@@ -27,7 +27,7 @@ include(${BOREALIS_LIBRARY}/cmake/commonOption.cmake)
 include(${BOREALIS_LIBRARY}/cmake/toolchain.cmake)
 
 # Project definition (AFTER toolchain include)
-project(VitaPlex VERSION 2.0.0 LANGUAGES C CXX)
+project(VitaABS VERSION 2.0.0 LANGUAGES C CXX)
 
 # C++17 required for Borealis
 set(CMAKE_CXX_STANDARD 17)
@@ -37,8 +37,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -frtti -fexceptions")
 
 # App metadata
-set(VITA_APP_NAME "VitaPlex")
-set(VITA_TITLEID "VPLEX0001")
+set(VITA_APP_NAME "VitaABS")
+set(VITA_TITLEID "VABS00001")
 set(VITA_VERSION "02.00")
 # ATTRIBUTE2=12 enables maximum heap size mode - CRITICAL for memory-intensive apps
 set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d PARENTAL_LEVEL=1 -d ATTRIBUTE2=12")
@@ -64,7 +64,7 @@ set(APP_SOURCES
 
     # Application
     src/app/application.cpp
-    src/app/plex_client.cpp
+    src/app/audiobookshelf_client.cpp
     src/app/downloads_manager.cpp
 
     # Activities
