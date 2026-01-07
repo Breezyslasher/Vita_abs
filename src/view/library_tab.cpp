@@ -119,7 +119,7 @@ void LibraryTab::loadSections() {
 
                 // Load first section by default
                 if (!m_sections.empty()) {
-                    brls::Logger::debug("LibraryTab: Loading first section: {}", m_sections[0].title);
+                    brls::Logger::debug("LibraryTab: Loading first section: {}", m_sections[0].name);
                     onSectionSelected(m_sections[0]);
                 }
 
@@ -164,13 +164,13 @@ void LibraryTab::onSectionSelected(const Library& section) {
 }
 
 void LibraryTab::onItemSelected(const MediaItem& item) {
-    // For tracks, play directly instead of showing detail view
-    if (item.mediaType == MediaType::MUSIC_TRACK) {
-        Application::getInstance().pushPlayerActivity(item.id);
+    // For podcast episodes, play directly instead of showing detail view
+    if (item.mediaType == MediaType::PODCAST_EPISODE) {
+        Application::getInstance().pushPlayerActivity(item.podcastId, item.episodeId);
         return;
     }
 
-    // Show media detail view for other types
+    // Show media detail view for books and other types
     auto* detailView = new MediaDetailView(item);
     brls::Application::pushActivity(new brls::Activity(detailView));
 }
