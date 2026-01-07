@@ -1,10 +1,11 @@
 /**
  * VitaABS - Downloads Manager Implementation
- * Handles offline audiobook downloads and progress sync
+ * Handles offline media downloads and progress sync
  */
 
 #include "app/downloads_manager.hpp"
 #include "app/audiobookshelf_client.hpp"
+#include "app/application.hpp"
 #include "utils/http_client.hpp"
 #include <borealis.hpp>
 #include <fstream>
@@ -59,9 +60,10 @@ bool DownloadsManager::init() {
 }
 
 bool DownloadsManager::queueDownload(const std::string& itemId, const std::string& title,
-                                      const std::string& audioPath, float size,
-                                      const std::string& mediaType, const std::string& coverUrl,
-                                      const std::string& episodeId) {
+                                      const std::string& audioPath, float duration,
+                                      const std::string& mediaType,
+                                      const std::string& parentTitle,
+                                      int seasonNum, int episodeNum) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     // Check if already in queue
@@ -76,16 +78,19 @@ bool DownloadsManager::queueDownload(const std::string& itemId, const std::strin
     item.itemId = itemId;
     item.title = title;
     item.audioPath = audioPath;
-    item.size = size;
+    item.duration = duration;
     item.mediaType = mediaType;
     item.coverUrl = coverUrl;
     item.episodeId = episodeId;
     item.state = DownloadState::QUEUED;
 
-    // Generate local path with appropriate extension
-    std::string extension = ".m4b";  // Audiobook format
-    if (mediaType == "podcast") {
+    // Generate local path - audiobooks are typically m4b, mp3, or other audio formats
+    std::string extension;
+    if (mediaType == "episode") {
         extension = ".mp3";
+    } else {
+        // For audiobooks, use m4b (common audiobook format) or mp3
+        extension = ".m4b";
     }
     std::string filename = itemId + extension;
     item.localPath = m_downloadsPath + "/" + filename;
@@ -256,7 +261,8 @@ void DownloadsManager::syncProgressToServer() {
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
     for (auto& item : itemsToSync) {
-        if (client.updateProgress(item.itemId, item.currentTime, item.duration, false, item.episodeId)) {
+        // Update progress on the Audiobookshelf server
+        if (client.updateProgress(item.itemId, "", item.currentTime, item.duration)) {
             std::lock_guard<std::mutex> lock(m_mutex);
             // Update last synced time
             for (auto& d : m_downloads) {
@@ -265,6 +271,7 @@ void DownloadsManager::syncProgressToServer() {
                     break;
                 }
             }
+            brls::Logger::debug("DownloadsManager: Synced progress for {}", item.title);
         }
     }
 
@@ -285,14 +292,10 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
         return;
     }
 
-    // Build download URL
-    std::string url;
-    if (!client.getDownloadUrl(item.itemId, url, item.episodeId)) {
-        brls::Logger::error("DownloadsManager: Failed to get download URL");
-        item.state = DownloadState::FAILED;
-        saveState();
-        return;
-    }
+    // Get the download URL for the item
+    // Audiobookshelf provides direct file access at /api/items/:id/file/:ino
+    // Or we can use the stream URL for transcoded audio
+    std::string url = client.getStreamUrl(item.itemId, "");
 
     brls::Logger::debug("DownloadsManager: Downloading from {}", url);
 
@@ -317,9 +320,12 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
 
     // Download with progress tracking
     HttpClient http;
-    http.setDefaultHeader("Authorization", "Bearer " + token);
 
-    bool success = http.downloadFile(url,
+    // Add auth header
+    std::map<std::string, std::string> headers;
+    headers["Authorization"] = "Bearer " + token;
+
+    bool success = http.downloadFileWithHeaders(url, headers,
         [&](const char* data, size_t size) {
             // Write chunk to file
 #ifdef __vita__
@@ -389,6 +395,7 @@ void DownloadsManager::saveState() {
            << "\"downloadedBytes\":" << item.downloadedBytes << ",\n"
            << "\"currentTime\":" << item.currentTime << ",\n"
            << "\"duration\":" << item.duration << ",\n"
+           << "\"currentTime\":" << item.currentTime << ",\n"
            << "\"state\":" << static_cast<int>(item.state) << ",\n"
            << "\"lastSynced\":" << item.lastSynced << "\n"
            << "}";

@@ -1,5 +1,5 @@
 /**
- * VitaABS - Plex Client for PlayStation Vita
+ * VitaABS - Audiobookshelf Client for PlayStation Vita
  * Borealis-based Application
  */
 
@@ -9,15 +9,15 @@
 #include <functional>
 
 // Application version
-#define VITA_PLEX_VERSION "2.0.0"
-#define VITA_PLEX_VERSION_NUM 200
+#define VITA_ABS_VERSION "1.0.0"
+#define VITA_ABS_VERSION_NUM 100
 
-// Plex client identification
-#define PLEX_CLIENT_ID "vita-plex-client-001"
-#define PLEX_CLIENT_NAME "VitaABS"
-#define PLEX_CLIENT_VERSION VITA_PLEX_VERSION
-#define PLEX_PLATFORM "PlayStation Vita"
-#define PLEX_DEVICE "PS Vita"
+// Client identification
+#define ABS_CLIENT_ID "vita-abs-client-001"
+#define ABS_CLIENT_NAME "VitaABS"
+#define ABS_CLIENT_VERSION VITA_ABS_VERSION
+#define ABS_PLATFORM "PlayStation Vita"
+#define ABS_DEVICE "PS Vita"
 
 namespace vitaabs {
 
@@ -28,21 +28,36 @@ enum class AppTheme {
     DARK = 2
 };
 
-// Video quality options for transcoding
-enum class VideoQuality {
-    ORIGINAL = 0,      // Direct play/stream
-    QUALITY_1080P = 1, // 1080p 20Mbps
-    QUALITY_720P = 2,  // 720p 4Mbps
-    QUALITY_480P = 3,  // 480p 2Mbps (recommended for Vita)
-    QUALITY_360P = 4,  // 360p 1Mbps
-    QUALITY_240P = 5   // 240p 500kbps
+// Audio quality options for streaming
+enum class AudioQuality {
+    ORIGINAL = 0,      // Direct play (no transcoding)
+    HIGH = 1,          // High quality (320kbps)
+    MEDIUM = 2,        // Medium quality (192kbps)
+    LOW = 3,           // Low quality (128kbps)
+    VERY_LOW = 4       // Very low quality (64kbps)
 };
 
-// Subtitle size options
-enum class SubtitleSize {
-    SMALL = 0,
-    MEDIUM = 1,
-    LARGE = 2
+// Playback speed options
+enum class PlaybackSpeed {
+    SPEED_0_5X = 0,    // 0.5x
+    SPEED_0_75X = 1,   // 0.75x
+    SPEED_1X = 2,      // Normal (1x)
+    SPEED_1_25X = 3,   // 1.25x
+    SPEED_1_5X = 4,    // 1.5x
+    SPEED_1_75X = 5,   // 1.75x
+    SPEED_2X = 6       // 2x
+};
+
+// Sleep timer options
+enum class SleepTimer {
+    OFF = 0,
+    MINUTES_5 = 1,
+    MINUTES_10 = 2,
+    MINUTES_15 = 3,
+    MINUTES_30 = 4,
+    MINUTES_45 = 5,
+    MINUTES_60 = 6,
+    END_OF_CHAPTER = 7
 };
 
 // Application settings structure
@@ -51,42 +66,52 @@ struct AppSettings {
     AppTheme theme = AppTheme::DARK;
     bool showClock = true;
     bool animationsEnabled = true;
-    bool debugLogging = true;  // Enable debug logging
+    bool debugLogging = true;
 
     // Layout Settings
-    bool showLibrariesInSidebar = false;  // Show libraries in sidebar instead of Library tab
-    bool collapseSidebar = false;         // Collapse sidebar to icons only
-    std::string hiddenLibraries;          // Comma-separated list of library keys to hide
-    std::string sidebarOrder;             // Custom sidebar order (comma-separated: home,library,search,livetv,settings)
+    bool showLibrariesInSidebar = false;
+    bool collapseSidebar = false;
+    std::string hiddenLibraries;       // Comma-separated list of library IDs to hide
 
     // Content Display Settings
-    bool showCollections = true;          // Show collections in library sections
-    bool showPlaylists = true;            // Show playlists
-    bool showGenres = true;               // Show genre categories
+    bool showCollections = true;
+    bool showSeries = true;
+    bool showAuthors = true;
+    bool showProgress = true;          // Show progress bars on items
 
     // Playback Settings
-    bool autoPlayNext = true;
-    bool resumePlayback = true;
-    bool showSubtitles = true;
-    SubtitleSize subtitleSize = SubtitleSize::MEDIUM;
-    int seekInterval = 10;  // seconds
+    bool autoPlayNext = false;         // Auto-play next chapter
+    bool resumePlayback = true;        // Resume from last position
+    PlaybackSpeed playbackSpeed = PlaybackSpeed::SPEED_1X;
+    SleepTimer sleepTimer = SleepTimer::OFF;
+    int seekInterval = 30;             // Skip forward/back interval in seconds
+    int longSeekInterval = 300;        // Long skip interval (5 minutes)
 
-    // Transcode Settings
-    VideoQuality videoQuality = VideoQuality::QUALITY_480P;
-    bool forceTranscode = false;
-    bool burnSubtitles = true;  // Burn subtitles into video for Vita compatibility
-    int maxBitrate = 2000;      // kbps
+    // Audio Settings
+    AudioQuality audioQuality = AudioQuality::ORIGINAL;
+    bool boostVolume = false;          // Volume boost for quiet audiobooks
+    int volumeBoostDb = 0;             // Volume boost in dB (0-12)
+
+    // Chapter Settings
+    bool showChapterList = true;       // Show chapter list in player
+    bool skipChapterTransitions = false; // Skip chapter intro/outro silence
+
+    // Bookmark Settings
+    bool autoBookmark = true;          // Auto-bookmark when closing player
 
     // Network Settings
-    int connectionTimeout = 180; // seconds (3 minutes for slow connections)
-    bool directPlay = false;     // Try direct play first
+    int connectionTimeout = 180;       // seconds
+    bool downloadOverWifiOnly = false;
 
     // Download Settings
-    bool autoStartDownloads = true;    // Start downloads automatically after queueing
-    bool downloadOverWifiOnly = false; // Only download when on WiFi
-    int maxConcurrentDownloads = 1;    // Max concurrent downloads
-    bool deleteAfterWatch = false;     // Auto-delete after fully watched
-    bool syncProgressOnConnect = true; // Sync offline progress when connected
+    bool autoStartDownloads = true;
+    int maxConcurrentDownloads = 1;
+    bool deleteAfterFinish = false;    // Delete downloaded book after finishing
+    bool syncProgressOnConnect = true;
+
+    // Sleep/Power Settings
+    bool preventSleep = true;          // Prevent screen sleep during playback
+    bool pauseOnHeadphoneDisconnect = true;
 };
 
 /**
@@ -104,7 +129,7 @@ public:
     // Navigation
     void pushLoginActivity();
     void pushMainActivity();
-    void pushPlayerActivity(const std::string& mediaKey);
+    void pushPlayerActivity(const std::string& itemId, const std::string& episodeId = "");
 
     // Authentication state
     bool isLoggedIn() const { return !m_authToken.empty(); }
@@ -121,6 +146,10 @@ public:
     const std::string& getUsername() const { return m_username; }
     void setUsername(const std::string& name) { m_username = name; }
 
+    // Current library (for context)
+    const std::string& getCurrentLibraryId() const { return m_currentLibraryId; }
+    void setCurrentLibraryId(const std::string& id) { m_currentLibraryId = id; }
+
     // Application settings access
     AppSettings& getSettings() { return m_settings; }
     const AppSettings& getSettings() const { return m_settings; }
@@ -132,9 +161,15 @@ public:
     void applyLogLevel();
 
     // Get quality string for display
-    static std::string getQualityString(VideoQuality quality);
+    static std::string getAudioQualityString(AudioQuality quality);
     static std::string getThemeString(AppTheme theme);
-    static std::string getSubtitleSizeString(SubtitleSize size);
+    static std::string getPlaybackSpeedString(PlaybackSpeed speed);
+    static std::string getSleepTimerString(SleepTimer timer);
+    static float getPlaybackSpeedValue(PlaybackSpeed speed);
+
+    // Format time for display (seconds to HH:MM:SS or MM:SS)
+    static std::string formatTime(float seconds);
+    static std::string formatDuration(float seconds);
 
 private:
     Application() = default;
@@ -146,6 +181,7 @@ private:
     std::string m_authToken;
     std::string m_serverUrl;
     std::string m_username;
+    std::string m_currentLibraryId;
     AppSettings m_settings;
 };
 
