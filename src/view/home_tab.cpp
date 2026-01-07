@@ -208,14 +208,12 @@ void HomeTab::loadContent() {
 
             // Fetch recently added using the correct API endpoint
             if (client.fetchRecentlyAdded(section.id, sectionItems)) {
-                // Sort items by type
+                // Sort items by library type (Audiobookshelf uses "book" and "podcast")
                 for (auto& item : sectionItems) {
-                    if (section.type == "movie") {
-                        if (movies.size() < 20) movies.push_back(item);
-                    } else if (section.type == "show") {
-                        if (shows.size() < 20) shows.push_back(item);
-                    } else if (section.type == "artist") {
-                        if (music.size() < 20) music.push_back(item);
+                    if (section.mediaType == "book") {
+                        if (movies.size() < 20) movies.push_back(item);  // Reusing movies for books
+                    } else if (section.mediaType == "podcast") {
+                        if (shows.size() < 20) shows.push_back(item);    // Reusing shows for podcasts
                     }
                 }
             }
@@ -241,13 +239,13 @@ void HomeTab::loadContent() {
 }
 
 void HomeTab::onItemSelected(const MediaItem& item) {
-    // For tracks, play directly instead of showing detail view
-    if (item.mediaType == MediaType::MUSIC_TRACK) {
-        Application::getInstance().pushPlayerActivity(item.id);
+    // For podcast episodes, play directly instead of showing detail view
+    if (item.mediaType == MediaType::PODCAST_EPISODE) {
+        Application::getInstance().pushPlayerActivity(item.podcastId, item.episodeId);
         return;
     }
 
-    // Show media detail view for other types
+    // Show media detail view for books and other types
     auto* detailView = new MediaDetailView(item);
     brls::Application::pushActivity(new brls::Activity(detailView));
 }
