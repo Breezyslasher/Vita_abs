@@ -16,11 +16,14 @@ namespace vitaabs {
 
 class PlayerActivity : public brls::Activity {
 public:
-    // Play from Plex server
-    PlayerActivity(const std::string& mediaKey);
+    // Play audiobook/podcast item (single file or book)
+    PlayerActivity(const std::string& itemId);
+
+    // Play podcast episode or audiobook with specific episode
+    PlayerActivity(const std::string& itemId, const std::string& episodeId);
 
     // Play local downloaded file
-    PlayerActivity(const std::string& mediaKey, bool isLocalFile);
+    PlayerActivity(const std::string& itemId, bool isLocalFile);
 
     // Play direct file path (for debug/testing)
     static PlayerActivity* createForDirectFile(const std::string& filePath);
@@ -37,7 +40,8 @@ private:
     void togglePlayPause();
     void seek(int seconds);
 
-    std::string m_mediaKey;
+    std::string m_itemId;
+    std::string m_episodeId;       // For podcast episodes
     std::string m_directFilePath;  // For direct file playback (debug)
     bool m_isPlaying = false;
     bool m_isPhoto = false;

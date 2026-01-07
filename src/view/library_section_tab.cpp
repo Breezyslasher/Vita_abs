@@ -1,4 +1,5 @@
 /**
+#include "app/audiobookshelf_client.hpp"
  * VitaABS - Library Section Tab implementation
  */
 
@@ -120,7 +121,7 @@ void LibrarySectionTab::loadContent() {
     std::weak_ptr<bool> aliveWeak = m_alive;  // Capture weak_ptr for async safety
 
     asyncRun([this, key, aliveWeak]() {
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
         if (client.fetchLibraryContent(key, items)) {
@@ -163,7 +164,7 @@ void LibrarySectionTab::loadCollections() {
     std::weak_ptr<bool> aliveWeak = m_alive;
 
     asyncRun([this, key, aliveWeak]() {
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> collections;
 
         if (client.fetchCollections(key, collections)) {
@@ -201,7 +202,7 @@ void LibrarySectionTab::loadGenres() {
     std::weak_ptr<bool> aliveWeak = m_alive;
 
     asyncRun([this, key, aliveWeak]() {
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<GenreItem> genres;
 
         if (client.fetchGenreItems(key, genres) && !genres.empty()) {
@@ -337,7 +338,7 @@ void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
     std::weak_ptr<bool> aliveWeak = m_alive;
 
     asyncRun([this, collectionKey, filterTitle, aliveWeak]() {
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
         if (client.fetchChildren(collectionKey, items)) {
@@ -374,7 +375,7 @@ void LibrarySectionTab::onGenreSelected(const GenreItem& genre) {
     std::weak_ptr<bool> aliveWeak = m_alive;
 
     asyncRun([this, key, genreKey, genreTitle, filterTitle, aliveWeak]() {
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
         // Try with genre key first, fall back to title

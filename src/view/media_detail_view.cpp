@@ -1,4 +1,5 @@
 /**
+#include "app/audiobookshelf_client.hpp"
  * VitaABS - Media Detail View implementation
  */
 
@@ -264,7 +265,7 @@ brls::View* MediaDetailView::create() {
 }
 
 void MediaDetailView::loadDetails() {
-    PlexClient& client = PlexClient::getInstance();
+    AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
     // Load full details
     MediaItem fullItem;
@@ -317,7 +318,7 @@ void MediaDetailView::loadDetails() {
 void MediaDetailView::loadChildren() {
     if (!m_childrenBox) return;
 
-    PlexClient& client = PlexClient::getInstance();
+    AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
     if (client.fetchChildren(m_item.ratingKey, m_children)) {
         m_childrenBox->clearViews();
@@ -345,7 +346,7 @@ void MediaDetailView::loadMusicCategories() {
     if (!m_musicCategoriesBox) return;
 
     asyncRun([this]() {
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
         std::vector<MediaItem> allAlbums;
         if (!client.fetchChildren(m_item.ratingKey, allAlbums)) {
@@ -440,7 +441,7 @@ void MediaDetailView::onPlay(bool resume) {
         if (!m_children.empty()) {
             // For shows, the first child is a season - need to get its first episode
             if (m_item.mediaType == MediaType::SHOW) {
-                PlexClient& client = PlexClient::getInstance();
+                AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
                 std::vector<MediaItem> episodes;
                 if (client.fetchChildren(m_children[0].ratingKey, episodes) && !episodes.empty()) {
                     Application::getInstance().pushPlayerActivity(episodes[0].ratingKey);
@@ -451,7 +452,7 @@ void MediaDetailView::onPlay(bool resume) {
             }
         } else {
             // Fetch children and play first one
-            PlexClient& client = PlexClient::getInstance();
+            AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
             std::vector<MediaItem> children;
             if (client.fetchChildren(m_item.ratingKey, children) && !children.empty()) {
                 if (m_item.mediaType == MediaType::SHOW) {
@@ -480,7 +481,7 @@ void MediaDetailView::onDownload() {
         brls::Application::notify("Loading media info...");
 
         // Try to load details now
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         MediaItem fullItem;
         if (client.fetchMediaDetails(m_item.ratingKey, fullItem) && !fullItem.partPath.empty()) {
             m_item = fullItem;
@@ -729,7 +730,7 @@ void MediaDetailView::downloadAll() {
     std::string parentTitle = m_item.title;
 
     asyncRun([this, progressDialog, ratingKey, mediaType, parentTitle]() {
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
         int queued = 0;
 
@@ -837,7 +838,7 @@ void MediaDetailView::downloadUnwatched(int maxCount) {
     std::string parentTitle = m_item.title;
 
     asyncRun([this, progressDialog, ratingKey, mediaType, parentTitle, maxCount]() {
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> unwatchedItems;
         int queued = 0;
 

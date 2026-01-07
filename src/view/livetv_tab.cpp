@@ -1,4 +1,5 @@
 /**
+#include "app/audiobookshelf_client.hpp"
  * VitaABS - Live TV Tab implementation
  */
 
@@ -150,7 +151,7 @@ std::string LiveTVTab::formatTime(int64_t timestamp) {
 void LiveTVTab::loadChannels() {
     asyncRun([this]() {
         brls::Logger::debug("LiveTVTab: Fetching EPG data (async)...");
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
         std::vector<LiveTVChannel> channels;
         bool success = client.fetchEPGGrid(channels, m_hoursToShow);
@@ -458,7 +459,7 @@ void LiveTVTab::loadRecordings() {
     asyncRun([this]() {
         brls::Logger::debug("LiveTVTab: Fetching DVR recordings...");
 
-        // TODO: Implement fetchDVRRecordings in PlexClient
+        // TODO: Implement fetchDVRRecordings in AudiobookshelfClient
         // For now, just clear the DVR section
 
         brls::sync([this]() {

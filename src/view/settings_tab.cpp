@@ -483,7 +483,7 @@ void SettingsTab::onLogout() {
         dialog->close();
 
         // Clear credentials
-        PlexClient::getInstance().logout();
+        AudiobookshelfClient::getInstance().logout();
         Application::getInstance().setAuthToken("");
         Application::getInstance().setServerUrl("");
         Application::getInstance().setUsername("");
@@ -565,7 +565,7 @@ void SettingsTab::onManageHiddenLibraries() {
 
     // Fetch library sections
     std::vector<LibrarySection> sections;
-    PlexClient::getInstance().fetchLibrarySections(sections);
+    AudiobookshelfClient::getInstance().fetchLibrarySections(sections);
 
     if (sections.empty()) {
         brls::Dialog* dialog = new brls::Dialog("No libraries found");

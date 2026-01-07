@@ -58,7 +58,7 @@ void MainActivity::onContentAvailable() {
 
         // If showing libraries in sidebar, check library names too
         if (settings.showLibrariesInSidebar) {
-            PlexClient& client = PlexClient::getInstance();
+            AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
             std::vector<LibrarySection> sections;
             if (client.fetchLibrarySections(sections)) {
                 s_cachedSections = sections;  // Cache for later use
@@ -81,7 +81,8 @@ void MainActivity::onContentAvailable() {
             }
         }
 
-        bool hasLiveTV = PlexClient::getInstance().hasLiveTV();
+        // Audiobookshelf doesn't have Live TV functionality
+        bool hasLiveTV = false;
 
         // If showing libraries in sidebar, only show actual library sections
         // Don't show premade tabs like "Library", "Music", "TV"
@@ -156,7 +157,7 @@ void MainActivity::loadLibrariesToSidebar() {
     tabFrame->addSeparator();
 
     // Fetch libraries synchronously to maintain correct sidebar order
-    PlexClient& client = PlexClient::getInstance();
+    AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
     std::vector<LibrarySection> sections;
 
     if (client.fetchLibrarySections(sections)) {

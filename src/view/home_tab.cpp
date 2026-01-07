@@ -1,4 +1,5 @@
 /**
+#include "app/audiobookshelf_client.hpp"
  * VitaABS - Home Tab implementation
  */
 
@@ -149,7 +150,7 @@ void HomeTab::loadContent() {
     // Load continue watching asynchronously
     asyncRun([this]() {
         brls::Logger::debug("HomeTab: Fetching continue watching (async)...");
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
         if (client.fetchContinueWatching(items)) {
@@ -167,7 +168,7 @@ void HomeTab::loadContent() {
     // Load recently added by fetching from library sections
     asyncRun([this]() {
         brls::Logger::debug("HomeTab: Fetching library sections for recently added...");
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
         // First get all library sections
         std::vector<LibrarySection> sections;

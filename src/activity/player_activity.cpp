@@ -11,15 +11,20 @@
 
 namespace vitaabs {
 
-PlayerActivity::PlayerActivity(const std::string& mediaKey)
-    : m_mediaKey(mediaKey), m_isLocalFile(false) {
-    brls::Logger::debug("PlayerActivity created for media: {}", mediaKey);
+PlayerActivity::PlayerActivity(const std::string& itemId)
+    : m_itemId(itemId), m_isLocalFile(false) {
+    brls::Logger::debug("PlayerActivity created for item: {}", itemId);
 }
 
-PlayerActivity::PlayerActivity(const std::string& mediaKey, bool isLocalFile)
-    : m_mediaKey(mediaKey), m_isLocalFile(isLocalFile) {
-    brls::Logger::debug("PlayerActivity created for {} media: {}",
-                       isLocalFile ? "local" : "remote", mediaKey);
+PlayerActivity::PlayerActivity(const std::string& itemId, const std::string& episodeId)
+    : m_itemId(itemId), m_episodeId(episodeId), m_isLocalFile(false) {
+    brls::Logger::debug("PlayerActivity created for item: {}, episode: {}", itemId, episodeId);
+}
+
+PlayerActivity::PlayerActivity(const std::string& itemId, bool isLocalFile)
+    : m_itemId(itemId), m_isLocalFile(isLocalFile) {
+    brls::Logger::debug("PlayerActivity created for {} item: {}",
+                       isLocalFile ? "local" : "remote", itemId);
 }
 
 PlayerActivity* PlayerActivity::createForDirectFile(const std::string& filePath) {
@@ -109,12 +114,15 @@ void PlayerActivity::willDisappear(bool resetState) {
 
             if (m_isLocalFile) {
                 // Save progress for downloaded media
-                DownloadsManager::getInstance().updateProgress(m_mediaKey, timeMs);
+                DownloadsManager::getInstance().updateProgress(m_itemId, timeMs);
                 DownloadsManager::getInstance().saveState();
-                brls::Logger::info("PlayerActivity: Saved local progress {}ms for {}", timeMs, m_mediaKey);
+                brls::Logger::info("PlayerActivity: Saved local progress {}ms for {}", timeMs, m_itemId);
             } else {
-                // Save progress to Plex server
-                PlexClient::getInstance().updatePlayProgress(m_mediaKey, timeMs);
+                // Save progress to Audiobookshelf server
+                MpvPlayer& player = MpvPlayer::getInstance();
+                float currentTime = (float)position;
+                float totalDuration = (float)player.getDuration();
+                AudiobookshelfClient::getInstance().updateProgress(m_itemId, currentTime, totalDuration, false, m_episodeId);
             }
         }
     }
@@ -179,7 +187,7 @@ void PlayerActivity::loadMedia() {
     // Handle local file playback (downloaded media)
     if (m_isLocalFile) {
         DownloadsManager& downloads = DownloadsManager::getInstance();
-        DownloadItem* download = downloads.getDownload(m_mediaKey);
+        DownloadItem* download = downloads.getDownload(m_itemId);
 
         if (!download || download->state != DownloadState::COMPLETED) {
             brls::Logger::error("PlayerActivity: Downloaded media not found or incomplete");
@@ -230,88 +238,71 @@ void PlayerActivity::loadMedia() {
         return;
     }
 
-    // Remote playback from Plex server
-    PlexClient& client = PlexClient::getInstance();
+    // Remote playback from Audiobookshelf server
+    AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
     MediaItem item;
 
-    if (client.fetchMediaDetails(m_mediaKey, item)) {
+    if (client.fetchItem(m_itemId, item)) {
         if (titleLabel) {
             std::string title = item.title;
-            if (item.mediaType == MediaType::EPISODE) {
-                title = item.grandparentTitle + " - " + item.title;
+            if (!item.authorName.empty()) {
+                title = item.title + " - " + item.authorName;
             }
             titleLabel->setText(title);
         }
 
-        // Handle photos differently - display image instead of playing
-        if (item.mediaType == MediaType::PHOTO) {
-            brls::Logger::info("Displaying photo: {}", item.title);
-            m_isPhoto = true;
+        // Start a playback session with Audiobookshelf
+        PlaybackSession session;
+        if (!client.startPlaybackSession(m_itemId, session, m_episodeId)) {
+            brls::Logger::error("Failed to start playback session for: {}", m_itemId);
             m_loadingMedia = false;
-
-            // Load the full-size photo
-            if (!item.thumb.empty()) {
-                std::string photoUrl = client.getThumbnailUrl(item.thumb, 960, 544);
-                brls::Logger::debug("Photo URL: {}", photoUrl);
-
-                // Load photo into the view (photoImage is defined in player.xml)
-                if (photoImage) {
-                    photoImage->setVisibility(brls::Visibility::VISIBLE);
-                    ImageLoader::loadAsync(photoUrl, [](brls::Image* image) {
-                        // Photo loaded
-                    }, photoImage);
-                }
-
-                // Hide player controls for photos
-                if (progressSlider) {
-                    progressSlider->setVisibility(brls::Visibility::GONE);
-                }
-                if (timeLabel) {
-                    timeLabel->setVisibility(brls::Visibility::GONE);
-                }
-            }
             return;
         }
 
-        // Get transcode URL for video/audio (forces Plex to convert to Vita-compatible format)
-        std::string url;
-        if (client.getTranscodeUrl(m_mediaKey, url, item.viewOffset)) {
-            MpvPlayer& player = MpvPlayer::getInstance();
+        // Get stream URL for the item
+        std::string streamUrl = client.getStreamUrl(m_itemId, m_episodeId);
+        if (streamUrl.empty()) {
+            brls::Logger::error("Failed to get stream URL for: {}", m_itemId);
+            m_loadingMedia = false;
+            return;
+        }
 
-            // Initialize player if needed
-            if (!player.isInitialized()) {
-                if (!player.init()) {
-                    brls::Logger::error("Failed to initialize MPV player");
-                    m_loadingMedia = false;
-                    return;
-                }
-            }
+        brls::Logger::info("Got stream URL: {}", streamUrl);
+        float startTime = session.currentTime;
 
-            // Load the URL using async command
-            // loadUrl returns false if a command is already pending (prevents rapid clicks)
-            if (!player.loadUrl(url, item.title)) {
-                brls::Logger::error("Failed to load URL: {}", url);
+        MpvPlayer& player = MpvPlayer::getInstance();
+
+        // Initialize player if needed
+        if (!player.isInitialized()) {
+            if (!player.init()) {
+                brls::Logger::error("Failed to initialize MPV player");
                 m_loadingMedia = false;
                 return;
             }
-
-            // Note: Don't call play() here - MPV auto-starts playback when file is loaded
-            // Calling play() while in LOADING state can cause crashes on Vita
-
-            // Show video view for video playback
-            if (videoView) {
-                videoView->setVisibility(brls::Visibility::VISIBLE);
-                videoView->setVideoVisible(true);
-                brls::Logger::debug("Video view enabled");
-            }
-
-            // Note: viewOffset is passed to transcode URL, so Plex handles resume position
-            // No need for m_pendingSeek for remote playback
-
-            m_isPlaying = true;
-        } else {
-            brls::Logger::error("Failed to get transcode URL for: {}", m_mediaKey);
         }
+
+        // Load the stream URL
+        if (!player.loadUrl(streamUrl, item.title)) {
+            brls::Logger::error("Failed to load URL: {}", streamUrl);
+            m_loadingMedia = false;
+            return;
+        }
+
+        // Show video view for audio playback (shows progress/controls)
+        if (videoView) {
+            videoView->setVisibility(brls::Visibility::VISIBLE);
+            videoView->setVideoVisible(true);
+            brls::Logger::debug("Video view enabled");
+        }
+
+        // Resume from saved position if available
+        if (startTime > 0) {
+            m_pendingSeek = startTime;
+        }
+
+        m_isPlaying = true;
+    } else {
+        brls::Logger::error("Failed to fetch item details for: {}", m_itemId);
     }
 
     m_loadingMedia = false;
@@ -363,7 +354,9 @@ void PlayerActivity::updateProgress() {
     // Check if playback ended (only if we were actually playing)
     if (m_isPlaying && player.hasEnded()) {
         m_isPlaying = false;  // Prevent multiple triggers
-        PlexClient::getInstance().markAsWatched(m_mediaKey);
+        // Mark as finished with Audiobookshelf (set isFinished=true)
+        float totalDuration = (float)player.getDuration();
+        AudiobookshelfClient::getInstance().updateProgress(m_itemId, totalDuration, totalDuration, true, m_episodeId);
         brls::Application::popActivity();
     }
 }

@@ -1,4 +1,5 @@
 /**
+#include "app/audiobookshelf_client.hpp"
  * VitaABS - Library Tab implementation
  */
 
@@ -77,7 +78,7 @@ void LibraryTab::loadSections() {
 
     asyncRun([this]() {
         brls::Logger::debug("LibraryTab: Fetching library sections (async)...");
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<LibrarySection> sections;
 
         if (client.fetchLibrarySections(sections)) {
@@ -139,7 +140,7 @@ void LibraryTab::loadContent(const std::string& sectionKey) {
 
     std::string key = sectionKey;  // Capture by value
     asyncRun([this, key]() {
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
         if (client.fetchLibraryContent(key, items)) {

@@ -1,4 +1,5 @@
 /**
+#include "app/audiobookshelf_client.hpp"
  * VitaABS - Search Tab implementation
  */
 
@@ -192,7 +193,7 @@ void SearchTab::performSearch(const std::string& query) {
         return;
     }
 
-    PlexClient& client = PlexClient::getInstance();
+    AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
     if (client.search(query, m_results)) {
         m_resultsLabel->setText("Found " + std::to_string(m_results.size()) + " results");
