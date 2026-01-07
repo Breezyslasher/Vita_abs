@@ -23,8 +23,8 @@ enum class LibraryViewMode {
 
 class LibrarySectionTab : public brls::Box {
 public:
-    LibraryTab(const std::string& sectionKey, const std::string& title, const std::string& sectionType = "");
-    ~LibraryTab() override;
+    LibrarySectionTab(const std::string& sectionKey, const std::string& title, const std::string& sectionType = "");
+    ~LibrarySectionTab() override;
 
     void onFocusGained() override;
 

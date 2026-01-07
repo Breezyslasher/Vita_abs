@@ -1,9 +1,9 @@
 /**
-#include "app/audiobookshelf_client.hpp"
  * VitaABS - Library Section Tab implementation
  */
 
 #include "view/library_section_tab.hpp"
+#include "app/audiobookshelf_client.hpp"
 #include "view/media_item_cell.hpp"
 #include "view/media_detail_view.hpp"
 #include "app/application.hpp"
@@ -11,7 +11,7 @@
 
 namespace vitaabs {
 
-LibrarySectionTab::LibraryTab(const std::string& sectionKey, const std::string& title, const std::string& sectionType)
+LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::string& title, const std::string& sectionType)
     : m_sectionKey(sectionKey), m_title(title), m_sectionType(sectionType) {
 
     // Create alive flag for async callback safety
@@ -98,12 +98,12 @@ LibrarySectionTab::LibraryTab(const std::string& sectionKey, const std::string& 
     loadContent();
 }
 
-LibrarySectionTab::~LibraryTab() {
+LibrarySectionTab::~LibrarySectionTab() {
     // Mark as no longer alive to prevent async callbacks from updating destroyed UI
     if (m_alive) {
         *m_alive = false;
     }
-    brls::Logger::debug("LibraryTab: Destroyed for section {}", m_sectionKey);
+    brls::Logger::debug("LibrarySectionTab: Destroyed for section {}", m_sectionKey);
 }
 
 void LibrarySectionTab::onFocusGained() {
@@ -165,16 +165,29 @@ void LibrarySectionTab::loadCollections() {
 
     asyncRun([this, key, aliveWeak]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-        std::vector<MediaItem> collections;
+        std::vector<Collection> collections;
 
         if (client.fetchLibraryCollections(key, collections)) {
-            brls::Logger::info("LibraryTab: Got {} collections for section {}", collections.size(), key);
+            brls::Logger::info("LibrarySectionTab: Got {} collections for section {}", collections.size(), key);
 
-            brls::sync([this, collections, aliveWeak]() {
+            // Convert Collection to MediaItem for display
+            std::vector<MediaItem> collectionItems;
+            for (const auto& col : collections) {
+                MediaItem item;
+                item.id = col.id;
+                item.title = col.name;
+                item.description = col.description;
+                item.coverPath = col.coverPath;
+                item.type = "collection";
+                item.mediaType = MediaType::UNKNOWN;
+                collectionItems.push_back(item);
+            }
+
+            brls::sync([this, collectionItems, aliveWeak]() {
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) return;
 
-                m_collections = collections;
+                m_collections = collectionItems;
                 m_collectionsLoaded = true;
 
                 // Hide collections button if none available
@@ -183,7 +196,7 @@ void LibrarySectionTab::loadCollections() {
                 }
             });
         } else {
-            brls::Logger::debug("LibraryTab: No collections for section {}", key);
+            brls::Logger::debug("LibrarySectionTab: No collections for section {}", key);
             brls::sync([this, aliveWeak]() {
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) return;
@@ -198,36 +211,17 @@ void LibrarySectionTab::loadCollections() {
 }
 
 void LibrarySectionTab::loadGenres() {
-    std::string key = m_sectionKey;
-    std::weak_ptr<bool> aliveWeak = m_alive;
+    // Audiobookshelf doesn't have a dedicated genre browsing API like Plex
+    // Genre filtering would require fetching all items and extracting unique genres
+    // For now, we disable the genres feature
+    brls::Logger::debug("LibrarySectionTab: Genre browsing not supported in Audiobookshelf");
 
-    asyncRun([this, key, aliveWeak]() {
-        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-        std::vector<GenreItem> genres;
+    m_genresLoaded = true;
+    m_genres.clear();
 
-        if (client.fetchGenreItems(key, genres) && !genres.empty()) {
-            brls::Logger::info("LibraryTab: Got {} genres for section {}", genres.size(), key);
-
-            brls::sync([this, genres, aliveWeak]() {
-                auto alive = aliveWeak.lock();
-                if (!alive || !*alive) return;
-
-                m_genres = genres;
-                m_genresLoaded = true;
-            });
-        } else {
-            brls::Logger::debug("LibraryTab: No genres for section {}", key);
-            brls::sync([this, aliveWeak]() {
-                auto alive = aliveWeak.lock();
-                if (!alive || !*alive) return;
-
-                m_genresLoaded = true;
-                if (m_categoriesBtn) {
-                    m_categoriesBtn->setVisibility(brls::Visibility::GONE);
-                }
-            });
-        }
-    });
+    if (m_categoriesBtn) {
+        m_categoriesBtn->setVisibility(brls::Visibility::GONE);
+    }
 }
 
 void LibrarySectionTab::showAllItems() {
@@ -318,31 +312,32 @@ void LibrarySectionTab::onItemSelected(const MediaItem& item) {
         return;
     }
 
-    // Normal item selection
-    if (item.mediaType == MediaType::MUSIC_TRACK) {
-        Application::getInstance().pushPlayerActivity(item.id);
+    // Normal item selection - for Audiobookshelf, most items go to detail view
+    // Podcast episodes can be played directly
+    if (item.mediaType == MediaType::PODCAST_EPISODE) {
+        Application::getInstance().pushPlayerActivity(item.podcastId, item.episodeId);
         return;
     }
 
-    // Show media detail view for other types
+    // Show media detail view for books and other types
     auto* detailView = new MediaDetailView(item);
     brls::Application::pushActivity(new brls::Activity(detailView));
 }
 
 void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
-    brls::Logger::debug("LibraryTab: Selected collection: {}", collection.title);
+    brls::Logger::debug("LibrarySectionTab: Selected collection: {}", collection.title);
 
     m_filterTitle = collection.title;
-    std::string collectionKey = collection.id;
+    std::string collectionId = collection.id;
     std::string filterTitle = m_filterTitle;
     std::weak_ptr<bool> aliveWeak = m_alive;
 
-    asyncRun([this, collectionKey, filterTitle, aliveWeak]() {
+    asyncRun([this, collectionId, filterTitle, aliveWeak]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
-        if (client.fetchPodcastEpisodes(collectionKey, items)) {
-            brls::Logger::info("LibraryTab: Got {} items in collection", items.size());
+        if (client.fetchCollectionBooks(collectionId, items)) {
+            brls::Logger::info("LibrarySectionTab: Got {} items in collection", items.size());
 
             brls::sync([this, items, filterTitle, aliveWeak]() {
                 auto alive = aliveWeak.lock();
@@ -354,7 +349,7 @@ void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
                 updateViewModeButtons();
             });
         } else {
-            brls::Logger::error("LibraryTab: Failed to load collection content");
+            brls::Logger::error("LibrarySectionTab: Failed to load collection content");
             brls::sync([aliveWeak]() {
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) return;
