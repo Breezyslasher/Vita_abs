@@ -41,7 +41,7 @@ struct DownloadItem {
 };
 
 // Progress callback: (downloadedBytes, totalBytes)
-using DownloadProgressCallback = std::function<void(int64_t, int64_t)>;
+using DownloadProgressCallback = std::function<void(float, float)>;
 
 class DownloadsManager {
 public:

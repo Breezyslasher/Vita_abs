@@ -7,7 +7,6 @@
 #include "app/audiobookshelf_client.hpp"
 #include "app/application.hpp"
 #include "utils/http_client.hpp"
-#include "utils/async.hpp"
 #include <borealis.hpp>
 #include <fstream>
 #include <sstream>
@@ -81,9 +80,8 @@ bool DownloadsManager::queueDownload(const std::string& itemId, const std::strin
     item.audioPath = audioPath;
     item.duration = duration;
     item.mediaType = mediaType;
-    item.parentTitle = parentTitle;
-    item.seasonNum = seasonNum;
-    item.episodeNum = episodeNum;
+    item.coverUrl = coverUrl;
+    item.episodeId = episodeId;
     item.state = DownloadState::QUEUED;
 
     // Generate local path - audiobooks are typically m4b, mp3, or other audio formats
@@ -110,8 +108,8 @@ void DownloadsManager::startDownloads() {
 
     brls::Logger::info("DownloadsManager: Starting download queue");
 
-    // Process downloads in background using asyncRun
-    asyncRun([this]() {
+    // Process downloads in background
+    std::thread([this]() {
         brls::Logger::info("DownloadsManager: Download thread started");
 
         while (m_downloading) {
@@ -140,7 +138,7 @@ void DownloadsManager::startDownloads() {
         }
         m_downloading = false;
         brls::Logger::info("DownloadsManager: Download thread finished");
-    });
+    }).detach();
 }
 
 void DownloadsManager::pauseDownloads() {
@@ -285,7 +283,7 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
 
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
     std::string serverUrl = client.getServerUrl();
-    std::string token = client.getAuthToken();
+    std::string token = client.getToken();
 
     if (serverUrl.empty() || token.empty()) {
         brls::Logger::error("DownloadsManager: Not connected to server");
@@ -339,13 +337,13 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
 
             // Call progress callback
             if (m_progressCallback) {
-                m_progressCallback(item.downloadedBytes, item.totalBytes);
+                m_progressCallback(item.downloadedBytes, item.size);
             }
 
             return m_downloading; // Return false to cancel
         },
         [&](int64_t total) {
-            item.totalBytes = total;
+            item.size = static_cast<float>(total);
             brls::Logger::debug("DownloadsManager: Total size: {} bytes", total);
         }
     );
@@ -390,15 +388,15 @@ void DownloadsManager::saveState() {
            << "\"title\":\"" << item.title << "\",\n"
            << "\"audioPath\":\"" << item.audioPath << "\",\n"
            << "\"localPath\":\"" << item.localPath << "\",\n"
-           << "\"totalBytes\":" << item.totalBytes << ",\n"
+           << "\"coverUrl\":\"" << item.coverUrl << "\",\n"
+           << "\"mediaType\":\"" << item.mediaType << "\",\n"
+           << "\"episodeId\":\"" << item.episodeId << "\",\n"
+           << "\"size\":" << item.size << ",\n"
            << "\"downloadedBytes\":" << item.downloadedBytes << ",\n"
+           << "\"currentTime\":" << item.currentTime << ",\n"
            << "\"duration\":" << item.duration << ",\n"
            << "\"currentTime\":" << item.currentTime << ",\n"
            << "\"state\":" << static_cast<int>(item.state) << ",\n"
-           << "\"mediaType\":\"" << item.mediaType << "\",\n"
-           << "\"parentTitle\":\"" << item.parentTitle << "\",\n"
-           << "\"seasonNum\":" << item.seasonNum << ",\n"
-           << "\"episodeNum\":" << item.episodeNum << ",\n"
            << "\"lastSynced\":" << item.lastSynced << "\n"
            << "}";
         if (i < m_downloads.size() - 1) ss << ",";
@@ -457,7 +455,6 @@ void DownloadsManager::loadState() {
     brls::Logger::info("DownloadsManager: Loading saved state...");
 
     // TODO: Implement proper JSON parsing for download items
-    // For now, start fresh on each launch
 }
 
 void DownloadsManager::setProgressCallback(DownloadProgressCallback callback) {
