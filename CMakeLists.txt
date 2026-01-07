@@ -116,6 +116,8 @@ target_link_libraries(${PROJECT_NAME}
     # External libraries first (they depend on Vita stubs)
     # FFmpeg has circular dependencies - list avcodec multiple times
     curl
+    ssl
+    crypto
     mpv
     avfilter
     avformat
@@ -124,15 +126,14 @@ target_link_libraries(${PROJECT_NAME}
     swscale
     avutil
     avcodec
+    mp3lame
+    zstd
     ass
     freetype
     harfbuzz
     fribidi
     png
     bz2
-    mbedtls
-    mbedcrypto
-    mbedx509
 
     # Vita SDK stubs (provide symbols for above libraries)
     vita2d
