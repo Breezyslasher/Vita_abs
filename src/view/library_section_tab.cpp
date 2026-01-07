@@ -10,8 +10,8 @@
 
 namespace vitaabs {
 
-LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::string& title, const std::string& sectionType)
-    : m_sectionKey(sectionKey), m_title(title), m_sectionType(sectionType) {
+LibrarySectionTab::LibrarySectionTab(const std::string& libraryId, const std::string& title)
+    : m_libraryId(libraryId), m_title(title) {
 
     // Create alive flag for async callback safety
     m_alive = std::make_shared<bool>(true);
@@ -31,7 +31,7 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
 
     const auto& settings = Application::getInstance().getSettings();
 
-    // View mode selector (All / Collections / Categories)
+    // View mode selector (All / Collections / Authors / Series)
     m_viewModeBox = new brls::Box();
     m_viewModeBox->setAxis(brls::Axis::ROW);
     m_viewModeBox->setJustifyContent(brls::JustifyContent::FLEX_START);
@@ -48,7 +48,7 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
     });
     m_viewModeBox->addView(m_allBtn);
 
-    // Collections button (only show if enabled)
+    // Collections button
     if (settings.showCollections) {
         m_collectionsBtn = new brls::Button();
         m_collectionsBtn->setText("Collections");
@@ -60,17 +60,25 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
         m_viewModeBox->addView(m_collectionsBtn);
     }
 
-    // Categories button (only show if enabled)
-    if (settings.showGenres) {
-        m_categoriesBtn = new brls::Button();
-        m_categoriesBtn->setText("Categories");
-        m_categoriesBtn->setMarginRight(10);
-        m_categoriesBtn->registerClickAction([this](brls::View* view) {
-            showCategories();
-            return true;
-        });
-        m_viewModeBox->addView(m_categoriesBtn);
-    }
+    // Series button
+    m_seriesBtn = new brls::Button();
+    m_seriesBtn->setText("Series");
+    m_seriesBtn->setMarginRight(10);
+    m_seriesBtn->registerClickAction([this](brls::View* view) {
+        showSeries();
+        return true;
+    });
+    m_viewModeBox->addView(m_seriesBtn);
+
+    // Authors button
+    m_authorsBtn = new brls::Button();
+    m_authorsBtn->setText("Authors");
+    m_authorsBtn->setMarginRight(10);
+    m_authorsBtn->registerClickAction([this](brls::View* view) {
+        showAuthors();
+        return true;
+    });
+    m_viewModeBox->addView(m_authorsBtn);
 
     // Back button (hidden by default, shown in filtered view)
     m_backBtn = new brls::Button();
@@ -93,7 +101,7 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
     this->addView(m_contentGrid);
 
     // Load content immediately
-    brls::Logger::debug("LibrarySectionTab: Created for section {} ({}) type={}", m_sectionKey, m_title, m_sectionType);
+    brls::Logger::debug("LibrarySectionTab: Created for library {} ({})", m_libraryId, m_title);
     loadContent();
 }
 
@@ -102,7 +110,7 @@ LibrarySectionTab::~LibrarySectionTab() {
     if (m_alive) {
         *m_alive = false;
     }
-    brls::Logger::debug("LibrarySectionTab: Destroyed for section {}", m_sectionKey);
+    brls::Logger::debug("LibrarySectionTab: Destroyed for library {}", m_libraryId);
 }
 
 void LibrarySectionTab::onFocusGained() {
@@ -114,17 +122,17 @@ void LibrarySectionTab::onFocusGained() {
 }
 
 void LibrarySectionTab::loadContent() {
-    brls::Logger::debug("LibrarySectionTab::loadContent - section: {} (async)", m_sectionKey);
+    brls::Logger::debug("LibrarySectionTab::loadContent - library: {} (async)", m_libraryId);
 
-    std::string key = m_sectionKey;
-    std::weak_ptr<bool> aliveWeak = m_alive;  // Capture weak_ptr for async safety
+    std::string id = m_libraryId;
+    std::weak_ptr<bool> aliveWeak = m_alive;
 
-    asyncRun([this, key, aliveWeak]() {
-        PlexClient& client = PlexClient::getInstance();
+    asyncRun([this, id, aliveWeak]() {
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
-        if (client.fetchLibraryContent(key, items)) {
-            brls::Logger::info("LibrarySectionTab: Got {} items for section {}", items.size(), key);
+        if (client.fetchLibraryItems(id, items)) {
+            brls::Logger::info("LibrarySectionTab: Got {} items for library {}", items.size(), id);
 
             brls::sync([this, items, aliveWeak]() {
                 // Check if object is still alive before updating UI
@@ -139,7 +147,7 @@ void LibrarySectionTab::loadContent() {
                 m_loaded = true;
             });
         } else {
-            brls::Logger::error("LibrarySectionTab: Failed to load content for section {}", key);
+            brls::Logger::error("LibrarySectionTab: Failed to load content for library {}", id);
             brls::sync([this, aliveWeak]() {
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) return;
@@ -148,26 +156,25 @@ void LibrarySectionTab::loadContent() {
         }
     });
 
-    // Preload collections and genres for quick switching
+    // Preload collections, series, and authors for quick switching
     const auto& settings = Application::getInstance().getSettings();
     if (settings.showCollections) {
         loadCollections();
     }
-    if (settings.showGenres) {
-        loadGenres();
-    }
+    loadSeries();
+    loadAuthors();
 }
 
 void LibrarySectionTab::loadCollections() {
-    std::string key = m_sectionKey;
+    std::string id = m_libraryId;
     std::weak_ptr<bool> aliveWeak = m_alive;
 
-    asyncRun([this, key, aliveWeak]() {
-        PlexClient& client = PlexClient::getInstance();
-        std::vector<MediaItem> collections;
+    asyncRun([this, id, aliveWeak]() {
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+        std::vector<Collection> collections;
 
-        if (client.fetchCollections(key, collections)) {
-            brls::Logger::info("LibrarySectionTab: Got {} collections for section {}", collections.size(), key);
+        if (client.fetchCollections(id, collections)) {
+            brls::Logger::info("LibrarySectionTab: Got {} collections for library {}", collections.size(), id);
 
             brls::sync([this, collections, aliveWeak]() {
                 auto alive = aliveWeak.lock();
@@ -182,7 +189,7 @@ void LibrarySectionTab::loadCollections() {
                 }
             });
         } else {
-            brls::Logger::debug("LibrarySectionTab: No collections for section {}", key);
+            brls::Logger::debug("LibrarySectionTab: No collections for library {}", id);
             brls::sync([this, aliveWeak]() {
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) return;
@@ -196,33 +203,76 @@ void LibrarySectionTab::loadCollections() {
     });
 }
 
-void LibrarySectionTab::loadGenres() {
-    std::string key = m_sectionKey;
+void LibrarySectionTab::loadSeries() {
+    std::string id = m_libraryId;
     std::weak_ptr<bool> aliveWeak = m_alive;
 
-    asyncRun([this, key, aliveWeak]() {
-        PlexClient& client = PlexClient::getInstance();
-        std::vector<GenreItem> genres;
+    asyncRun([this, id, aliveWeak]() {
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+        std::vector<Series> seriesList;
 
-        if (client.fetchGenreItems(key, genres) && !genres.empty()) {
-            brls::Logger::info("LibrarySectionTab: Got {} genres for section {}", genres.size(), key);
+        if (client.fetchSeries(id, seriesList)) {
+            brls::Logger::info("LibrarySectionTab: Got {} series for library {}", seriesList.size(), id);
 
-            brls::sync([this, genres, aliveWeak]() {
+            brls::sync([this, seriesList, aliveWeak]() {
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) return;
 
-                m_genres = genres;
-                m_genresLoaded = true;
+                m_series = seriesList;
+                m_seriesLoaded = true;
+
+                // Hide series button if none available
+                if (m_series.empty() && m_seriesBtn) {
+                    m_seriesBtn->setVisibility(brls::Visibility::GONE);
+                }
             });
         } else {
-            brls::Logger::debug("LibrarySectionTab: No genres for section {}", key);
+            brls::Logger::debug("LibrarySectionTab: No series for library {}", id);
             brls::sync([this, aliveWeak]() {
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) return;
 
-                m_genresLoaded = true;
-                if (m_categoriesBtn) {
-                    m_categoriesBtn->setVisibility(brls::Visibility::GONE);
+                m_seriesLoaded = true;
+                if (m_seriesBtn) {
+                    m_seriesBtn->setVisibility(brls::Visibility::GONE);
+                }
+            });
+        }
+    });
+}
+
+void LibrarySectionTab::loadAuthors() {
+    std::string id = m_libraryId;
+    std::weak_ptr<bool> aliveWeak = m_alive;
+
+    asyncRun([this, id, aliveWeak]() {
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+        std::vector<Author> authorsList;
+
+        if (client.fetchAuthors(id, authorsList)) {
+            brls::Logger::info("LibrarySectionTab: Got {} authors for library {}", authorsList.size(), id);
+
+            brls::sync([this, authorsList, aliveWeak]() {
+                auto alive = aliveWeak.lock();
+                if (!alive || !*alive) return;
+
+                m_authors = authorsList;
+                m_authorsLoaded = true;
+
+                // Hide authors button if none available
+                if (m_authors.empty() && m_authorsBtn) {
+                    m_authorsBtn->setVisibility(brls::Visibility::GONE);
+                }
+            });
+        } else {
+            brls::Logger::debug("LibrarySectionTab: No authors for library {}", id);
+            brls::sync([this, aliveWeak]() {
+                auto alive = aliveWeak.lock();
+                if (!alive || !*alive) return;
+
+                m_authorsLoaded = true;
+                if (m_authorsBtn) {
+                    m_authorsBtn->setVisibility(brls::Visibility::GONE);
                 }
             });
         }
@@ -250,37 +300,77 @@ void LibrarySectionTab::showCollections() {
     m_viewMode = LibraryViewMode::COLLECTIONS;
     m_titleLabel->setText(m_title + " - Collections");
 
-    // Show collections in the grid
-    m_contentGrid->setDataSource(m_collections);
+    // Convert collections to MediaItem format for the grid
+    std::vector<MediaItem> collectionItems;
+    for (const auto& collection : m_collections) {
+        MediaItem item;
+        item.id = collection.id;
+        item.title = collection.name;
+        item.description = collection.description;
+        item.mediaType = MediaType::BOOK;  // Will be treated specially
+        collectionItems.push_back(item);
+    }
+
+    m_contentGrid->setDataSource(collectionItems);
     updateViewModeButtons();
 }
 
-void LibrarySectionTab::showCategories() {
-    if (!m_genresLoaded) {
-        brls::Application::notify("Loading categories...");
+void LibrarySectionTab::showSeries() {
+    if (!m_seriesLoaded) {
+        brls::Application::notify("Loading series...");
         return;
     }
 
-    if (m_genres.empty()) {
-        brls::Application::notify("No categories available");
+    if (m_series.empty()) {
+        brls::Application::notify("No series available");
         return;
     }
 
-    m_viewMode = LibraryViewMode::CATEGORIES;
-    m_titleLabel->setText(m_title + " - Categories");
+    m_viewMode = LibraryViewMode::SERIES;
+    m_titleLabel->setText(m_title + " - Series");
 
-    // Convert genres to MediaItem format for the grid
-    std::vector<MediaItem> genreItems;
-    for (const auto& genre : m_genres) {
+    // Convert series to MediaItem format for the grid
+    std::vector<MediaItem> seriesItems;
+    for (const auto& series : m_series) {
         MediaItem item;
-        item.title = genre.title;
-        item.ratingKey = genre.key;  // Use genre key for filtering
-        item.type = "genre";
-        item.mediaType = MediaType::UNKNOWN;
-        genreItems.push_back(item);
+        item.id = series.id;
+        item.title = series.name;
+        item.description = series.description;
+        item.mediaType = MediaType::BOOK;  // Will be treated specially
+        seriesItems.push_back(item);
     }
 
-    m_contentGrid->setDataSource(genreItems);
+    m_contentGrid->setDataSource(seriesItems);
+    updateViewModeButtons();
+}
+
+void LibrarySectionTab::showAuthors() {
+    if (!m_authorsLoaded) {
+        brls::Application::notify("Loading authors...");
+        return;
+    }
+
+    if (m_authors.empty()) {
+        brls::Application::notify("No authors available");
+        return;
+    }
+
+    m_viewMode = LibraryViewMode::AUTHORS;
+    m_titleLabel->setText(m_title + " - Authors");
+
+    // Convert authors to MediaItem format for the grid
+    std::vector<MediaItem> authorItems;
+    for (const auto& author : m_authors) {
+        MediaItem item;
+        item.id = author.id;
+        item.title = author.name;
+        item.description = author.description;
+        item.coverUrl = author.imagePath;
+        item.mediaType = MediaType::BOOK;  // Will be treated specially
+        authorItems.push_back(item);
+    }
+
+    m_contentGrid->setDataSource(authorItems);
     updateViewModeButtons();
 }
 
@@ -295,8 +385,11 @@ void LibrarySectionTab::updateViewModeButtons() {
     if (m_collectionsBtn) {
         m_collectionsBtn->setVisibility(showModeButtons && !m_collections.empty() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
     }
-    if (m_categoriesBtn) {
-        m_categoriesBtn->setVisibility(showModeButtons && !m_genres.empty() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+    if (m_seriesBtn) {
+        m_seriesBtn->setVisibility(showModeButtons && !m_series.empty() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+    }
+    if (m_authorsBtn) {
+        m_authorsBtn->setVisibility(showModeButtons && !m_authors.empty() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
     }
 }
 
@@ -308,22 +401,24 @@ void LibrarySectionTab::onItemSelected(const MediaItem& item) {
         return;
     }
 
-    if (m_viewMode == LibraryViewMode::CATEGORIES) {
-        // Selected a category/genre - filter by it
-        GenreItem genre;
-        genre.title = item.title;
-        genre.key = item.ratingKey;
-        onGenreSelected(genre);
+    if (m_viewMode == LibraryViewMode::SERIES) {
+        // Selected a series - show its books
+        onSeriesSelected(item);
         return;
     }
 
-    // Normal item selection
-    if (item.mediaType == MediaType::MUSIC_TRACK) {
-        Application::getInstance().pushPlayerActivity(item.ratingKey);
+    if (m_viewMode == LibraryViewMode::AUTHORS) {
+        // Selected an author - show their books
+        onAuthorSelected(item);
         return;
     }
 
-    // Show media detail view for other types
+    // Normal item selection - show media detail view
+    if (item.mediaType == MediaType::PODCAST_EPISODE) {
+        Application::getInstance().pushPlayerActivity(item.id, item.episodeId);
+        return;
+    }
+
     auto* detailView = new MediaDetailView(item);
     brls::Application::pushActivity(new brls::Activity(detailView));
 }
@@ -332,15 +427,15 @@ void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
     brls::Logger::debug("LibrarySectionTab: Selected collection: {}", collection.title);
 
     m_filterTitle = collection.title;
-    std::string collectionKey = collection.ratingKey;
+    std::string collectionId = collection.id;
     std::string filterTitle = m_filterTitle;
     std::weak_ptr<bool> aliveWeak = m_alive;
 
-    asyncRun([this, collectionKey, filterTitle, aliveWeak]() {
-        PlexClient& client = PlexClient::getInstance();
+    asyncRun([this, collectionId, filterTitle, aliveWeak]() {
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
-        if (client.fetchChildren(collectionKey, items)) {
+        if (client.fetchCollectionItems(collectionId, items)) {
             brls::Logger::info("LibrarySectionTab: Got {} items in collection", items.size());
 
             brls::sync([this, items, filterTitle, aliveWeak]() {
@@ -363,23 +458,21 @@ void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
     });
 }
 
-void LibrarySectionTab::onGenreSelected(const GenreItem& genre) {
-    brls::Logger::debug("LibrarySectionTab: Selected genre: {} (key: {})", genre.title, genre.key);
+void LibrarySectionTab::onSeriesSelected(const MediaItem& series) {
+    brls::Logger::debug("LibrarySectionTab: Selected series: {}", series.title);
 
-    m_filterTitle = genre.title;
-    std::string key = m_sectionKey;
-    std::string genreKey = genre.key;
-    std::string genreTitle = genre.title;
+    m_filterTitle = series.title;
+    std::string seriesId = series.id;
+    std::string libraryId = m_libraryId;
     std::string filterTitle = m_filterTitle;
     std::weak_ptr<bool> aliveWeak = m_alive;
 
-    asyncRun([this, key, genreKey, genreTitle, filterTitle, aliveWeak]() {
-        PlexClient& client = PlexClient::getInstance();
+    asyncRun([this, seriesId, libraryId, filterTitle, aliveWeak]() {
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
-        // Try with genre key first, fall back to title
-        if (client.fetchByGenreKey(key, genreKey, items) || client.fetchByGenre(key, genreTitle, items)) {
-            brls::Logger::info("LibrarySectionTab: Got {} items for genre", items.size());
+        if (client.fetchSeriesItems(libraryId, seriesId, items)) {
+            brls::Logger::info("LibrarySectionTab: Got {} items in series", items.size());
 
             brls::sync([this, items, filterTitle, aliveWeak]() {
                 auto alive = aliveWeak.lock();
@@ -391,11 +484,47 @@ void LibrarySectionTab::onGenreSelected(const GenreItem& genre) {
                 updateViewModeButtons();
             });
         } else {
-            brls::Logger::error("LibrarySectionTab: Failed to load genre content");
+            brls::Logger::error("LibrarySectionTab: Failed to load series content");
             brls::sync([aliveWeak]() {
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) return;
-                brls::Application::notify("Failed to load category");
+                brls::Application::notify("Failed to load series");
+            });
+        }
+    });
+}
+
+void LibrarySectionTab::onAuthorSelected(const MediaItem& author) {
+    brls::Logger::debug("LibrarySectionTab: Selected author: {}", author.title);
+
+    m_filterTitle = author.title;
+    std::string authorId = author.id;
+    std::string libraryId = m_libraryId;
+    std::string filterTitle = m_filterTitle;
+    std::weak_ptr<bool> aliveWeak = m_alive;
+
+    asyncRun([this, authorId, libraryId, filterTitle, aliveWeak]() {
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+        std::vector<MediaItem> items;
+
+        if (client.fetchAuthorItems(libraryId, authorId, items)) {
+            brls::Logger::info("LibrarySectionTab: Got {} items by author", items.size());
+
+            brls::sync([this, items, filterTitle, aliveWeak]() {
+                auto alive = aliveWeak.lock();
+                if (!alive || !*alive) return;
+
+                m_viewMode = LibraryViewMode::FILTERED;
+                m_titleLabel->setText(m_title + " - " + filterTitle);
+                m_contentGrid->setDataSource(items);
+                updateViewModeButtons();
+            });
+        } else {
+            brls::Logger::error("LibrarySectionTab: Failed to load author content");
+            brls::sync([aliveWeak]() {
+                auto alive = aliveWeak.lock();
+                if (!alive || !*alive) return;
+                brls::Application::notify("Failed to load author");
             });
         }
     });

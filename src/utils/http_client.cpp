@@ -3,6 +3,7 @@
  */
 
 #include "utils/http_client.hpp"
+#include "app/application.hpp"
 
 #include <borealis.hpp>
 #include <curl/curl.h>
@@ -11,9 +12,6 @@
 #include <cctype>
 
 namespace vitaabs {
-
-// User agent string
-static const char* USER_AGENT = "VitaABS/1.0.0 (PlayStation Vita)";
 
 // Curl write callback data
 struct WriteCallbackData {
@@ -36,7 +34,7 @@ void HttpClient::globalCleanup() {
 
 HttpClient::HttpClient() {
     m_curl = curl_easy_init();
-    m_userAgent = USER_AGENT;
+    m_userAgent = ABS_CLIENT_NAME "/" VITA_ABS_VERSION " (" ABS_DEVICE_NAME ")";
 }
 
 HttpClient::~HttpClient() {
@@ -198,12 +196,6 @@ HttpResponse HttpClient::request(const HttpRequest& req) {
         }
     } else if (req.method == "DELETE") {
         curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
-    } else if (req.method == "PATCH") {
-        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PATCH");
-        if (!req.body.empty()) {
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, req.body.c_str());
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)req.body.length());
-        }
     }
 
     // Perform request
@@ -330,11 +322,8 @@ static size_t downloadHeaderCallback(void* contents, size_t size, size_t nmemb, 
     if (data && data->sizeCallback && !data->sizeReported) {
         std::string header(static_cast<char*>(contents), totalSize);
 
-        // Look for Content-Length header (case-insensitive)
-        std::string lowerHeader = header;
-        for (char& c : lowerHeader) c = std::tolower(c);
-
-        if (lowerHeader.find("content-length:") == 0) {
+        // Look for Content-Length header
+        if (header.find("Content-Length:") == 0 || header.find("content-length:") == 0) {
             size_t colonPos = header.find(':');
             if (colonPos != std::string::npos) {
                 std::string value = header.substr(colonPos + 1);
@@ -381,16 +370,6 @@ bool HttpClient::downloadFile(const std::string& url, WriteCallback writeCallbac
     // User agent
     curl_easy_setopt(curl, CURLOPT_USERAGENT, m_userAgent.c_str());
 
-    // Add default headers (including Authorization if set)
-    struct curl_slist* headerList = nullptr;
-    for (const auto& h : m_defaultHeaders) {
-        std::string header = h.first + ": " + h.second;
-        headerList = curl_slist_append(headerList, header.c_str());
-    }
-    if (headerList) {
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headerList);
-    }
-
     // Setup callback data
     DownloadCallbackData callbackData;
     callbackData.writeCallback = writeCallback;
@@ -412,11 +391,6 @@ bool HttpClient::downloadFile(const std::string& url, WriteCallback writeCallbac
 
     // Perform download
     CURLcode res = curl_easy_perform(curl);
-
-    // Cleanup headers
-    if (headerList) {
-        curl_slist_free_all(headerList);
-    }
 
     if (callbackData.cancelled) {
         brls::Logger::info("HttpClient: Download cancelled by user");

@@ -180,8 +180,6 @@ int main(int argc, char* argv[]) {
     if (logFile) {
         // Use line buffering so logs are written immediately
         setvbuf(logFile, NULL, _IOLBF, 0);
-        // Note: brls::Logger::setLogOutput doesn't work on Vita (uses sceClibPrintf)
-        // We'll subscribe to log events after Borealis init
     }
 #endif
 
@@ -199,7 +197,7 @@ int main(int argc, char* argv[]) {
     }
 
 #ifdef __vita__
-    // Subscribe to log events to write to file (since setLogOutput doesn't work on Vita)
+    // Subscribe to log events to write to file
     if (logFile) {
         brls::Logger::getLogEvent()->subscribe([](brls::Logger::TimePoint time, brls::LogLevel level, std::string log) {
             if (!logFile) return;
