@@ -61,17 +61,7 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
         m_viewModeBox->addView(m_collectionsBtn);
     }
 
-    // Categories button (only show if enabled)
-    if (settings.showGenres) {
-        m_categoriesBtn = new brls::Button();
-        m_categoriesBtn->setText("Categories");
-        m_categoriesBtn->setMarginRight(10);
-        m_categoriesBtn->registerClickAction([this](brls::View* view) {
-            showCategories();
-            return true;
-        });
-        m_viewModeBox->addView(m_categoriesBtn);
-    }
+    // Note: Categories/Genres button removed - Audiobookshelf doesn't have a genre browsing API
 
     // Back button (hidden by default, shown in filtered view)
     m_backBtn = new brls::Button();
@@ -149,14 +139,12 @@ void LibrarySectionTab::loadContent() {
         }
     });
 
-    // Preload collections and genres for quick switching
+    // Preload collections for quick switching
     const auto& settings = Application::getInstance().getSettings();
     if (settings.showCollections) {
         loadCollections();
     }
-    if (settings.showGenres) {
-        loadGenres();
-    }
+    // Note: Genre preloading removed - Audiobookshelf doesn't have a genre browsing API
 }
 
 void LibrarySectionTab::loadCollections() {
