@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Library Tab implementation
+ * VitaABS - Library Tab implementation
  */
 
 #include "view/library_tab.hpp"
@@ -8,7 +8,7 @@
 #include "app/application.hpp"
 #include "utils/async.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 LibraryTab::LibraryTab() {
     this->setAxis(brls::Axis::COLUMN);
@@ -174,4 +174,4 @@ void LibraryTab::onItemSelected(const MediaItem& item) {
     brls::Application::pushActivity(new brls::Activity(detailView));
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

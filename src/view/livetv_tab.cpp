@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Live TV Tab implementation
+ * VitaABS - Live TV Tab implementation
  */
 
 #include "view/livetv_tab.hpp"
@@ -8,7 +8,7 @@
 #include "utils/image_loader.hpp"
 #include <ctime>
 
-namespace vitaplex {
+namespace vitaabs {
 
 // Constants for EPG grid layout
 static const int CHANNEL_COLUMN_WIDTH = 100;  // Width of channel name column
@@ -517,4 +517,4 @@ void LiveTVTab::scheduleRecording(const GuideProgram& program, const LiveTVChann
     dialog->open();
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Music Tab implementation
+ * VitaABS - Music Tab implementation
  */
 
 #include "view/music_tab.hpp"
@@ -8,7 +8,7 @@
 #include "app/application.hpp"
 #include "utils/async.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 MusicTab::MusicTab() {
     // Create alive flag for async callback safety
@@ -413,4 +413,4 @@ void MusicTab::onCollectionSelected(const MediaItem& collection) {
     });
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

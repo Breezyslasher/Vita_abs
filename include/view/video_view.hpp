@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Video View
+ * VitaABS - Video View
  * Custom view for rendering video frames from MPV player
  */
 
@@ -7,7 +7,7 @@
 
 #include <borealis.hpp>
 
-namespace vitaplex {
+namespace vitaabs {
 
 /**
  * VideoView - renders video frames from MPV player using NanoVG
@@ -29,4 +29,4 @@ private:
     bool m_videoVisible = false;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

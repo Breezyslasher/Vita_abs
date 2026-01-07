@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Main Activity implementation
+ * VitaABS - Main Activity implementation
  */
 
 #include "activity/main_activity.hpp"
@@ -18,7 +18,7 @@
 
 #include <algorithm>
 
-namespace vitaplex {
+namespace vitaabs {
 
 // Cached library sections for sidebar mode
 static std::vector<LibrarySection> s_cachedSections;
@@ -198,4 +198,4 @@ void MainActivity::loadLibrariesToSidebar() {
     }
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Search Tab
+ * VitaABS - Search Tab
  * Search for media content
  */
 
@@ -9,7 +9,7 @@
 #include "app/plex_client.hpp"
 #include "view/recycling_grid.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 class SearchTab : public brls::Box {
 public:
@@ -48,4 +48,4 @@ private:
     std::vector<MediaItem> m_music;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

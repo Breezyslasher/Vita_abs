@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Login Activity
+ * VitaABS - Login Activity
  * Handles user authentication via credentials or PIN
  */
 
@@ -9,7 +9,7 @@
 #include <borealis/core/timer.hpp>
 #include "app/plex_client.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 class LoginActivity : public brls::Activity {
 public:
@@ -45,4 +45,4 @@ private:
     brls::RepeatingTimer m_pinTimer;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

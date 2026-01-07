@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Plex API Client implementation
+ * VitaABS - Plex API Client implementation
  */
 
 #include "app/plex_client.hpp"
@@ -11,7 +11,7 @@
 #include <ctime>
 #include <algorithm>
 
-namespace vitaplex {
+namespace vitaabs {
 
 PlexClient& PlexClient::getInstance() {
     static PlexClient instance;
@@ -1696,8 +1696,8 @@ bool PlexClient::getTranscodeUrl(const std::string& ratingKey, std::string& url,
 
     // Add authentication and client identification
     url += "&X-Plex-Token=" + m_authToken;
-    url += "&X-Plex-Client-Identifier=VitaPlex";
-    url += "&X-Plex-Product=VitaPlex";
+    url += "&X-Plex-Client-Identifier=VitaABS";
+    url += "&X-Plex-Product=VitaABS";
     url += "&X-Plex-Version=1.0.0";
     url += "&X-Plex-Platform=PlayStation%20Vita";
     url += "&X-Plex-Device=PS%20Vita";
@@ -1968,4 +1968,4 @@ std::string PlexClient::getThumbnailUrl(const std::string& thumb, int width, int
     return url;
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

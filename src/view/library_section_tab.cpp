@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Library Section Tab implementation
+ * VitaABS - Library Section Tab implementation
  */
 
 #include "view/library_section_tab.hpp"
@@ -8,7 +8,7 @@
 #include "app/application.hpp"
 #include "utils/async.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::string& title, const std::string& sectionType)
     : m_sectionKey(sectionKey), m_title(title), m_sectionType(sectionType) {
@@ -401,4 +401,4 @@ void LibrarySectionTab::onGenreSelected(const GenreItem& genre) {
     });
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

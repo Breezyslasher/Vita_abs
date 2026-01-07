@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Application implementation
+ * VitaABS - Application implementation
  */
 
 #include "app/application.hpp"
@@ -17,9 +17,9 @@
 #include <psp2/io/stat.h>
 #endif
 
-namespace vitaplex {
+namespace vitaabs {
 
-static const char* SETTINGS_PATH = "ux0:data/VitaPlex/settings.json";
+static const char* SETTINGS_PATH = "ux0:data/VitaABS/settings.json";
 
 Application& Application::getInstance() {
     static Application instance;
@@ -28,11 +28,11 @@ Application& Application::getInstance() {
 
 bool Application::init() {
     brls::Logger::setLogLevel(brls::LogLevel::LOG_DEBUG);
-    brls::Logger::info("VitaPlex {} initializing...", VITA_PLEX_VERSION);
+    brls::Logger::info("VitaABS {} initializing...", VITA_PLEX_VERSION);
 
 #ifdef __vita__
     // Create data directory
-    int ret = sceIoMkdir("ux0:data/VitaPlex", 0777);
+    int ret = sceIoMkdir("ux0:data/VitaABS", 0777);
     brls::Logger::debug("sceIoMkdir result: {:#x}", ret);
 #endif
 
@@ -81,7 +81,7 @@ void Application::run() {
 void Application::shutdown() {
     saveSettings();
     m_initialized = false;
-    brls::Logger::info("VitaPlex shutting down");
+    brls::Logger::info("VitaABS shutting down");
 }
 
 void Application::pushLoginActivity() {
@@ -351,4 +351,4 @@ bool Application::saveSettings() {
 #endif
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

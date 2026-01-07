@@ -1,5 +1,5 @@
 /**
- * VitaPlex - MPV Video Player
+ * VitaABS - MPV Video Player
  * Hardware-accelerated video playback using libmpv with FFmpeg-vita
  */
 
@@ -8,7 +8,7 @@
 #include <string>
 #include <mpv/client.h>
 
-namespace vitaplex {
+namespace vitaabs {
 
 // Player states
 enum class MpvPlayerState {
@@ -149,4 +149,4 @@ private:
     bool m_subtitlesVisible = true;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

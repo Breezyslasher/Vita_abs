@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Home Tab
+ * VitaABS - Home Tab
  * Shows continue watching, recently added movies, shows, and music
  */
 
@@ -9,7 +9,7 @@
 #include "app/plex_client.hpp"
 #include "view/recycling_grid.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 class HomeTab : public brls::Box {
 public:
@@ -54,4 +54,4 @@ private:
     bool m_loaded = false;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

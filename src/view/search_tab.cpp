@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Search Tab implementation
+ * VitaABS - Search Tab implementation
  */
 
 #include "view/search_tab.hpp"
@@ -7,7 +7,7 @@
 #include "view/media_item_cell.hpp"
 #include "app/application.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 SearchTab::SearchTab() {
     this->setAxis(brls::Axis::COLUMN);
@@ -281,4 +281,4 @@ void SearchTab::onItemSelected(const MediaItem& item) {
     brls::Application::pushActivity(new brls::Activity(detailView));
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

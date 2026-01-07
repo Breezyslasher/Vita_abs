@@ -1,12 +1,12 @@
 /**
- * VitaPlex - Media Item Cell implementation
+ * VitaABS - Media Item Cell implementation
  */
 
 #include "view/media_item_cell.hpp"
 #include "app/plex_client.hpp"
 #include "utils/image_loader.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 MediaItemCell::MediaItemCell() {
     this->setAxis(brls::Axis::COLUMN);
@@ -232,4 +232,4 @@ void MediaItemCell::updateFocusInfo(bool focused) {
     }
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Async utilities
+ * VitaABS - Async utilities
  * Simple async task execution with UI thread callbacks
  */
 
@@ -9,7 +9,7 @@
 #include <thread>
 #include <borealis.hpp>
 
-namespace vitaplex {
+namespace vitaabs {
 
 /**
  * Execute a task asynchronously and call a callback on the UI thread when done.
@@ -53,4 +53,4 @@ inline void asyncRun(std::function<void()> task) {
     }).detach();
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

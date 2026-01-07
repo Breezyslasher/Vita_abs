@@ -1,11 +1,11 @@
 /**
- * VitaPlex - Asynchronous Image Loader implementation
+ * VitaABS - Asynchronous Image Loader implementation
  */
 
 #include "utils/image_loader.hpp"
 #include "utils/http_client.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 std::map<std::string, std::vector<uint8_t>> ImageLoader::s_cache;
 std::mutex ImageLoader::s_cacheMutex;
@@ -61,4 +61,4 @@ void ImageLoader::cancelAll() {
     // Borealis handles thread cancellation
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

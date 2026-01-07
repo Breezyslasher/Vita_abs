@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Home Tab implementation
+ * VitaABS - Home Tab implementation
  */
 
 #include "view/home_tab.hpp"
@@ -8,7 +8,7 @@
 #include "app/application.hpp"
 #include "utils/async.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 HomeTab::HomeTab() {
     this->setAxis(brls::Axis::COLUMN);
@@ -251,4 +251,4 @@ void HomeTab::onItemSelected(const MediaItem& item) {
     brls::Application::pushActivity(new brls::Activity(detailView));
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

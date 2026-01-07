@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Live TV Tab
+ * VitaABS - Live TV Tab
  * Browse live TV channels and program guide
  */
 
@@ -8,7 +8,7 @@
 #include <borealis.hpp>
 #include "app/plex_client.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 // Program guide item
 struct GuideProgram {
@@ -85,4 +85,4 @@ private:
     bool m_loaded = false;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

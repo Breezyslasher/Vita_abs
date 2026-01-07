@@ -1,5 +1,5 @@
 /**
- * VitaPlex - MPV Video Player Implementation
+ * VitaABS - MPV Video Player Implementation
  * Based on switchfin's MPV implementation for PS Vita
  * Using software rendering with NanoVG display
  */
@@ -21,7 +21,7 @@
 #include <cstdlib>
 #include <clocale>
 
-namespace vitaplex {
+namespace vitaabs {
 
 // Command IDs for async operations
 static const uint64_t CMD_LOADFILE = 1;
@@ -134,7 +134,7 @@ bool MpvPlayer::init() {
     mpv_set_option_string(m_mpv, "network-timeout", "30");
 
     // User agent for Plex compatibility
-    mpv_set_option_string(m_mpv, "user-agent", "VitaPlex/1.0");
+    mpv_set_option_string(m_mpv, "user-agent", "VitaABS/1.0");
 
     // ========================================
     // Subtitle settings
@@ -972,4 +972,4 @@ void MpvPlayer::render() {
 #endif
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

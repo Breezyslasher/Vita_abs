@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Player Activity implementation
+ * VitaABS - Player Activity implementation
  */
 
 #include "activity/player_activity.hpp"
@@ -9,7 +9,7 @@
 #include "utils/image_loader.hpp"
 #include "view/video_view.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 PlayerActivity::PlayerActivity(const std::string& mediaKey)
     : m_mediaKey(mediaKey), m_isLocalFile(false) {
@@ -385,4 +385,4 @@ void PlayerActivity::seek(int seconds) {
     player.seekRelative(seconds);
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

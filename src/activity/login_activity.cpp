@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Login Activity implementation
+ * VitaABS - Login Activity implementation
  */
 
 #include "activity/login_activity.hpp"
@@ -10,7 +10,7 @@
 
 #include <memory>
 
-namespace vitaplex {
+namespace vitaabs {
 
 LoginActivity::LoginActivity() {
     brls::Logger::debug("LoginActivity created");
@@ -25,7 +25,7 @@ void LoginActivity::onContentAvailable() {
 
     // Set initial values
     if (titleLabel) {
-        titleLabel->setText("VitaPlex");
+        titleLabel->setText("VitaABS");
     }
 
     if (statusLabel) {
@@ -320,4 +320,4 @@ void LoginActivity::checkPinStatus() {
     }
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

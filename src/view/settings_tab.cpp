@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Settings Tab implementation
+ * VitaABS - Settings Tab implementation
  */
 
 #include "view/settings_tab.hpp"
@@ -10,7 +10,7 @@
 #include "activity/player_activity.hpp"
 #include <set>
 
-namespace vitaplex {
+namespace vitaabs {
 
 SettingsTab::SettingsTab() {
     this->setAxis(brls::Axis::COLUMN);
@@ -425,7 +425,7 @@ void SettingsTab::createDebugSection() {
     // Test local playback button
     auto* testLocalCell = new brls::DetailCell();
     testLocalCell->setText("Test Local Playback");
-    testLocalCell->setDetailText("ux0:data/VitaPlex/test.mp3");
+    testLocalCell->setDetailText("ux0:data/VitaABS/test.mp3");
     testLocalCell->registerClickAction([this](brls::View* view) {
         onTestLocalPlayback();
         return true;
@@ -434,7 +434,7 @@ void SettingsTab::createDebugSection() {
 
     // Info label
     auto* infoLabel = new brls::Label();
-    infoLabel->setText("Place test.mp3 or test.mp4 in ux0:data/VitaPlex/");
+    infoLabel->setText("Place test.mp3 or test.mp4 in ux0:data/VitaABS/");
     infoLabel->setFontSize(14);
     infoLabel->setMarginLeft(16);
     infoLabel->setMarginTop(8);
@@ -456,7 +456,7 @@ void SettingsTab::createAboutSection() {
 
     // App description
     auto* descLabel = new brls::Label();
-    descLabel->setText("VitaPlex - Plex Client for PlayStation Vita");
+    descLabel->setText("VitaABS - Plex Client for PlayStation Vita");
     descLabel->setFontSize(16);
     descLabel->setMarginLeft(16);
     descLabel->setMarginTop(8);
@@ -858,7 +858,7 @@ void SettingsTab::onTestLocalPlayback() {
     brls::Logger::info("SettingsTab: Testing local playback...");
 
     // Check for test files
-    const std::string basePath = "ux0:data/VitaPlex/";
+    const std::string basePath = "ux0:data/VitaABS/";
     std::string testFile;
 
     // Try mp4 first (to test video), then audio files
@@ -880,7 +880,7 @@ void SettingsTab::onTestLocalPlayback() {
     }
 
     if (testFile.empty()) {
-        brls::Application::notify("No test file found in ux0:data/VitaPlex/");
+        brls::Application::notify("No test file found in ux0:data/VitaABS/");
         brls::Logger::error("SettingsTab: No test file found");
         return;
     }
@@ -891,4 +891,4 @@ void SettingsTab::onTestLocalPlayback() {
     brls::Application::pushActivity(activity);
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

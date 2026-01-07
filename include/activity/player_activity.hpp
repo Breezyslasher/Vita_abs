@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Player Activity
+ * VitaABS - Player Activity
  * Video playback screen with controls
  */
 
@@ -10,9 +10,9 @@
 #include <string>
 
 // Forward declaration
-namespace vitaplex { class VideoView; }
+namespace vitaabs { class VideoView; }
 
-namespace vitaplex {
+namespace vitaabs {
 
 class PlayerActivity : public brls::Activity {
 public:
@@ -57,4 +57,4 @@ private:
     BRLS_BIND(VideoView, videoView, "player/video");
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

@@ -1,10 +1,10 @@
 /**
- * VitaPlex - Progress Dialog implementation
+ * VitaABS - Progress Dialog implementation
  */
 
 #include "view/progress_dialog.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 ProgressDialog::ProgressDialog(const std::string& title) {
     this->setAxis(brls::Axis::COLUMN);
@@ -245,4 +245,4 @@ ProgressDialog* ProgressDialog::showDownloading(const std::string& title) {
     return dialog;
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

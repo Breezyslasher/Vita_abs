@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Media Detail View
+ * VitaABS - Media Detail View
  * Shows detailed information about a media item
  */
 
@@ -8,7 +8,7 @@
 #include <borealis.hpp>
 #include "app/plex_client.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 class MediaDetailView : public brls::Box {
 public:
@@ -55,4 +55,4 @@ private:
     brls::Box* m_soundtracksContent = nullptr;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

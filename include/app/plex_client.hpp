@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Plex API Client
+ * VitaABS - Plex API Client
  * Handles all communication with Plex servers
  */
 
@@ -10,7 +10,7 @@
 #include <functional>
 #include <memory>
 
-namespace vitaplex {
+namespace vitaabs {
 
 // Media types
 enum class MediaType {
@@ -224,4 +224,4 @@ private:
     bool m_hasLiveTV = false;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

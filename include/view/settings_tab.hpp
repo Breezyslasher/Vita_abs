@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Settings Tab
+ * VitaABS - Settings Tab
  * Application settings and user info
  */
 
@@ -7,7 +7,7 @@
 
 #include <borealis.hpp>
 
-namespace vitaplex {
+namespace vitaabs {
 
 class SettingsTab : public brls::Box {
 public:
@@ -79,4 +79,4 @@ private:
     brls::DetailCell* m_clearDownloadsCell = nullptr;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

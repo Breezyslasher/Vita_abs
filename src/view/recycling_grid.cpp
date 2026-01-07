@@ -1,11 +1,11 @@
 /**
- * VitaPlex - Recycling Grid implementation
+ * VitaABS - Recycling Grid implementation
  */
 
 #include "view/recycling_grid.hpp"
 #include "view/media_item_cell.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 RecyclingGrid::RecyclingGrid() {
     this->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
@@ -80,4 +80,4 @@ brls::View* RecyclingGrid::create() {
     return new RecyclingGrid();
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

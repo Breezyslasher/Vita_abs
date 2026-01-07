@@ -1,12 +1,12 @@
 /**
- * VitaPlex - Downloads Tab Implementation
+ * VitaABS - Downloads Tab Implementation
  */
 
 #include "view/downloads_tab.hpp"
 #include "app/downloads_manager.hpp"
 #include "activity/player_activity.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 DownloadsTab::DownloadsTab() {
     this->setAxis(brls::Axis::COLUMN);
@@ -172,4 +172,4 @@ void DownloadsTab::showDownloadOptions(const std::string& ratingKey, const std::
     // Not implemented - download options would be shown from media detail view
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

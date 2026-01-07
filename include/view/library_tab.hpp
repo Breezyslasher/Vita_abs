@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Library Tab
+ * VitaABS - Library Tab
  * Browse library sections and content
  */
 
@@ -9,7 +9,7 @@
 #include "app/plex_client.hpp"
 #include "view/recycling_grid.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 class LibraryTab : public brls::Box {
 public:
@@ -34,4 +34,4 @@ private:
     bool m_loaded = false;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

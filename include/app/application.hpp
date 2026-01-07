@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Plex Client for PlayStation Vita
+ * VitaABS - Plex Client for PlayStation Vita
  * Borealis-based Application
  */
 
@@ -14,12 +14,12 @@
 
 // Plex client identification
 #define PLEX_CLIENT_ID "vita-plex-client-001"
-#define PLEX_CLIENT_NAME "VitaPlex"
+#define PLEX_CLIENT_NAME "VitaABS"
 #define PLEX_CLIENT_VERSION VITA_PLEX_VERSION
 #define PLEX_PLATFORM "PlayStation Vita"
 #define PLEX_DEVICE "PS Vita"
 
-namespace vitaplex {
+namespace vitaabs {
 
 // Theme options
 enum class AppTheme {
@@ -149,4 +149,4 @@ private:
     AppSettings m_settings;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

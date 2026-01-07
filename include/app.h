@@ -1,7 +1,7 @@
 #pragma once
 
 /**
- * VitaPlex - Plex Client for PlayStation Vita
+ * VitaABS - Plex Client for PlayStation Vita
  * Based on switchfin architecture (https://github.com/dragonflylee/switchfin)
  */
 
@@ -21,12 +21,12 @@
 
 // Plex client identification
 #define PLEX_CLIENT_ID "vita-plex-client-001"
-#define PLEX_CLIENT_NAME "VitaPlex"
+#define PLEX_CLIENT_NAME "VitaABS"
 #define PLEX_CLIENT_VERSION VITA_PLEX_VERSION
 #define PLEX_PLATFORM "PlayStation Vita"
 #define PLEX_DEVICE "PS Vita"
 
-namespace vitaplex {
+namespace vitaabs {
 
 // Application states
 enum class AppState {
@@ -378,4 +378,4 @@ private:
     int m_hubItemIndex = 0;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

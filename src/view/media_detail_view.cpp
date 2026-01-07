@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Media Detail View implementation
+ * VitaABS - Media Detail View implementation
  */
 
 #include "view/media_detail_view.hpp"
@@ -15,7 +15,7 @@
 #include <psp2/kernel/threadmgr.h>
 #endif
 
-namespace vitaplex {
+namespace vitaabs {
 
 MediaDetailView::MediaDetailView(const MediaItem& item)
     : m_item(item) {
@@ -937,4 +937,4 @@ void MediaDetailView::downloadUnwatched(int maxCount) {
     });
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

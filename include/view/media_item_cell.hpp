@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Media Item Cell
+ * VitaABS - Media Item Cell
  * A cell for displaying media items in a grid
  */
 
@@ -8,7 +8,7 @@
 #include <borealis.hpp>
 #include "app/plex_client.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 class MediaItemCell : public brls::Box {
 public:
@@ -36,4 +36,4 @@ private:
     brls::Rectangle* m_progressBar = nullptr;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs
