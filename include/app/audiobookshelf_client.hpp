@@ -102,6 +102,17 @@ struct MediaItem {
     int episodeNumber = 0;
     int seasonNumber = 0;
     std::string pubDate;
+
+    // ============================================
+    // Plex compatibility aliases
+    // ============================================
+    std::string ratingKey;         // Alias for id
+    std::string thumb;             // Alias for coverPath
+    std::string key;               // Alias for id (used for section/item keys)
+    std::string partPath;          // File path (audioTracks[0].contentUrl)
+    std::string grandparentTitle;  // Alias for seriesName
+    int64_t viewOffset = 0;        // Progress in milliseconds (currentTime * 1000)
+    bool watched = false;          // Alias for isFinished
 };
 
 // Library section info
@@ -112,6 +123,10 @@ struct Library {
     std::string mediaType;         // "book" or "podcast"
     int itemCount = 0;
     std::vector<std::string> folders;
+
+    // Plex compatibility
+    std::string key;               // Alias for id
+    std::string title;             // Alias for name
 };
 
 // Collection info
@@ -123,6 +138,9 @@ struct Collection {
     std::string coverPath;
     int bookCount = 0;
     std::vector<std::string> bookIds;
+
+    // Plex compatibility
+    std::string ratingKey;         // Alias for id
 };
 
 // Server info
@@ -250,6 +268,49 @@ public:
     void setServerUrl(const std::string& url) { m_serverUrl = url; }
     const std::string& getServerUrl() const { return m_serverUrl; }
     const User& getCurrentUser() const { return m_currentUser; }
+
+    // ============================================
+    // Plex API compatibility aliases
+    // These map old Plex-style calls to Audiobookshelf equivalents
+    // ============================================
+
+    // Library methods (Plex compatibility)
+    bool fetchLibrarySections(std::vector<Library>& sections) { return fetchLibraries(sections); }
+    bool fetchLibraryContent(const std::string& libraryId, std::vector<MediaItem>& items) {
+        return fetchLibraryItems(libraryId, items);
+    }
+
+    // Item methods (Plex compatibility)
+    bool fetchMediaDetails(const std::string& itemId, MediaItem& item) { return fetchItem(itemId, item); }
+    bool fetchChildren(const std::string& parentId, std::vector<MediaItem>& children) {
+        // For podcasts, fetch episodes; for books, this returns empty
+        return fetchPodcastEpisodes(parentId, children);
+    }
+
+    // Progress methods (Plex compatibility)
+    bool fetchContinueWatching(std::vector<MediaItem>& items) { return fetchItemsInProgress(items); }
+    bool fetchSectionRecentlyAdded(const std::string& libraryId, std::vector<MediaItem>& items) {
+        return fetchRecentlyAdded(libraryId, items);
+    }
+
+    // Cover/thumbnail (Plex compatibility)
+    std::string getThumbnailUrl(const std::string& path, int width = 400, int height = 400) {
+        // For Audiobookshelf, path is the item ID
+        return getCoverUrl(path, width, height);
+    }
+
+    // Collections (Plex compatibility)
+    bool fetchCollections(const std::string& libraryId, std::vector<Collection>& collections) {
+        return fetchLibraryCollections(libraryId, collections);
+    }
+
+    // Stub methods for unsupported Plex features
+    bool fetchPlaylists(std::vector<MediaItem>& playlists) { playlists.clear(); return false; }
+    bool fetchEPGGrid(std::vector<MediaItem>& channels, int hours) { channels.clear(); return false; }
+    bool fetchGenreItems(const std::string& libraryId, std::vector<std::string>& genres) { genres.clear(); return false; }
+    bool fetchByGenre(const std::string& libraryId, const std::string& genre, std::vector<MediaItem>& items) { items.clear(); return false; }
+    bool fetchByGenreKey(const std::string& libraryId, const std::string& genreKey, std::vector<MediaItem>& items) { items.clear(); return false; }
+    bool hasLiveTV() { return false; }
 
 private:
     AudiobookshelfClient() = default;

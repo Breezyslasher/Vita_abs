@@ -121,7 +121,7 @@ void MediaItemCell::setItem(const MediaItem& item) {
 void MediaItemCell::loadThumbnail() {
     if (!m_thumbnailImage) return;
 
-    PlexClient& client = PlexClient::getInstance();
+    AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
     // Use square dimensions for music, portrait for movies/TV
     bool isMusic = (m_item.mediaType == MediaType::MUSIC_ARTIST ||

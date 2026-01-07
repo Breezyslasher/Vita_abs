@@ -105,8 +105,15 @@ void LoginActivity::onTestConnectionPressed() {
 
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
-    if (client.pingServer(m_serverUrl)) {
-        if (statusLabel) statusLabel->setText("Server is reachable!");
+    // Try to connect and fetch server info
+    if (client.connectToServer(m_serverUrl)) {
+        ServerInfo info;
+        if (client.fetchServerInfo(info)) {
+            std::string msg = "Connected to " + info.serverName + " v" + info.version;
+            if (statusLabel) statusLabel->setText(msg);
+        } else {
+            if (statusLabel) statusLabel->setText("Server is reachable!");
+        }
     } else {
         if (statusLabel) statusLabel->setText("Cannot reach server - check URL");
     }
@@ -128,11 +135,14 @@ void LoginActivity::onLoginPressed() {
     // Perform login
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
-    if (client.login(m_serverUrl, m_username, m_password)) {
+    // Set server URL first, then attempt login
+    client.setServerUrl(m_serverUrl);
+
+    if (client.login(m_username, m_password)) {
         // Save credentials
         Application::getInstance().setUsername(m_username);
         Application::getInstance().setServerUrl(m_serverUrl);
-        Application::getInstance().setAuthToken(client.getToken());
+        Application::getInstance().setAuthToken(client.getAuthToken());
         Application::getInstance().saveSettings();
 
         if (statusLabel) statusLabel->setText("Login successful!");

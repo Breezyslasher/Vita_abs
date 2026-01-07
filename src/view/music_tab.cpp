@@ -1,4 +1,5 @@
 /**
+#include "app/audiobookshelf_client.hpp"
  * VitaABS - Music Tab implementation
  */
 
@@ -145,7 +146,7 @@ void MusicTab::loadSections() {
 
     asyncRun([this, aliveWeak]() {
         brls::Logger::debug("MusicTab: Fetching library sections (async)...");
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<LibrarySection> allSections;
 
         if (client.fetchLibrarySections(allSections)) {
@@ -221,7 +222,7 @@ void MusicTab::loadContent(const std::string& sectionKey) {
     std::weak_ptr<bool> aliveWeak = m_alive;
 
     asyncRun([this, key, aliveWeak]() {
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
         if (client.fetchLibraryContent(key, items)) {
@@ -245,7 +246,7 @@ void MusicTab::loadPlaylists() {
     std::weak_ptr<bool> aliveWeak = m_alive;
 
     asyncRun([this, aliveWeak]() {
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> allPlaylists;
 
         if (client.fetchPlaylists(allPlaylists)) {
@@ -299,7 +300,7 @@ void MusicTab::loadCollections(const std::string& sectionKey) {
     std::weak_ptr<bool> aliveWeak = m_alive;
 
     asyncRun([this, key, aliveWeak]() {
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> collections;
 
         if (client.fetchCollections(key, collections) && !collections.empty()) {
@@ -365,7 +366,7 @@ void MusicTab::onPlaylistSelected(const MediaItem& playlist) {
     std::weak_ptr<bool> aliveWeak = m_alive;
 
     asyncRun([this, playlistKey, playlistTitle, aliveWeak]() {
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
         if (client.fetchChildren(playlistKey, items)) {
@@ -393,7 +394,7 @@ void MusicTab::onCollectionSelected(const MediaItem& collection) {
     std::weak_ptr<bool> aliveWeak = m_alive;
 
     asyncRun([this, collectionKey, collectionTitle, aliveWeak]() {
-        PlexClient& client = PlexClient::getInstance();
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
         if (client.fetchChildren(collectionKey, items)) {
