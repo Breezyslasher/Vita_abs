@@ -9,7 +9,6 @@
 #include "view/search_tab.hpp"
 #include "view/settings_tab.hpp"
 #include "view/downloads_tab.hpp"
-#include "view/music_tab.hpp"
 #include "app/downloads_manager.hpp"
 #include "app/application.hpp"
 #include "app/audiobookshelf_client.hpp"
@@ -50,7 +49,7 @@ void MainActivity::onContentAvailable() {
         int sidebarWidth = 200;  // Minimum width
 
         // Standard tab names to consider
-        std::vector<std::string> standardTabs = {"Home", "Library", "Music", "Search", "Downloads", "Settings"};
+        std::vector<std::string> standardTabs = {"Home", "Library", "Search", "Downloads", "Settings"};
         for (const auto& tab : standardTabs) {
             sidebarWidth = std::max(sidebarWidth, calculateTextWidth(tab));
         }
