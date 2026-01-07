@@ -77,8 +77,9 @@ void MediaItemCell::setItem(const MediaItem& item) {
     // Set subtitle for podcast episodes
     if (m_subtitleLabel) {
         if (item.mediaType == MediaType::PODCAST_EPISODE) {
-            if (item.index > 0) {
-                m_subtitleLabel->setText("Episode " + std::to_string(item.index));
+            // Show subtitle or episode title
+            if (!item.subtitle.empty()) {
+                m_subtitleLabel->setText(item.subtitle);
                 m_subtitleLabel->setVisibility(brls::Visibility::VISIBLE);
             } else {
                 m_subtitleLabel->setVisibility(brls::Visibility::GONE);
@@ -146,14 +147,14 @@ void MediaItemCell::updateFocusInfo(bool focused) {
                 int minutes = (int)(m_item.duration / 60.0f);
                 info = std::to_string(minutes) + " min";
             }
-            if (!m_item.summary.empty()) {
-                // Show first 50 chars of summary
-                std::string summary = m_item.summary;
-                if (summary.length() > 50) {
-                    summary = summary.substr(0, 47) + "...";
+            if (!m_item.description.empty()) {
+                // Show first 50 chars of description
+                std::string desc = m_item.description;
+                if (desc.length() > 50) {
+                    desc = desc.substr(0, 47) + "...";
                 }
                 if (!info.empty()) info += " - ";
-                info += summary;
+                info += desc;
             }
             if (!info.empty()) {
                 m_descriptionLabel->setText(info);
@@ -188,11 +189,11 @@ void MediaItemCell::updateFocusInfo(bool focused) {
             m_descriptionLabel->setVisibility(brls::Visibility::GONE);
         }
     } else if (m_item.mediaType == MediaType::PODCAST) {
-        // Show episode count for podcasts on focus
+        // Show podcast info on focus
         if (focused) {
             std::string info;
-            if (m_item.numEpisodes > 0) {
-                info = std::to_string(m_item.numEpisodes) + " episodes";
+            if (!m_item.authorName.empty()) {
+                info = m_item.authorName;
             }
             if (!info.empty()) {
                 m_descriptionLabel->setText(info);
