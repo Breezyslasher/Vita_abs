@@ -1,9 +1,9 @@
 /**
-#include "app/audiobookshelf_client.hpp"
  * VitaABS - Search Tab implementation
  */
 
 #include "view/search_tab.hpp"
+#include "app/audiobookshelf_client.hpp"
 #include "view/media_detail_view.hpp"
 #include "view/media_item_cell.hpp"
 #include "app/application.hpp"
@@ -59,13 +59,13 @@ SearchTab::SearchTab() {
     m_scrollContent->setJustifyContent(brls::JustifyContent::FLEX_START);
     m_scrollContent->setAlignItems(brls::AlignItems::STRETCH);
 
-    // Movies row
-    auto* moviesLabel = new brls::Label();
-    moviesLabel->setText("Movies");
-    moviesLabel->setFontSize(20);
-    moviesLabel->setMarginBottom(10);
-    moviesLabel->setVisibility(brls::Visibility::GONE);
-    m_scrollContent->addView(moviesLabel);
+    // Books row (replaces Movies for Audiobookshelf)
+    auto* booksLabel = new brls::Label();
+    booksLabel->setText("Books");
+    booksLabel->setFontSize(20);
+    booksLabel->setMarginBottom(10);
+    booksLabel->setVisibility(brls::Visibility::GONE);
+    m_scrollContent->addView(booksLabel);
 
     m_moviesRow = new brls::HScrollingFrame();
     m_moviesRow->setHeight(180);
@@ -78,13 +78,13 @@ SearchTab::SearchTab() {
     m_moviesRow->setContentView(m_moviesContent);
     m_scrollContent->addView(m_moviesRow);
 
-    // TV Shows row
-    auto* showsLabel = new brls::Label();
-    showsLabel->setText("TV Shows");
-    showsLabel->setFontSize(20);
-    showsLabel->setMarginBottom(10);
-    showsLabel->setVisibility(brls::Visibility::GONE);
-    m_scrollContent->addView(showsLabel);
+    // Podcasts row (replaces TV Shows for Audiobookshelf)
+    auto* podcastsLabel = new brls::Label();
+    podcastsLabel->setText("Podcasts");
+    podcastsLabel->setFontSize(20);
+    podcastsLabel->setMarginBottom(10);
+    podcastsLabel->setVisibility(brls::Visibility::GONE);
+    m_scrollContent->addView(podcastsLabel);
 
     m_showsRow = new brls::HScrollingFrame();
     m_showsRow->setHeight(180);
@@ -97,7 +97,7 @@ SearchTab::SearchTab() {
     m_showsRow->setContentView(m_showsContent);
     m_scrollContent->addView(m_showsRow);
 
-    // Episodes row (separate from TV Shows)
+    // Episodes row (podcast episodes)
     auto* episodesLabel = new brls::Label();
     episodesLabel->setText("Episodes");
     episodesLabel->setFontSize(20);
@@ -116,24 +116,9 @@ SearchTab::SearchTab() {
     m_episodesRow->setContentView(m_episodesContent);
     m_scrollContent->addView(m_episodesRow);
 
-    // Music row
-    auto* musicLabel = new brls::Label();
-    musicLabel->setText("Music");
-    musicLabel->setFontSize(20);
-    musicLabel->setMarginBottom(10);
-    musicLabel->setVisibility(brls::Visibility::GONE);
-    m_scrollContent->addView(musicLabel);
-
-    m_musicRow = new brls::HScrollingFrame();
-    m_musicRow->setHeight(160);
-    m_musicRow->setMarginBottom(15);
-    m_musicRow->setVisibility(brls::Visibility::GONE);
-
-    m_musicContent = new brls::Box();
-    m_musicContent->setAxis(brls::Axis::ROW);
-    m_musicContent->setJustifyContent(brls::JustifyContent::FLEX_START);
-    m_musicRow->setContentView(m_musicContent);
-    m_scrollContent->addView(m_musicRow);
+    // Hide music row - not applicable for Audiobookshelf
+    m_musicRow = nullptr;
+    m_musicContent = nullptr;
 
     m_scrollView->setContentView(m_scrollContent);
     this->addView(m_scrollView);
@@ -174,8 +159,8 @@ void SearchTab::performSearch(const std::string& query) {
     if (query.empty()) {
         m_resultsLabel->setText("");
         m_results.clear();
-        m_movies.clear();
-        m_shows.clear();
+        m_movies.clear();  // books
+        m_shows.clear();   // podcasts
         m_episodes.clear();
         m_music.clear();
 
@@ -183,7 +168,6 @@ void SearchTab::performSearch(const std::string& query) {
         m_moviesRow->setVisibility(brls::Visibility::GONE);
         m_showsRow->setVisibility(brls::Visibility::GONE);
         m_episodesRow->setVisibility(brls::Visibility::GONE);
-        m_musicRow->setVisibility(brls::Visibility::GONE);
 
         // Hide labels
         auto& views = m_scrollContent->getChildren();
@@ -195,36 +179,48 @@ void SearchTab::performSearch(const std::string& query) {
 
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
-    if (client.search(query, m_results)) {
+    // Audiobookshelf search requires a library ID
+    // Search across all libraries
+    std::vector<Library> libraries;
+    if (!client.fetchLibraries(libraries) || libraries.empty()) {
+        m_resultsLabel->setText("No libraries available");
+        return;
+    }
+
+    m_results.clear();
+    m_movies.clear();  // books
+    m_shows.clear();   // podcasts
+    m_episodes.clear();
+
+    // Search each library
+    for (const auto& lib : libraries) {
+        std::vector<MediaItem> libResults;
+        if (client.search(lib.id, query, libResults)) {
+            for (auto& item : libResults) {
+                m_results.push_back(item);
+            }
+        }
+    }
+
+    if (!m_results.empty()) {
         m_resultsLabel->setText("Found " + std::to_string(m_results.size()) + " results");
 
-        // Organize results by type - separate shows from episodes
-        m_movies.clear();
-        m_shows.clear();
-        m_episodes.clear();
-        m_music.clear();
-
+        // Organize results by type for Audiobookshelf
         for (const auto& item : m_results) {
-            if (item.mediaType == MediaType::MOVIE) {
-                m_movies.push_back(item);
-            } else if (item.mediaType == MediaType::SHOW || item.mediaType == MediaType::SEASON) {
-                // Shows and seasons go to TV Shows row
-                m_shows.push_back(item);
-            } else if (item.mediaType == MediaType::EPISODE) {
-                // Episodes get their own row
+            if (item.mediaType == MediaType::BOOK) {
+                m_movies.push_back(item);  // Using movies vector for books
+            } else if (item.mediaType == MediaType::PODCAST) {
+                m_shows.push_back(item);   // Using shows vector for podcasts
+            } else if (item.mediaType == MediaType::PODCAST_EPISODE) {
                 m_episodes.push_back(item);
-            } else if (item.mediaType == MediaType::MUSIC_ARTIST ||
-                       item.mediaType == MediaType::MUSIC_ALBUM ||
-                       item.mediaType == MediaType::MUSIC_TRACK) {
-                m_music.push_back(item);
             }
         }
 
         // Update rows visibility and content
-        // Order: Movies(0,1), Shows(2,3), Episodes(4,5), Music(6,7)
+        // Order: Books(0,1), Podcasts(2,3), Episodes(4,5)
         auto& views = m_scrollContent->getChildren();
 
-        // Movies (label at index 0, row at index 1)
+        // Books (label at index 0, row at index 1)
         if (!m_movies.empty()) {
             views[0]->setVisibility(brls::Visibility::VISIBLE);
             m_moviesRow->setVisibility(brls::Visibility::VISIBLE);
@@ -234,7 +230,7 @@ void SearchTab::performSearch(const std::string& query) {
             m_moviesRow->setVisibility(brls::Visibility::GONE);
         }
 
-        // Shows (label at index 2, row at index 3)
+        // Podcasts (label at index 2, row at index 3)
         if (!m_shows.empty()) {
             views[2]->setVisibility(brls::Visibility::VISIBLE);
             m_showsRow->setVisibility(brls::Visibility::VISIBLE);
@@ -254,30 +250,19 @@ void SearchTab::performSearch(const std::string& query) {
             m_episodesRow->setVisibility(brls::Visibility::GONE);
         }
 
-        // Music (label at index 6, row at index 7)
-        if (!m_music.empty()) {
-            views[6]->setVisibility(brls::Visibility::VISIBLE);
-            m_musicRow->setVisibility(brls::Visibility::VISIBLE);
-            populateRow(m_musicContent, m_music);
-        } else {
-            views[6]->setVisibility(brls::Visibility::GONE);
-            m_musicRow->setVisibility(brls::Visibility::GONE);
-        }
-
     } else {
-        m_resultsLabel->setText("Search failed");
-        m_results.clear();
+        m_resultsLabel->setText("No results found");
     }
 }
 
 void SearchTab::onItemSelected(const MediaItem& item) {
-    // For tracks, play directly instead of showing detail view
-    if (item.mediaType == MediaType::MUSIC_TRACK) {
-        Application::getInstance().pushPlayerActivity(item.id);
+    // For podcast episodes, play directly instead of showing detail view
+    if (item.mediaType == MediaType::PODCAST_EPISODE) {
+        Application::getInstance().pushPlayerActivity(item.podcastId, item.episodeId);
         return;
     }
 
-    // Show media detail view for other types
+    // Show media detail view for books and podcasts
     auto* detailView = new MediaDetailView(item);
     brls::Application::pushActivity(new brls::Activity(detailView));
 }

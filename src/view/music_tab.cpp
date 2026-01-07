@@ -347,13 +347,13 @@ void MusicTab::loadCollections(const std::string& sectionKey) {
 }
 
 void MusicTab::onItemSelected(const MediaItem& item) {
-    // For tracks, play directly
-    if (item.mediaType == MediaType::MUSIC_TRACK) {
-        Application::getInstance().pushPlayerActivity(item.id);
+    // For podcast episodes, play directly
+    if (item.mediaType == MediaType::PODCAST_EPISODE) {
+        Application::getInstance().pushPlayerActivity(item.podcastId, item.episodeId);
         return;
     }
 
-    // Show media detail view for artists and albums
+    // Show media detail view for books and podcasts
     auto* detailView = new MediaDetailView(item);
     brls::Application::pushActivity(new brls::Activity(detailView));
 }
