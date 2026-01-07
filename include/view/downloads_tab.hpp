@@ -18,7 +18,7 @@ public:
 
 private:
     void refresh();
-    void showDownloadOptions(const std::string& itemId, const std::string& title);
+    void showDownloadOptions(const std::string& ratingKey, const std::string& title);
 
     brls::Box* m_listContainer = nullptr;
     brls::Label* m_emptyLabel = nullptr;

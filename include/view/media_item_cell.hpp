@@ -1,6 +1,6 @@
 /**
  * VitaABS - Media Item Cell
- * A cell for displaying audiobook/podcast items in a grid
+ * A cell for displaying media items in a grid
  */
 
 #pragma once
@@ -23,16 +23,16 @@ public:
     static brls::View* create();
 
 private:
-    void loadCover();
+    void loadThumbnail();
     void updateFocusInfo(bool focused);
 
     MediaItem m_item;
     std::string m_originalTitle;  // Store original truncated title
 
-    brls::Image* m_coverImage = nullptr;
+    brls::Image* m_thumbnailImage = nullptr;
     brls::Label* m_titleLabel = nullptr;
-    brls::Label* m_authorLabel = nullptr;
-    brls::Label* m_durationLabel = nullptr;  // Shows on focus
+    brls::Label* m_subtitleLabel = nullptr;
+    brls::Label* m_descriptionLabel = nullptr;  // Shows on focus for episodes
     brls::Rectangle* m_progressBar = nullptr;
 };
 

@@ -1,6 +1,6 @@
 /**
  * VitaABS - Recycling Grid
- * Efficient grid view for displaying audiobook/podcast items
+ * Efficient grid view for displaying media items
  */
 
 #pragma once

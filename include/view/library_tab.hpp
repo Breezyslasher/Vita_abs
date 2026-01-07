@@ -1,6 +1,6 @@
 /**
  * VitaABS - Library Tab
- * Browse audiobook and podcast libraries
+ * Browse library sections and content
  */
 
 #pragma once
@@ -18,19 +18,19 @@ public:
     void onFocusGained() override;
 
 private:
-    void loadLibraries();
-    void loadContent(const std::string& libraryId);
-    void onLibrarySelected(const Library& library);
+    void loadSections();
+    void loadContent(const std::string& sectionKey);
+    void onSectionSelected(const LibrarySection& section);
     void onItemSelected(const MediaItem& item);
 
     brls::Label* m_titleLabel = nullptr;
-    brls::HScrollingFrame* m_librariesScroll = nullptr;
-    brls::Box* m_librariesBox = nullptr;
+    brls::HScrollingFrame* m_sectionsScroll = nullptr;
+    brls::Box* m_sectionsBox = nullptr;
     RecyclingGrid* m_contentGrid = nullptr;
 
-    std::vector<Library> m_libraries;
+    std::vector<LibrarySection> m_sections;
     std::vector<MediaItem> m_items;
-    std::string m_currentLibrary;
+    std::string m_currentSection;
     bool m_loaded = false;
 };
 

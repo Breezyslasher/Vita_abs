@@ -1,6 +1,6 @@
 /**
  * VitaABS - Search Tab
- * Search for audiobooks, podcasts, and authors
+ * Search for media content
  */
 
 #pragma once
@@ -31,19 +31,21 @@ private:
     brls::Box* m_scrollContent = nullptr;
 
     // Category rows
-    brls::HScrollingFrame* m_audiobooksRow = nullptr;
-    brls::Box* m_audiobooksContent = nullptr;
-    brls::HScrollingFrame* m_podcastsRow = nullptr;
-    brls::Box* m_podcastsContent = nullptr;
-    brls::HScrollingFrame* m_authorsRow = nullptr;
-    brls::Box* m_authorsContent = nullptr;
-    brls::HScrollingFrame* m_seriesRow = nullptr;
-    brls::Box* m_seriesContent = nullptr;
+    brls::HScrollingFrame* m_moviesRow = nullptr;
+    brls::Box* m_moviesContent = nullptr;
+    brls::HScrollingFrame* m_showsRow = nullptr;
+    brls::Box* m_showsContent = nullptr;
+    brls::HScrollingFrame* m_episodesRow = nullptr;
+    brls::Box* m_episodesContent = nullptr;
+    brls::HScrollingFrame* m_musicRow = nullptr;
+    brls::Box* m_musicContent = nullptr;
 
     std::string m_searchQuery;
     std::vector<MediaItem> m_results;
-    std::vector<MediaItem> m_audiobooks;
-    std::vector<MediaItem> m_podcasts;
+    std::vector<MediaItem> m_movies;
+    std::vector<MediaItem> m_shows;
+    std::vector<MediaItem> m_episodes;
+    std::vector<MediaItem> m_music;
 };
 
 } // namespace vitaabs

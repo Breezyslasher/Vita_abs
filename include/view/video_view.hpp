@@ -1,6 +1,6 @@
 /**
  * VitaABS - Video View
- * Custom view for rendering audio visualization or cover art during playback
+ * Custom view for rendering video frames from MPV player
  */
 
 #pragma once
@@ -10,7 +10,7 @@
 namespace vitaabs {
 
 /**
- * VideoView - renders cover art or audio visualization
+ * VideoView - renders video frames from MPV player using NanoVG
  */
 class VideoView : public brls::Box {
 public:

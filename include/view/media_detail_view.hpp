@@ -1,6 +1,6 @@
 /**
  * VitaABS - Media Detail View
- * Shows detailed information about an audiobook or podcast
+ * Shows detailed information about a media item
  */
 
 #pragma once
@@ -18,41 +18,41 @@ public:
 
 private:
     void loadDetails();
-    void loadChapters();
-    void loadEpisodes();  // For podcasts
+    void loadChildren();
+    void loadMusicCategories();
     void onPlay(bool resume = false);
-    void onPlayChapter(int chapterIndex);
     void onDownload();
     void showDownloadOptions();
+    void downloadAll();
+    void downloadUnwatched(int maxCount = -1);
 
     brls::HScrollingFrame* createMediaRow(const std::string& title, brls::Box** contentOut);
 
     MediaItem m_item;
-    std::vector<Chapter> m_chapters;
-    std::vector<MediaItem> m_episodes;  // For podcasts
+    std::vector<MediaItem> m_children;
 
     // Main layout
     brls::ScrollingFrame* m_scrollView = nullptr;
     brls::Box* m_mainContent = nullptr;
 
-    // Book/Podcast info
     brls::Label* m_titleLabel = nullptr;
-    brls::Label* m_authorLabel = nullptr;
-    brls::Label* m_narratorLabel = nullptr;
-    brls::Label* m_seriesLabel = nullptr;
+    brls::Label* m_yearLabel = nullptr;
+    brls::Label* m_ratingLabel = nullptr;
     brls::Label* m_durationLabel = nullptr;
-    brls::Label* m_progressLabel = nullptr;
     brls::Label* m_summaryLabel = nullptr;
-    brls::Image* m_coverImage = nullptr;
-
-    // Action buttons
+    brls::Image* m_posterImage = nullptr;
     brls::Button* m_playButton = nullptr;
     brls::Button* m_resumeButton = nullptr;
     brls::Button* m_downloadButton = nullptr;
+    brls::Box* m_childrenBox = nullptr;
 
-    // Chapters/Episodes list
-    brls::Box* m_chaptersBox = nullptr;
-    brls::Box* m_episodesBox = nullptr;
+    // Music category rows for artists
+    brls::Box* m_musicCategoriesBox = nullptr;
+    brls::Box* m_albumsContent = nullptr;
+    brls::Box* m_singlesContent = nullptr;
+    brls::Box* m_epsContent = nullptr;
+    brls::Box* m_compilationsContent = nullptr;
+    brls::Box* m_soundtracksContent = nullptr;
 };
 
 } // namespace vitaabs
