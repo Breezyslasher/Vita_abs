@@ -39,7 +39,7 @@ DownloadsTab::DownloadsTab() {
 
     // Empty label
     m_emptyLabel = new brls::Label();
-    m_emptyLabel->setText("No downloads yet.\nUse the download button on audiobook details to save for offline listening.");
+    m_emptyLabel->setText("No downloads yet.\nUse the download button on media details to save for offline viewing.");
     m_emptyLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     m_emptyLabel->setVerticalAlign(brls::VerticalAlign::CENTER);
     m_emptyLabel->setGrow(1.0f);
@@ -113,9 +113,9 @@ void DownloadsTab::refresh() {
                 break;
             case DownloadState::COMPLETED:
                 statusText = "Ready to play";
-                if (item.currentTime > 0) {
-                    int minutes = (int)(item.currentTime / 60.0f);
-                    statusText += " (" + std::to_string(minutes) + " min listened)";
+                if (item.viewOffset > 0) {
+                    int minutes = (int)(item.viewOffset / 60000);
+                    statusText += " (" + std::to_string(minutes) + " min watched)";
                 }
                 break;
             case DownloadState::FAILED:
@@ -133,20 +133,20 @@ void DownloadsTab::refresh() {
             playBtn->setText("Play");
             playBtn->setMargins(0, 0, 0, 10);
 
-            std::string itemId = item.itemId;
+            std::string ratingKey = item.ratingKey;
             std::string localPath = item.localPath;
-            playBtn->registerClickAction([itemId, localPath](brls::View*) {
+            playBtn->registerClickAction([ratingKey, localPath](brls::View*) {
                 // Play local file
-                brls::Application::pushActivity(new PlayerActivity(itemId, "", true));
+                brls::Application::pushActivity(new PlayerActivity(ratingKey, true));
                 return true;
             });
             row->addView(playBtn);
 
             auto deleteBtn = new brls::Button();
             deleteBtn->setText("Delete");
-            std::string id = item.itemId;
-            deleteBtn->registerClickAction([id](brls::View*) {
-                DownloadsManager::getInstance().deleteDownload(id);
+            std::string key = item.ratingKey;
+            deleteBtn->registerClickAction([key](brls::View*) {
+                DownloadsManager::getInstance().deleteDownload(key);
                 brls::Application::notify("Download deleted");
                 return true;
             });
@@ -154,9 +154,9 @@ void DownloadsTab::refresh() {
         } else if (item.state == DownloadState::DOWNLOADING || item.state == DownloadState::QUEUED) {
             auto cancelBtn = new brls::Button();
             cancelBtn->setText("Cancel");
-            std::string id = item.itemId;
-            cancelBtn->registerClickAction([id](brls::View*) {
-                DownloadsManager::getInstance().cancelDownload(id);
+            std::string key = item.ratingKey;
+            cancelBtn->registerClickAction([key](brls::View*) {
+                DownloadsManager::getInstance().cancelDownload(key);
                 brls::Application::notify("Download cancelled");
                 return true;
             });
@@ -168,7 +168,7 @@ void DownloadsTab::refresh() {
     }
 }
 
-void DownloadsTab::showDownloadOptions(const std::string& itemId, const std::string& title) {
+void DownloadsTab::showDownloadOptions(const std::string& ratingKey, const std::string& title) {
     // Not implemented - download options would be shown from media detail view
 }
 

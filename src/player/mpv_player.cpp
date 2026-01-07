@@ -1,5 +1,5 @@
 /**
- * VitaABS - MPV Audio Player Implementation
+ * VitaABS - MPV Video Player Implementation
  * Based on switchfin's MPV implementation for PS Vita
  * Using software rendering with NanoVG display
  */
@@ -133,7 +133,7 @@ bool MpvPlayer::init() {
 
     mpv_set_option_string(m_mpv, "network-timeout", "30");
 
-    // User agent for Audiobookshelf compatibility
+    // User agent for Plex compatibility
     mpv_set_option_string(m_mpv, "user-agent", "VitaABS/1.0");
 
     // ========================================

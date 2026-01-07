@@ -58,11 +58,11 @@ ProgressDialog::ProgressDialog(const std::string& title) {
     m_progressBg->setCornerRadius(5);
     progressContainer->addView(m_progressBg);
 
-    // Progress bar foreground (purple for audiobooks)
+    // Progress bar foreground
     m_progressBar = new brls::Rectangle();
     m_progressBar->setWidth(0);
     m_progressBar->setHeight(20);
-    m_progressBar->setColor(nvgRGBA(140, 82, 255, 255));
+    m_progressBar->setColor(nvgRGBA(229, 160, 13, 255));  // Plex orange
     m_progressBar->setCornerRadius(5);
     m_progressBar->setPositionType(brls::PositionType::ABSOLUTE);
     m_progressBar->setPositionLeft(0);
