@@ -61,14 +61,6 @@ struct GenreItem {
     int itemCount = 0;
 };
 
-// Live TV Channel (stub - Audiobookshelf doesn't have Live TV)
-struct LiveTVChannel {
-    std::string id;
-    std::string title;
-    std::string thumb;
-    std::string channelNumber;
-};
-
 // Media item info (audiobook or podcast)
 struct MediaItem {
     std::string id;                // Library item ID

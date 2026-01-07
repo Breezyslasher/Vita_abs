@@ -150,9 +150,9 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
     metaBox->setAxis(brls::Axis::ROW);
     metaBox->setMarginBottom(15);
 
-    if (m_item.year > 0) {
+    if (!m_item.publishedYear.empty()) {
         m_yearLabel = new brls::Label();
-        m_yearLabel->setText(std::to_string(m_item.year));
+        m_yearLabel->setText(m_item.publishedYear);
         m_yearLabel->setFontSize(16);
         m_yearLabel->setMarginRight(15);
         metaBox->addView(m_yearLabel);
@@ -174,9 +174,9 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
     rightBox->addView(metaBox);
 
     // Summary/Description
-    if (!m_item.summary.empty()) {
+    if (!m_item.description.empty()) {
         m_summaryLabel = new brls::Label();
-        m_summaryLabel->setText(m_item.summary);
+        m_summaryLabel->setText(m_item.description);
         m_summaryLabel->setFontSize(16);
         m_summaryLabel->setMarginBottom(20);
         rightBox->addView(m_summaryLabel);
@@ -268,8 +268,8 @@ void MediaDetailView::loadDetails() {
             m_titleLabel->setText(m_item.title);
         }
 
-        if (m_summaryLabel && !m_item.summary.empty()) {
-            m_summaryLabel->setText(m_item.summary);
+        if (m_summaryLabel && !m_item.description.empty()) {
+            m_summaryLabel->setText(m_item.description);
         }
 
         // Update download button state
@@ -383,12 +383,11 @@ void MediaDetailView::onDownload() {
     bool queued = DownloadsManager::getInstance().queueDownload(
         m_item.id,
         m_item.title,
-        m_item.audioTracks.empty() ? "" : m_item.audioTracks[0].contentUrl,
+        m_item.authorName,
         m_item.duration,
         mediaType,
-        m_item.authorName,
-        0,  // No season for audiobooks
-        0   // No episode number for audiobooks
+        m_item.seriesName,
+        m_item.episodeId
     );
 
     if (queued) {
@@ -545,12 +544,11 @@ void MediaDetailView::downloadAll() {
                     if (DownloadsManager::getInstance().queueDownload(
                         fullItem.id,
                         fullItem.title,
-                        fullItem.audioTracks.empty() ? "" : fullItem.audioTracks[0].contentUrl,
+                        fullItem.authorName,
                         fullItem.duration,
                         "episode",
                         podcastTitle,
-                        0,
-                        fullItem.index
+                        fullItem.episodeId
                     )) {
                         queued++;
                     }
@@ -625,12 +623,11 @@ void MediaDetailView::downloadUnwatched(int maxCount) {
                 if (DownloadsManager::getInstance().queueDownload(
                     fullItem.id,
                     fullItem.title,
-                    fullItem.audioTracks.empty() ? "" : fullItem.audioTracks[0].contentUrl,
+                    fullItem.authorName,
                     fullItem.duration,
                     "episode",
                     podcastTitle,
-                    0,
-                    fullItem.index
+                    fullItem.episodeId
                 )) {
                     queued++;
                 }

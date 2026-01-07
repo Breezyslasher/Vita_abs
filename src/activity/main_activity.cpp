@@ -8,7 +8,6 @@
 #include "view/library_section_tab.hpp"
 #include "view/search_tab.hpp"
 #include "view/settings_tab.hpp"
-#include "view/livetv_tab.hpp"
 #include "view/downloads_tab.hpp"
 #include "view/music_tab.hpp"
 #include "app/downloads_manager.hpp"
@@ -51,7 +50,7 @@ void MainActivity::onContentAvailable() {
         int sidebarWidth = 200;  // Minimum width
 
         // Standard tab names to consider
-        std::vector<std::string> standardTabs = {"Home", "Library", "Music", "Search", "Live TV", "Downloads", "Settings"};
+        std::vector<std::string> standardTabs = {"Home", "Library", "Music", "Search", "Downloads", "Settings"};
         for (const auto& tab : standardTabs) {
             sidebarWidth = std::max(sidebarWidth, calculateTextWidth(tab));
         }
@@ -81,11 +80,8 @@ void MainActivity::onContentAvailable() {
             }
         }
 
-        // Audiobookshelf doesn't have Live TV functionality
-        bool hasLiveTV = false;
-
         // If showing libraries in sidebar, only show actual library sections
-        // Don't show premade tabs like "Library", "Music", "TV"
+        // Don't show premade tabs like "Library", "Music"
         if (settings.showLibrariesInSidebar) {
             // Home tab
             tabFrame->addTab("Home", []() { return new HomeTab(); });
@@ -95,11 +91,6 @@ void MainActivity::onContentAvailable() {
 
             // Search
             tabFrame->addTab("Search", []() { return new SearchTab(); });
-
-            // Live TV if available
-            if (hasLiveTV) {
-                tabFrame->addTab("Live TV", []() { return new LiveTVTab(); });
-            }
         } else {
             // Standard mode with premade tabs for Audiobookshelf
             tabFrame->addTab("Home", []() { return new HomeTab(); });
