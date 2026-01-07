@@ -19,6 +19,7 @@ private:
     void createLayoutSection();
     void createContentDisplaySection();
     void createPlaybackSection();
+    void createAudioSection();
     void createTranscodeSection();
     void createDownloadsSection();
     void createAboutSection();
