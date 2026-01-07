@@ -24,18 +24,18 @@ LibraryTab::LibraryTab() {
     m_titleLabel->setMarginBottom(20);
     this->addView(m_titleLabel);
 
-    // Libraries row with horizontal scrolling
-    m_librariesScroll = new brls::HScrollingFrame();
-    m_librariesScroll->setHeight(50);
-    m_librariesScroll->setMarginBottom(20);
+    // Sections row with horizontal scrolling
+    m_sectionsScroll = new brls::HScrollingFrame();
+    m_sectionsScroll->setHeight(50);
+    m_sectionsScroll->setMarginBottom(20);
 
-    m_librariesBox = new brls::Box();
-    m_librariesBox->setAxis(brls::Axis::ROW);
-    m_librariesBox->setJustifyContent(brls::JustifyContent::FLEX_START);
-    m_librariesBox->setAlignItems(brls::AlignItems::CENTER);
+    m_sectionsBox = new brls::Box();
+    m_sectionsBox->setAxis(brls::Axis::ROW);
+    m_sectionsBox->setJustifyContent(brls::JustifyContent::FLEX_START);
+    m_sectionsBox->setAlignItems(brls::AlignItems::CENTER);
 
-    m_librariesScroll->setContentView(m_librariesBox);
-    this->addView(m_librariesScroll);
+    m_sectionsScroll->setContentView(m_sectionsBox);
+    this->addView(m_sectionsScroll);
 
     // Content grid
     m_contentGrid = new RecyclingGrid();
@@ -45,88 +45,88 @@ LibraryTab::LibraryTab() {
     });
     this->addView(m_contentGrid);
 
-    // Load libraries immediately
-    brls::Logger::debug("LibraryTab: Loading libraries...");
-    loadLibraries();
+    // Load sections immediately
+    brls::Logger::debug("LibraryTab: Loading sections...");
+    loadSections();
 }
 
 void LibraryTab::onFocusGained() {
     brls::Box::onFocusGained();
 
     if (!m_loaded) {
-        loadLibraries();
+        loadSections();
     }
 }
 
 // Helper function to check if a library is hidden
-static bool isLibraryHidden(const std::string& id, const std::string& hiddenLibraries) {
+static bool isLibraryHidden(const std::string& key, const std::string& hiddenLibraries) {
     if (hiddenLibraries.empty()) return false;
 
     std::string hidden = hiddenLibraries;
     size_t pos = 0;
     while ((pos = hidden.find(',')) != std::string::npos) {
-        std::string hiddenId = hidden.substr(0, pos);
-        if (hiddenId == id) return true;
+        std::string hiddenKey = hidden.substr(0, pos);
+        if (hiddenKey == key) return true;
         hidden.erase(0, pos + 1);
     }
-    return (hidden == id);
+    return (hidden == key);
 }
 
-void LibraryTab::loadLibraries() {
-    brls::Logger::debug("LibraryTab::loadLibraries - Starting async load");
+void LibraryTab::loadSections() {
+    brls::Logger::debug("LibraryTab::loadSections - Starting async load");
 
     asyncRun([this]() {
-        brls::Logger::debug("LibraryTab: Fetching libraries (async)...");
-        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-        std::vector<Library> libraries;
+        brls::Logger::debug("LibraryTab: Fetching library sections (async)...");
+        PlexClient& client = PlexClient::getInstance();
+        std::vector<LibrarySection> sections;
 
-        if (client.fetchLibraries(libraries)) {
-            brls::Logger::info("LibraryTab: Got {} libraries", libraries.size());
+        if (client.fetchLibrarySections(sections)) {
+            brls::Logger::info("LibraryTab: Got {} sections", sections.size());
 
             // Get hidden libraries setting
             std::string hiddenLibraries = Application::getInstance().getSettings().hiddenLibraries;
 
-            // Filter out hidden libraries
-            std::vector<Library> visibleLibraries;
-            for (const auto& library : libraries) {
-                if (!isLibraryHidden(library.id, hiddenLibraries)) {
-                    visibleLibraries.push_back(library);
+            // Filter out hidden sections
+            std::vector<LibrarySection> visibleSections;
+            for (const auto& section : sections) {
+                if (!isLibraryHidden(section.key, hiddenLibraries)) {
+                    visibleSections.push_back(section);
                 } else {
-                    brls::Logger::debug("LibraryTab: Hiding library: {}", library.name);
+                    brls::Logger::debug("LibraryTab: Hiding section: {}", section.title);
                 }
             }
 
             // Update UI on main thread
-            brls::sync([this, visibleLibraries]() {
-                m_libraries = visibleLibraries;
-                m_librariesBox->clearViews();
+            brls::sync([this, visibleSections]() {
+                m_sections = visibleSections;
+                m_sectionsBox->clearViews();
 
-                for (const auto& library : m_libraries) {
-                    brls::Logger::debug("LibraryTab: Adding library button: {}", library.name);
+                for (const auto& section : m_sections) {
+                    brls::Logger::debug("LibraryTab: Adding section button: {}", section.title);
                     auto* btn = new brls::Button();
-                    btn->setText(library.name);
+                    btn->setText(section.title);
                     btn->setMarginRight(10);
 
-                    Library capturedLibrary = library;
-                    btn->registerClickAction([this, capturedLibrary](brls::View* view) {
-                        onLibrarySelected(capturedLibrary);
+                    LibrarySection capturedSection = section;
+                    btn->registerClickAction([this, capturedSection](brls::View* view) {
+                        onSectionSelected(capturedSection);
                         return true;
                     });
 
-                    m_librariesBox->addView(btn);
+                    m_sectionsBox->addView(btn);
                 }
 
-                // Load first library by default
-                if (!m_libraries.empty()) {
-                    brls::Logger::debug("LibraryTab: Loading first library: {}", m_libraries[0].name);
-                    onLibrarySelected(m_libraries[0]);
+                // Load first section by default
+                if (!m_sections.empty()) {
+                    brls::Logger::debug("LibraryTab: Loading first section: {}", m_sections[0].title);
+                    onSectionSelected(m_sections[0]);
                 }
 
                 m_loaded = true;
-                brls::Logger::debug("LibraryTab: Libraries loading complete");
+                brls::Logger::debug("LibraryTab: Sections loading complete");
             });
         } else {
-            brls::Logger::error("LibraryTab: Failed to fetch libraries");
+            brls::Logger::error("LibraryTab: Failed to fetch sections");
             brls::sync([this]() {
                 m_loaded = true;
             });
@@ -134,16 +134,16 @@ void LibraryTab::loadLibraries() {
     });
 }
 
-void LibraryTab::loadContent(const std::string& libraryId) {
-    brls::Logger::debug("LibraryTab::loadContent - library: {} (async)", libraryId);
+void LibraryTab::loadContent(const std::string& sectionKey) {
+    brls::Logger::debug("LibraryTab::loadContent - section: {} (async)", sectionKey);
 
-    std::string id = libraryId;  // Capture by value
-    asyncRun([this, id]() {
-        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+    std::string key = sectionKey;  // Capture by value
+    asyncRun([this, key]() {
+        PlexClient& client = PlexClient::getInstance();
         std::vector<MediaItem> items;
 
-        if (client.fetchLibraryItems(id, items)) {
-            brls::Logger::info("LibraryTab: Got {} items for library {}", items.size(), id);
+        if (client.fetchLibraryContent(key, items)) {
+            brls::Logger::info("LibraryTab: Got {} items for section {}", items.size(), key);
 
             // Update UI on main thread
             brls::sync([this, items]() {
@@ -151,25 +151,25 @@ void LibraryTab::loadContent(const std::string& libraryId) {
                 m_contentGrid->setDataSource(m_items);
             });
         } else {
-            brls::Logger::error("LibraryTab: Failed to load content for library {}", id);
+            brls::Logger::error("LibraryTab: Failed to load content for section {}", key);
         }
     });
 }
 
-void LibraryTab::onLibrarySelected(const Library& library) {
-    m_currentLibrary = library.id;
-    m_titleLabel->setText("Library - " + library.name);
-    loadContent(library.id);
+void LibraryTab::onSectionSelected(const LibrarySection& section) {
+    m_currentSection = section.key;
+    m_titleLabel->setText("Library - " + section.title);
+    loadContent(section.key);
 }
 
 void LibraryTab::onItemSelected(const MediaItem& item) {
-    // For podcast episodes, play directly
-    if (item.mediaType == MediaType::PODCAST_EPISODE) {
-        Application::getInstance().pushPlayerActivity(item.id, item.episodeId);
+    // For tracks, play directly instead of showing detail view
+    if (item.mediaType == MediaType::MUSIC_TRACK) {
+        Application::getInstance().pushPlayerActivity(item.ratingKey);
         return;
     }
 
-    // Show media detail view for audiobooks and podcasts
+    // Show media detail view for other types
     auto* detailView = new MediaDetailView(item);
     brls::Application::pushActivity(new brls::Activity(detailView));
 }

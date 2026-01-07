@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Plex Client for PlayStation Vita
+ * VitaABS - Plex Client for PlayStation Vita
  * Main application implementation with PIN auth, library browsing, search, and playback
  */
 
@@ -26,7 +26,7 @@
 
 #include <cstdarg>
 
-namespace vitaplex {
+namespace vitaabs {
 
 // ============================================================================
 // Debug Logging System
@@ -34,12 +34,12 @@ namespace vitaplex {
 
 static SceUID s_logFile = -1;
 static bool s_loggingEnabled = false;
-static const char* LOG_PATH = "ux0:data/VitaPlex/debug.log";
+static const char* LOG_PATH = "ux0:data/VitaABS/debug.log";
 
 void initDebugLog() {
     if (s_loggingEnabled && s_logFile < 0) {
         // Ensure directory exists
-        sceIoMkdir("ux0:data/VitaPlex", 0777);
+        sceIoMkdir("ux0:data/VitaABS", 0777);
         
         // Open log file (append mode)
         s_logFile = sceIoOpen(LOG_PATH, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0777);
@@ -49,7 +49,7 @@ void initDebugLog() {
             sceRtcGetCurrentClockLocalTime(&time);
             char header[256];
             snprintf(header, sizeof(header), 
-                "\n\n========== VitaPlex Debug Log ==========\n"
+                "\n\n========== VitaABS Debug Log ==========\n"
                 "Started: %04d-%02d-%02d %02d:%02d:%02d\n"
                 "=========================================\n\n",
                 time.year, time.month, time.day, 
@@ -366,10 +366,10 @@ App& App::getInstance() {
 }
 
 bool App::init() {
-    debugLog("VitaPlex App initializing...\n");
+    debugLog("VitaABS App initializing...\n");
     
     // Create data directory
-    sceIoMkdir("ux0:data/VitaPlex", 0777);
+    sceIoMkdir("ux0:data/VitaABS", 0777);
     
     // Load saved settings
     loadSettings();
@@ -652,7 +652,7 @@ void App::logout() {
 // Settings Persistence
 // ============================================================================
 
-static const char* SETTINGS_PATH = "ux0:data/VitaPlex/settings.cfg";
+static const char* SETTINGS_PATH = "ux0:data/VitaABS/settings.cfg";
 
 bool App::saveSettings() {
     debugLog("Saving settings to %s\n", SETTINGS_PATH);
@@ -1906,7 +1906,7 @@ bool App::markAsUnwatched(const std::string& ratingKey) {
 
 void App::drawLoginScreen(vita2d_pgf* font) {
     // Title
-    vita2d_pgf_draw_text(font, 380, 60, COLOR_ORANGE, 1.2f, "VitaPlex");
+    vita2d_pgf_draw_text(font, 380, 60, COLOR_ORANGE, 1.2f, "VitaABS");
     vita2d_pgf_draw_text(font, 350, 90, COLOR_GRAY, 0.8f, "Plex Client for PS Vita");
     
     // Instructions
@@ -2011,7 +2011,7 @@ void App::drawPinAuthScreen(vita2d_pgf* font) {
 
 void App::drawHomeScreen(vita2d_pgf* font) {
     // Header
-    vita2d_pgf_draw_text(font, 30, 40, COLOR_ORANGE, 1.0f, "VitaPlex");
+    vita2d_pgf_draw_text(font, 30, 40, COLOR_ORANGE, 1.0f, "VitaABS");
     vita2d_pgf_draw_text(font, 150, 40, COLOR_GRAY, 0.7f, m_currentServer.name.c_str());
     
     // Menu options
@@ -2451,7 +2451,7 @@ void App::drawSettingsScreen(vita2d_pgf* font) {
     vita2d_pgf_draw_text(font, 350, y + 32, m_settings.enableFileLogging ? COLOR_SUCCESS : COLOR_GRAY, 0.75f,
                          m_settings.enableFileLogging ? "ON" : "OFF");
     if (m_settings.enableFileLogging) {
-        vita2d_pgf_draw_text(font, 450, y + 32, COLOR_GRAY, 0.6f, "(ux0:data/VitaPlex/debug.log)");
+        vita2d_pgf_draw_text(font, 450, y + 32, COLOR_GRAY, 0.6f, "(ux0:data/VitaABS/debug.log)");
     }
     y += 70;
     
@@ -2461,7 +2461,7 @@ void App::drawSettingsScreen(vita2d_pgf* font) {
     vita2d_pgf_draw_text(font, 85, y + 35, COLOR_WHITE, 0.9f, "Logout");
     
     // Version info
-    vita2d_pgf_draw_text(font, 750, y + 35, COLOR_GRAY, 0.6f, "VitaPlex v" VITA_PLEX_VERSION);
+    vita2d_pgf_draw_text(font, 750, y + 35, COLOR_GRAY, 0.6f, "VitaABS v" VITA_PLEX_VERSION);
     
     // Controls
     vita2d_pgf_draw_text(font, 30, 520, COLOR_GRAY, 0.6f, 
@@ -3646,7 +3646,7 @@ bool App::cancelDVRRecording(const std::string& recordingKey) {
 
 void App::run() {
     initDebugLog();
-    debugLog("VitaPlex running...\n");
+    debugLog("VitaABS running...\n");
     
     vita2d_pgf* font = vita2d_load_default_pgf();
     if (!font) {
@@ -3837,9 +3837,9 @@ void App::run() {
 }
 
 void App::shutdown() {
-    debugLog("VitaPlex shutting down...\n");
+    debugLog("VitaABS shutting down...\n");
     closeDebugLog();
     m_running = false;
 }
 
-} // namespace vitaplex
+} // namespace vitaabs
