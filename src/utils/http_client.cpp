@@ -1,5 +1,5 @@
 /**
- * VitaPlex - HTTP Client implementation using libcurl
+ * VitaABS - HTTP Client implementation using libcurl
  */
 
 #include "utils/http_client.hpp"
@@ -11,7 +11,7 @@
 #include <cstdio>
 #include <cctype>
 
-namespace vitaplex {
+namespace vitaabs {
 
 // Curl write callback data
 struct WriteCallbackData {
@@ -34,7 +34,7 @@ void HttpClient::globalCleanup() {
 
 HttpClient::HttpClient() {
     m_curl = curl_easy_init();
-    m_userAgent = PLEX_CLIENT_NAME "/" PLEX_CLIENT_VERSION " (" PLEX_PLATFORM ")";
+    m_userAgent = ABS_CLIENT_NAME "/" VITA_ABS_VERSION " (" ABS_DEVICE_NAME ")";
 }
 
 HttpClient::~HttpClient() {
@@ -414,4 +414,4 @@ bool HttpClient::downloadFile(const std::string& url, WriteCallback writeCallbac
     }
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

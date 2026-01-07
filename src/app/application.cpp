@@ -1,9 +1,9 @@
 /**
- * VitaPlex - Application implementation
+ * VitaABS - Application implementation
  */
 
 #include "app/application.hpp"
-#include "app/plex_client.hpp"
+#include "app/audiobookshelf_client.hpp"
 #include "activity/login_activity.hpp"
 #include "activity/main_activity.hpp"
 #include "activity/player_activity.hpp"
@@ -11,15 +11,16 @@
 #include <borealis.hpp>
 #include <fstream>
 #include <cstring>
+#include <cmath>
 
 #ifdef __vita__
 #include <psp2/io/fcntl.h>
 #include <psp2/io/stat.h>
 #endif
 
-namespace vitaplex {
+namespace vitaabs {
 
-static const char* SETTINGS_PATH = "ux0:data/VitaPlex/settings.json";
+static const char* SETTINGS_PATH = "ux0:data/VitaABS/settings.json";
 
 Application& Application::getInstance() {
     static Application instance;
@@ -28,11 +29,11 @@ Application& Application::getInstance() {
 
 bool Application::init() {
     brls::Logger::setLogLevel(brls::LogLevel::LOG_DEBUG);
-    brls::Logger::info("VitaPlex {} initializing...", VITA_PLEX_VERSION);
+    brls::Logger::info("VitaABS {} initializing...", VITA_ABS_VERSION);
 
 #ifdef __vita__
     // Create data directory
-    int ret = sceIoMkdir("ux0:data/VitaPlex", 0777);
+    int ret = sceIoMkdir("ux0:data/VitaABS", 0777);
     brls::Logger::debug("sceIoMkdir result: {:#x}", ret);
 #endif
 
@@ -57,13 +58,15 @@ void Application::run() {
     if (isLoggedIn() && !m_serverUrl.empty()) {
         brls::Logger::info("Restoring saved session...");
         // Verify connection and go to main
-        PlexClient::getInstance().setAuthToken(m_authToken);
-        // Use connectToServer to properly initialize (including Live TV check)
-        if (PlexClient::getInstance().connectToServer(m_serverUrl)) {
-            brls::Logger::info("Restored session and connected to server");
+        AudiobookshelfClient::getInstance().setAuthToken(m_authToken);
+        AudiobookshelfClient::getInstance().setServerUrl(m_serverUrl);
+
+        // Validate token before proceeding
+        if (AudiobookshelfClient::getInstance().validateToken()) {
+            brls::Logger::info("Restored session, token valid");
             pushMainActivity();
         } else {
-            brls::Logger::error("Failed to connect to saved server, showing login");
+            brls::Logger::error("Saved token invalid, showing login");
             pushLoginActivity();
         }
     } else {
@@ -81,7 +84,7 @@ void Application::run() {
 void Application::shutdown() {
     saveSettings();
     m_initialized = false;
-    brls::Logger::info("VitaPlex shutting down");
+    brls::Logger::info("VitaABS shutting down");
 }
 
 void Application::pushLoginActivity() {
@@ -92,8 +95,8 @@ void Application::pushMainActivity() {
     brls::Application::pushActivity(new MainActivity());
 }
 
-void Application::pushPlayerActivity(const std::string& mediaKey) {
-    brls::Application::pushActivity(new PlayerActivity(mediaKey));
+void Application::pushPlayerActivity(const std::string& itemId, const std::string& episodeId) {
+    brls::Application::pushActivity(new PlayerActivity(itemId, episodeId));
 }
 
 void Application::applyTheme() {
@@ -127,14 +130,13 @@ void Application::applyLogLevel() {
     }
 }
 
-std::string Application::getQualityString(VideoQuality quality) {
+std::string Application::getAudioQualityString(AudioQuality quality) {
     switch (quality) {
-        case VideoQuality::ORIGINAL: return "Original (Direct Play)";
-        case VideoQuality::QUALITY_1080P: return "1080p (20 Mbps)";
-        case VideoQuality::QUALITY_720P: return "720p (4 Mbps)";
-        case VideoQuality::QUALITY_480P: return "480p (2 Mbps)";
-        case VideoQuality::QUALITY_360P: return "360p (1 Mbps)";
-        case VideoQuality::QUALITY_240P: return "240p (500 Kbps)";
+        case AudioQuality::ORIGINAL: return "Original (Direct Play)";
+        case AudioQuality::HIGH: return "High (320 kbps)";
+        case AudioQuality::MEDIUM: return "Medium (192 kbps)";
+        case AudioQuality::LOW: return "Low (128 kbps)";
+        case AudioQuality::VERY_LOW: return "Very Low (64 kbps)";
         default: return "Unknown";
     }
 }
@@ -148,13 +150,77 @@ std::string Application::getThemeString(AppTheme theme) {
     }
 }
 
-std::string Application::getSubtitleSizeString(SubtitleSize size) {
-    switch (size) {
-        case SubtitleSize::SMALL: return "Small";
-        case SubtitleSize::MEDIUM: return "Medium";
-        case SubtitleSize::LARGE: return "Large";
+std::string Application::getPlaybackSpeedString(PlaybackSpeed speed) {
+    switch (speed) {
+        case PlaybackSpeed::SPEED_0_5X: return "0.5x";
+        case PlaybackSpeed::SPEED_0_75X: return "0.75x";
+        case PlaybackSpeed::SPEED_1X: return "1x (Normal)";
+        case PlaybackSpeed::SPEED_1_25X: return "1.25x";
+        case PlaybackSpeed::SPEED_1_5X: return "1.5x";
+        case PlaybackSpeed::SPEED_1_75X: return "1.75x";
+        case PlaybackSpeed::SPEED_2X: return "2x";
         default: return "Unknown";
     }
+}
+
+std::string Application::getSleepTimerString(SleepTimer timer) {
+    switch (timer) {
+        case SleepTimer::OFF: return "Off";
+        case SleepTimer::MINUTES_5: return "5 minutes";
+        case SleepTimer::MINUTES_10: return "10 minutes";
+        case SleepTimer::MINUTES_15: return "15 minutes";
+        case SleepTimer::MINUTES_30: return "30 minutes";
+        case SleepTimer::MINUTES_45: return "45 minutes";
+        case SleepTimer::MINUTES_60: return "60 minutes";
+        case SleepTimer::END_OF_CHAPTER: return "End of Chapter";
+        default: return "Unknown";
+    }
+}
+
+float Application::getPlaybackSpeedValue(PlaybackSpeed speed) {
+    switch (speed) {
+        case PlaybackSpeed::SPEED_0_5X: return 0.5f;
+        case PlaybackSpeed::SPEED_0_75X: return 0.75f;
+        case PlaybackSpeed::SPEED_1X: return 1.0f;
+        case PlaybackSpeed::SPEED_1_25X: return 1.25f;
+        case PlaybackSpeed::SPEED_1_5X: return 1.5f;
+        case PlaybackSpeed::SPEED_1_75X: return 1.75f;
+        case PlaybackSpeed::SPEED_2X: return 2.0f;
+        default: return 1.0f;
+    }
+}
+
+std::string Application::formatTime(float seconds) {
+    if (seconds < 0) seconds = 0;
+
+    int totalSeconds = (int)seconds;
+    int hours = totalSeconds / 3600;
+    int minutes = (totalSeconds % 3600) / 60;
+    int secs = totalSeconds % 60;
+
+    char buffer[32];
+    if (hours > 0) {
+        snprintf(buffer, sizeof(buffer), "%d:%02d:%02d", hours, minutes, secs);
+    } else {
+        snprintf(buffer, sizeof(buffer), "%d:%02d", minutes, secs);
+    }
+    return buffer;
+}
+
+std::string Application::formatDuration(float seconds) {
+    if (seconds < 0) seconds = 0;
+
+    int totalSeconds = (int)seconds;
+    int hours = totalSeconds / 3600;
+    int minutes = (totalSeconds % 3600) / 60;
+
+    char buffer[64];
+    if (hours > 0) {
+        snprintf(buffer, sizeof(buffer), "%dh %dm", hours, minutes);
+    } else {
+        snprintf(buffer, sizeof(buffer), "%d min", minutes);
+    }
+    return buffer;
 }
 
 bool Application::loadSettings() {
@@ -186,17 +252,15 @@ bool Application::loadSettings() {
 
     brls::Logger::debug("loadSettings: Read {} bytes", content.length());
 
-    // Simple JSON parsing for strings (handles whitespace after colon)
+    // Simple JSON parsing for strings
     auto extractString = [&content](const std::string& key) -> std::string {
         std::string search = "\"" + key + "\":";
         size_t pos = content.find(search);
         if (pos == std::string::npos) return "";
         pos += search.length();
-        // Skip whitespace after colon
         while (pos < content.length() && (content[pos] == ' ' || content[pos] == '\t')) pos++;
-        // Expect opening quote
         if (pos >= content.length() || content[pos] != '"') return "";
-        pos++; // Skip opening quote
+        pos++;
         size_t end = content.find("\"", pos);
         if (end == std::string::npos) return "";
         return content.substr(pos, end - pos);
@@ -228,6 +292,7 @@ bool Application::loadSettings() {
     m_authToken = extractString("authToken");
     m_serverUrl = extractString("serverUrl");
     m_username = extractString("username");
+    m_currentLibraryId = extractString("currentLibraryId");
 
     brls::Logger::info("loadSettings: authToken={}, serverUrl={}, username={}",
                        m_authToken.empty() ? "(empty)" : "(set)",
@@ -244,32 +309,50 @@ bool Application::loadSettings() {
     m_settings.showLibrariesInSidebar = extractBool("showLibrariesInSidebar", false);
     m_settings.collapseSidebar = extractBool("collapseSidebar", false);
     m_settings.hiddenLibraries = extractString("hiddenLibraries");
-    m_settings.sidebarOrder = extractString("sidebarOrder");
 
     // Load content display settings
     m_settings.showCollections = extractBool("showCollections", true);
-    m_settings.showPlaylists = extractBool("showPlaylists", true);
-    m_settings.showGenres = extractBool("showGenres", true);
+    m_settings.showSeries = extractBool("showSeries", true);
+    m_settings.showAuthors = extractBool("showAuthors", true);
+    m_settings.showProgress = extractBool("showProgress", true);
 
     // Load playback settings
-    m_settings.autoPlayNext = extractBool("autoPlayNext", true);
+    m_settings.autoPlayNext = extractBool("autoPlayNext", false);
     m_settings.resumePlayback = extractBool("resumePlayback", true);
-    m_settings.showSubtitles = extractBool("showSubtitles", true);
-    m_settings.subtitleSize = static_cast<SubtitleSize>(extractInt("subtitleSize"));
+    m_settings.playbackSpeed = static_cast<PlaybackSpeed>(extractInt("playbackSpeed"));
+    m_settings.sleepTimer = static_cast<SleepTimer>(extractInt("sleepTimer"));
     m_settings.seekInterval = extractInt("seekInterval");
-    if (m_settings.seekInterval <= 0) m_settings.seekInterval = 10;
+    if (m_settings.seekInterval <= 0) m_settings.seekInterval = 30;
+    m_settings.longSeekInterval = extractInt("longSeekInterval");
+    if (m_settings.longSeekInterval <= 0) m_settings.longSeekInterval = 300;
 
-    // Load transcode settings
-    m_settings.videoQuality = static_cast<VideoQuality>(extractInt("videoQuality"));
-    m_settings.forceTranscode = extractBool("forceTranscode", false);
-    m_settings.burnSubtitles = extractBool("burnSubtitles", true);
-    m_settings.maxBitrate = extractInt("maxBitrate");
-    if (m_settings.maxBitrate <= 0) m_settings.maxBitrate = 2000;
+    // Load audio settings
+    m_settings.audioQuality = static_cast<AudioQuality>(extractInt("audioQuality"));
+    m_settings.boostVolume = extractBool("boostVolume", false);
+    m_settings.volumeBoostDb = extractInt("volumeBoostDb");
+
+    // Load chapter settings
+    m_settings.showChapterList = extractBool("showChapterList", true);
+    m_settings.skipChapterTransitions = extractBool("skipChapterTransitions", false);
+
+    // Load bookmark settings
+    m_settings.autoBookmark = extractBool("autoBookmark", true);
 
     // Load network settings
     m_settings.connectionTimeout = extractInt("connectionTimeout");
-    if (m_settings.connectionTimeout <= 0) m_settings.connectionTimeout = 180; // 3 minutes default
-    m_settings.directPlay = extractBool("directPlay", false);
+    if (m_settings.connectionTimeout <= 0) m_settings.connectionTimeout = 180;
+    m_settings.downloadOverWifiOnly = extractBool("downloadOverWifiOnly", false);
+
+    // Load download settings
+    m_settings.autoStartDownloads = extractBool("autoStartDownloads", true);
+    m_settings.maxConcurrentDownloads = extractInt("maxConcurrentDownloads");
+    if (m_settings.maxConcurrentDownloads <= 0) m_settings.maxConcurrentDownloads = 1;
+    m_settings.deleteAfterFinish = extractBool("deleteAfterFinish", false);
+    m_settings.syncProgressOnConnect = extractBool("syncProgressOnConnect", true);
+
+    // Load sleep/power settings
+    m_settings.preventSleep = extractBool("preventSleep", true);
+    m_settings.pauseOnHeadphoneDisconnect = extractBool("pauseOnHeadphoneDisconnect", true);
 
     brls::Logger::info("Settings loaded successfully");
     return !m_authToken.empty();
@@ -293,6 +376,7 @@ bool Application::saveSettings() {
     json += "  \"authToken\": \"" + m_authToken + "\",\n";
     json += "  \"serverUrl\": \"" + m_serverUrl + "\",\n";
     json += "  \"username\": \"" + m_username + "\",\n";
+    json += "  \"currentLibraryId\": \"" + m_currentLibraryId + "\",\n";
 
     // UI settings
     json += "  \"theme\": " + std::to_string(static_cast<int>(m_settings.theme)) + ",\n";
@@ -304,29 +388,46 @@ bool Application::saveSettings() {
     json += "  \"showLibrariesInSidebar\": " + std::string(m_settings.showLibrariesInSidebar ? "true" : "false") + ",\n";
     json += "  \"collapseSidebar\": " + std::string(m_settings.collapseSidebar ? "true" : "false") + ",\n";
     json += "  \"hiddenLibraries\": \"" + m_settings.hiddenLibraries + "\",\n";
-    json += "  \"sidebarOrder\": \"" + m_settings.sidebarOrder + "\",\n";
 
     // Content display settings
     json += "  \"showCollections\": " + std::string(m_settings.showCollections ? "true" : "false") + ",\n";
-    json += "  \"showPlaylists\": " + std::string(m_settings.showPlaylists ? "true" : "false") + ",\n";
-    json += "  \"showGenres\": " + std::string(m_settings.showGenres ? "true" : "false") + ",\n";
+    json += "  \"showSeries\": " + std::string(m_settings.showSeries ? "true" : "false") + ",\n";
+    json += "  \"showAuthors\": " + std::string(m_settings.showAuthors ? "true" : "false") + ",\n";
+    json += "  \"showProgress\": " + std::string(m_settings.showProgress ? "true" : "false") + ",\n";
 
     // Playback settings
     json += "  \"autoPlayNext\": " + std::string(m_settings.autoPlayNext ? "true" : "false") + ",\n";
     json += "  \"resumePlayback\": " + std::string(m_settings.resumePlayback ? "true" : "false") + ",\n";
-    json += "  \"showSubtitles\": " + std::string(m_settings.showSubtitles ? "true" : "false") + ",\n";
-    json += "  \"subtitleSize\": " + std::to_string(static_cast<int>(m_settings.subtitleSize)) + ",\n";
+    json += "  \"playbackSpeed\": " + std::to_string(static_cast<int>(m_settings.playbackSpeed)) + ",\n";
+    json += "  \"sleepTimer\": " + std::to_string(static_cast<int>(m_settings.sleepTimer)) + ",\n";
     json += "  \"seekInterval\": " + std::to_string(m_settings.seekInterval) + ",\n";
+    json += "  \"longSeekInterval\": " + std::to_string(m_settings.longSeekInterval) + ",\n";
 
-    // Transcode settings
-    json += "  \"videoQuality\": " + std::to_string(static_cast<int>(m_settings.videoQuality)) + ",\n";
-    json += "  \"forceTranscode\": " + std::string(m_settings.forceTranscode ? "true" : "false") + ",\n";
-    json += "  \"burnSubtitles\": " + std::string(m_settings.burnSubtitles ? "true" : "false") + ",\n";
-    json += "  \"maxBitrate\": " + std::to_string(m_settings.maxBitrate) + ",\n";
+    // Audio settings
+    json += "  \"audioQuality\": " + std::to_string(static_cast<int>(m_settings.audioQuality)) + ",\n";
+    json += "  \"boostVolume\": " + std::string(m_settings.boostVolume ? "true" : "false") + ",\n";
+    json += "  \"volumeBoostDb\": " + std::to_string(m_settings.volumeBoostDb) + ",\n";
+
+    // Chapter settings
+    json += "  \"showChapterList\": " + std::string(m_settings.showChapterList ? "true" : "false") + ",\n";
+    json += "  \"skipChapterTransitions\": " + std::string(m_settings.skipChapterTransitions ? "true" : "false") + ",\n";
+
+    // Bookmark settings
+    json += "  \"autoBookmark\": " + std::string(m_settings.autoBookmark ? "true" : "false") + ",\n";
 
     // Network settings
     json += "  \"connectionTimeout\": " + std::to_string(m_settings.connectionTimeout) + ",\n";
-    json += "  \"directPlay\": " + std::string(m_settings.directPlay ? "true" : "false") + "\n";
+    json += "  \"downloadOverWifiOnly\": " + std::string(m_settings.downloadOverWifiOnly ? "true" : "false") + ",\n";
+
+    // Download settings
+    json += "  \"autoStartDownloads\": " + std::string(m_settings.autoStartDownloads ? "true" : "false") + ",\n";
+    json += "  \"maxConcurrentDownloads\": " + std::to_string(m_settings.maxConcurrentDownloads) + ",\n";
+    json += "  \"deleteAfterFinish\": " + std::string(m_settings.deleteAfterFinish ? "true" : "false") + ",\n";
+    json += "  \"syncProgressOnConnect\": " + std::string(m_settings.syncProgressOnConnect ? "true" : "false") + ",\n";
+
+    // Sleep/power settings
+    json += "  \"preventSleep\": " + std::string(m_settings.preventSleep ? "true" : "false") + ",\n";
+    json += "  \"pauseOnHeadphoneDisconnect\": " + std::string(m_settings.pauseOnHeadphoneDisconnect ? "true" : "false") + "\n";
 
     json += "}\n";
 
@@ -351,4 +452,4 @@ bool Application::saveSettings() {
 #endif
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

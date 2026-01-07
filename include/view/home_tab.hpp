@@ -1,15 +1,15 @@
 /**
- * VitaPlex - Home Tab
- * Shows continue watching, recently added movies, shows, and music
+ * VitaABS - Home Tab
+ * Shows continue listening, recently added audiobooks and podcasts
  */
 
 #pragma once
 
 #include <borealis.hpp>
-#include "app/plex_client.hpp"
+#include "app/audiobookshelf_client.hpp"
 #include "view/recycling_grid.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 class HomeTab : public brls::Box {
 public:
@@ -31,27 +31,22 @@ private:
 
     brls::Label* m_titleLabel = nullptr;
 
-    // Continue Watching section
-    brls::HScrollingFrame* m_continueWatchingRow = nullptr;
-    brls::Box* m_continueWatchingContent = nullptr;
+    // Continue Listening section
+    brls::HScrollingFrame* m_continueListeningRow = nullptr;
+    brls::Box* m_continueListeningContent = nullptr;
 
-    // Recently Added Movies section
-    brls::HScrollingFrame* m_moviesRow = nullptr;
-    brls::Box* m_moviesContent = nullptr;
+    // Recently Added Audiobooks section
+    brls::HScrollingFrame* m_audiobooksRow = nullptr;
+    brls::Box* m_audiobooksContent = nullptr;
 
-    // Recently Added TV Shows section
-    brls::HScrollingFrame* m_showsRow = nullptr;
-    brls::Box* m_showsContent = nullptr;
+    // Recently Added Podcasts section
+    brls::HScrollingFrame* m_podcastsRow = nullptr;
+    brls::Box* m_podcastsContent = nullptr;
 
-    // Recently Added Music section
-    brls::HScrollingFrame* m_musicRow = nullptr;
-    brls::Box* m_musicContent = nullptr;
-
-    std::vector<MediaItem> m_continueWatching;
-    std::vector<MediaItem> m_recentMovies;
-    std::vector<MediaItem> m_recentShows;
-    std::vector<MediaItem> m_recentMusic;
+    std::vector<MediaItem> m_continueListening;
+    std::vector<MediaItem> m_recentAudiobooks;
+    std::vector<MediaItem> m_recentPodcasts;
     bool m_loaded = false;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

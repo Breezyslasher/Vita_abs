@@ -1,10 +1,10 @@
 /**
- * VitaPlex - Progress Dialog implementation
+ * VitaABS - Progress Dialog implementation
  */
 
 #include "view/progress_dialog.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 ProgressDialog::ProgressDialog(const std::string& title) {
     this->setAxis(brls::Axis::COLUMN);
@@ -58,11 +58,11 @@ ProgressDialog::ProgressDialog(const std::string& title) {
     m_progressBg->setCornerRadius(5);
     progressContainer->addView(m_progressBg);
 
-    // Progress bar foreground
+    // Progress bar foreground (purple for audiobooks)
     m_progressBar = new brls::Rectangle();
     m_progressBar->setWidth(0);
     m_progressBar->setHeight(20);
-    m_progressBar->setColor(nvgRGBA(229, 160, 13, 255));  // Plex orange
+    m_progressBar->setColor(nvgRGBA(140, 82, 255, 255));
     m_progressBar->setCornerRadius(5);
     m_progressBar->setPositionType(brls::PositionType::ABSOLUTE);
     m_progressBar->setPositionLeft(0);
@@ -245,4 +245,4 @@ ProgressDialog* ProgressDialog::showDownloading(const std::string& title) {
     return dialog;
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

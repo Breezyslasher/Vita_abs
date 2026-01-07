@@ -1,6 +1,6 @@
 /**
- * VitaPlex - MPV Video Player
- * Hardware-accelerated video playback using libmpv with GXM rendering on Vita
+ * VitaABS - MPV Audio Player
+ * Audio playback using libmpv for audiobooks and podcasts
  */
 
 #pragma once
@@ -19,7 +19,7 @@ typedef struct mpv_event_property mpv_event_property;
 typedef struct mpv_render_context mpv_render_context;
 #endif
 
-namespace vitaplex {
+namespace vitaabs {
 
 // Player states
 enum class MpvPlayerState {
@@ -39,23 +39,19 @@ struct MpvPlaybackInfo {
     int volume = 100;
     bool muted = false;
     std::string mediaTitle;
-    std::string videoCodec;
-    int videoWidth = 0;
-    int videoHeight = 0;
-    double fps = 0.0;
     std::string audioCodec;
     int audioChannels = 0;
     int sampleRate = 0;
-    int subtitleTrack = 0;
-    int audioTrack = 0;
+    int audioBitrate = 0;
     double cacheUsed = 0.0;
     bool seeking = false;
     bool buffering = false;
     double bufferingPercent = 0.0;
+    double speed = 1.0;
 };
 
 /**
- * MPV-based video player with GXM rendering support on Vita
+ * MPV-based audio player for audiobooks and podcasts
  */
 class MpvPlayer {
 public:
@@ -78,7 +74,6 @@ public:
     void seekTo(double seconds);
     void seekRelative(double seconds);
     void seekPercent(double percent);
-    void seekChapter(int delta);
 
     // Volume
     void setVolume(int percent);
@@ -88,14 +83,9 @@ public:
     bool isMuted() const;
     void toggleMute();
 
-    // Tracks
-    void setSubtitleTrack(int track);
-    void setAudioTrack(int track);
-    void cycleSubtitle();
-    void cycleAudio();
-    void toggleSubtitles();
-    void setSubtitleDelay(double seconds);
-    void setAudioDelay(double seconds);
+    // Playback speed (for audiobooks)
+    void setSpeed(double speed);
+    double getSpeed() const;
 
     // State
     MpvPlayerState getState() const { return m_state; }
@@ -115,31 +105,13 @@ public:
 
     // OSD
     void showOSD(const std::string& text, double durationSec = 2.0);
-    void toggleOSD();
 
     // Options and properties
     void setOption(const std::string& name, const std::string& value);
     std::string getProperty(const std::string& name) const;
 
-    // Update (call in render loop)
+    // Update (call in main loop)
     void update();
-    void render();
-
-    // Check if render context is available (video mode vs audio-only)
-    bool hasRenderContext() const { return m_mpvRenderCtx != nullptr; }
-
-    // Get NanoVG image handle for drawing video (returns 0 if not available)
-    int getVideoImage() const {
-#ifdef __vita__
-        return m_nvgImage;
-#else
-        return 0;
-#endif
-    }
-
-    // Get video dimensions
-    int getVideoWidth() const { return 960; }
-    int getVideoHeight() const { return 544; }
 
 private:
     MpvPlayer() = default;
@@ -147,8 +119,6 @@ private:
     MpvPlayer(const MpvPlayer&) = delete;
     MpvPlayer& operator=(const MpvPlayer&) = delete;
 
-    bool initRenderContext();
-    void cleanupRenderContext();
     void eventMainLoop();
     void updatePlaybackInfo();
     void handleEvent(mpv_event* event);
@@ -156,24 +126,12 @@ private:
     void setState(MpvPlayerState newState);
 
     mpv_handle* m_mpv = nullptr;
-    mpv_render_context* m_mpvRenderCtx = nullptr;
     MpvPlayerState m_state = MpvPlayerState::IDLE;
     MpvPlaybackInfo m_playbackInfo;
     std::string m_errorMessage;
     std::string m_currentUrl;
-    bool m_subtitlesVisible = true;
-    bool m_stopping = false;        // Shutdown in progress
-    bool m_commandPending = false;  // Async command pending
-
-#ifdef __vita__
-    // GXM render resources
-    int m_nvgImage = 0;                 // NanoVG image handle for display
-    void* m_gxmFramebuffer = nullptr;   // GXM framebuffer structure
-    mpv_gxm_fbo m_mpvFbo = {};          // MPV GXM FBO parameters
-    int m_videoWidth = 960;
-    int m_videoHeight = 544;
-    bool m_renderReady = false;         // Flag for when frame is ready
-#endif
+    bool m_stopping = false;
+    bool m_commandPending = false;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

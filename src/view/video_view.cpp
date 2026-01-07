@@ -1,12 +1,12 @@
 /**
- * VitaPlex - Video View Implementation
+ * VitaABS - Video View Implementation
  * Renders video frames from MPV player
  */
 
 #include "view/video_view.hpp"
 #include "player/mpv_player.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 VideoView::VideoView() {
     // Set up as full-screen by default
@@ -67,4 +67,4 @@ brls::View* VideoView::create() {
     return new VideoView();
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

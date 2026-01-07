@@ -1,15 +1,15 @@
 /**
- * VitaPlex - Recycling Grid
- * Efficient grid view for displaying media items
+ * VitaABS - Recycling Grid
+ * Efficient grid view for displaying audiobook/podcast items
  */
 
 #pragma once
 
 #include <borealis.hpp>
-#include "app/plex_client.hpp"
+#include "app/audiobookshelf_client.hpp"
 #include <functional>
 
-namespace vitaplex {
+namespace vitaabs {
 
 class RecyclingGrid : public brls::ScrollingFrame {
 public:
@@ -32,4 +32,4 @@ private:
     int m_visibleRows = 3;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs
