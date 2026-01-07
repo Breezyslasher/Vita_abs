@@ -153,7 +153,7 @@ void HomeTab::loadContent() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
-        if (client.fetchContinueWatching(items)) {
+        if (client.fetchItemsInProgress(items)) {
             brls::Logger::info("HomeTab: Got {} continue watching items", items.size());
 
             brls::sync([this, items]() {
@@ -172,7 +172,7 @@ void HomeTab::loadContent() {
 
         // First get all library sections
         std::vector<LibrarySection> sections;
-        if (!client.fetchLibrarySections(sections)) {
+        if (!client.fetchLibraries(sections)) {
             brls::Logger::error("HomeTab: Failed to fetch library sections");
             return;
         }
@@ -199,15 +199,15 @@ void HomeTab::loadContent() {
         // Fetch recently added from each section by type
         for (const auto& section : sections) {
             // Skip hidden libraries
-            if (isHidden(section.key)) {
-                brls::Logger::debug("HomeTab: Skipping hidden library: {}", section.title);
+            if (isHidden(section.id)) {
+                brls::Logger::debug("HomeTab: Skipping hidden library: {}", section.name);
                 continue;
             }
 
             std::vector<MediaItem> sectionItems;
 
             // Fetch recently added using the correct API endpoint
-            if (client.fetchSectionRecentlyAdded(section.key, sectionItems)) {
+            if (client.fetchRecentlyAdded(section.id, sectionItems)) {
                 // Sort items by type
                 for (auto& item : sectionItems) {
                     if (section.type == "movie") {
@@ -243,7 +243,7 @@ void HomeTab::loadContent() {
 void HomeTab::onItemSelected(const MediaItem& item) {
     // For tracks, play directly instead of showing detail view
     if (item.mediaType == MediaType::MUSIC_TRACK) {
-        Application::getInstance().pushPlayerActivity(item.ratingKey);
+        Application::getInstance().pushPlayerActivity(item.id);
         return;
     }
 

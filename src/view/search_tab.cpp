@@ -273,7 +273,7 @@ void SearchTab::performSearch(const std::string& query) {
 void SearchTab::onItemSelected(const MediaItem& item) {
     // For tracks, play directly instead of showing detail view
     if (item.mediaType == MediaType::MUSIC_TRACK) {
-        Application::getInstance().pushPlayerActivity(item.ratingKey);
+        Application::getInstance().pushPlayerActivity(item.id);
         return;
     }
 

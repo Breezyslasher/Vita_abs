@@ -477,7 +477,7 @@ void LiveTVTab::onChannelSelected(const LiveTVChannel& channel) {
     brls::Logger::info("LiveTVTab: Selected channel: {} ({})", channel.title, channel.channelNumber);
 
     // Start playing the channel
-    Application::getInstance().pushPlayerActivity(channel.ratingKey);
+    Application::getInstance().pushPlayerActivity(channel.id);
 }
 
 void LiveTVTab::onProgramSelected(const GuideProgram& program, const LiveTVChannel& channel) {
@@ -494,7 +494,7 @@ void LiveTVTab::onProgramSelected(const GuideProgram& program, const LiveTVChann
 
     dialog->addButton("Watch Now", [this, channel, dialog]() {
         dialog->close();
-        Application::getInstance().pushPlayerActivity(channel.ratingKey);
+        Application::getInstance().pushPlayerActivity(channel.id);
     });
 
     dialog->addButton("Record", [this, program, channel, dialog]() {

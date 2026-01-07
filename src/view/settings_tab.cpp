@@ -393,7 +393,7 @@ void SettingsTab::createDownloadsSection() {
         dialog->addButton("Delete All", [dialog, this]() {
             auto downloads = DownloadsManager::getInstance().getDownloads();
             for (const auto& item : downloads) {
-                DownloadsManager::getInstance().deleteDownload(item.ratingKey);
+                DownloadsManager::getInstance().deleteDownload(item.id);
             }
             if (m_clearDownloadsCell) {
                 m_clearDownloadsCell->setDetailText("0 items");
@@ -565,7 +565,7 @@ void SettingsTab::onManageHiddenLibraries() {
 
     // Fetch library sections
     std::vector<LibrarySection> sections;
-    AudiobookshelfClient::getInstance().fetchLibrarySections(sections);
+    AudiobookshelfClient::getInstance().fetchLibraries(sections);
 
     if (sections.empty()) {
         brls::Dialog* dialog = new brls::Dialog("No libraries found");
@@ -612,10 +612,10 @@ void SettingsTab::onManageHiddenLibraries() {
 
     for (const auto& section : sections) {
         auto* checkbox = new brls::BooleanCell();
-        bool isHidden = (hiddenKeys.find(section.key) != hiddenKeys.end());
-        checkbox->init(section.title, isHidden, [](bool value) {});
+        bool isHidden = (hiddenKeys.find(section.id) != hiddenKeys.end());
+        checkbox->init(section.name, isHidden, [](bool value) {});
         content->addView(checkbox);
-        checkboxes.push_back({section.key, checkbox});
+        checkboxes.push_back({section.id, checkbox});
     }
 
     scrollFrame->setContentView(content);

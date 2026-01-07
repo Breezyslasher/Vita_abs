@@ -108,8 +108,8 @@ void MediaItemCell::setItem(const MediaItem& item) {
     }
 
     // Show progress bar for items with view offset
-    if (m_progressBar && item.viewOffset > 0 && item.duration > 0) {
-        float progress = (float)item.viewOffset / (float)item.duration;
+    if (m_progressBar && item.currentTime > 0 && item.duration > 0) {
+        float progress = (float)item.currentTime / (float)item.duration;
         m_progressBar->setWidth(110 * progress);
         m_progressBar->setVisibility(brls::Visibility::VISIBLE);
     }
@@ -132,14 +132,14 @@ void MediaItemCell::loadThumbnail() {
     int height = isMusic ? 220 : 330;
 
     // For episodes, prefer grandparentThumb (show poster) if available
-    std::string thumbPath = m_item.thumb;
+    std::string thumbPath = m_item.coverPath;
     if (m_item.mediaType == MediaType::EPISODE && !m_item.grandparentThumb.empty()) {
         thumbPath = m_item.grandparentThumb;
     }
 
     if (thumbPath.empty()) return;
 
-    std::string url = client.getThumbnailUrl(thumbPath, width, height);
+    std::string url = client.getCoverUrl(thumbPath, width, height);
 
     ImageLoader::loadAsync(url, [this](brls::Image* image) {
         // Image loaded callback

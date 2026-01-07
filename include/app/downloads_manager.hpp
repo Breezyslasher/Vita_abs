@@ -27,12 +27,14 @@ struct DownloadItem {
     std::string episodeId;      // Episode ID (for podcasts)
     std::string title;          // Display title
     std::string authorName;     // Author/narrator name
+    std::string parentTitle;    // Series name or parent title (for display)
     std::string localPath;      // Local storage path
     std::string coverUrl;       // Cover image URL
     int64_t totalBytes = 0;     // Total file size
     int64_t downloadedBytes = 0; // Downloaded so far
     float duration = 0.0f;      // Media duration in seconds
     float currentTime = 0.0f;   // Watch progress in seconds
+    int64_t viewOffset = 0;     // Progress in milliseconds (for UI compatibility)
     DownloadState state = DownloadState::QUEUED;
     std::string mediaType;      // "book", "podcast"
     std::string seriesName;     // Series name for audiobooks

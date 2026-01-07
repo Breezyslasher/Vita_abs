@@ -110,17 +110,15 @@ void PlayerActivity::willDisappear(bool resetState) {
     if (player.isInitialized() && (player.isPlaying() || player.isPaused())) {
         double position = player.getPosition();
         if (position > 0) {
-            int timeMs = (int)(position * 1000);
+            float currentTime = (float)position;
 
             if (m_isLocalFile) {
-                // Save progress for downloaded media
-                DownloadsManager::getInstance().updateProgress(m_itemId, timeMs);
+                // Save progress for downloaded media (in seconds)
+                DownloadsManager::getInstance().updateProgress(m_itemId, currentTime);
                 DownloadsManager::getInstance().saveState();
-                brls::Logger::info("PlayerActivity: Saved local progress {}ms for {}", timeMs, m_itemId);
+                brls::Logger::info("PlayerActivity: Saved local progress {}s for {}", currentTime, m_itemId);
             } else {
                 // Save progress to Audiobookshelf server
-                MpvPlayer& player = MpvPlayer::getInstance();
-                float currentTime = (float)position;
                 float totalDuration = (float)player.getDuration();
                 AudiobookshelfClient::getInstance().updateProgress(m_itemId, currentTime, totalDuration, false, m_episodeId);
             }

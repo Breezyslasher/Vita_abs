@@ -60,10 +60,10 @@ bool DownloadsManager::init() {
 }
 
 bool DownloadsManager::queueDownload(const std::string& itemId, const std::string& title,
-                                      const std::string& audioPath, float duration,
+                                      const std::string& authorName, float duration,
                                       const std::string& mediaType,
-                                      const std::string& parentTitle,
-                                      int seasonNum, int episodeNum) {
+                                      const std::string& seriesName,
+                                      const std::string& episodeId) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     // Check if already in queue
@@ -77,16 +77,21 @@ bool DownloadsManager::queueDownload(const std::string& itemId, const std::strin
     DownloadItem item;
     item.itemId = itemId;
     item.title = title;
-    item.audioPath = audioPath;
+    item.authorName = authorName;
+    item.parentTitle = seriesName.empty() ? authorName : seriesName;
     item.duration = duration;
     item.mediaType = mediaType;
-    item.coverUrl = coverUrl;
+    item.seriesName = seriesName;
     item.episodeId = episodeId;
     item.state = DownloadState::QUEUED;
 
+    // Get cover URL from client
+    AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+    item.coverUrl = client.getCoverUrl(itemId);
+
     // Generate local path - audiobooks are typically m4b, mp3, or other audio formats
     std::string extension;
-    if (mediaType == "episode") {
+    if (mediaType == "podcast" || !episodeId.empty()) {
         extension = ".mp3";
     } else {
         // For audiobooks, use m4b (common audiobook format) or mp3
@@ -236,6 +241,7 @@ void DownloadsManager::updateProgress(const std::string& itemId, float currentTi
     for (auto& item : m_downloads) {
         if (item.itemId == itemId) {
             item.currentTime = currentTime;
+            item.viewOffset = static_cast<int64_t>(currentTime * 1000.0f);  // Convert to milliseconds
             brls::Logger::debug("DownloadsManager: Updated progress for {} to {}s",
                                item.title, currentTime);
             break;
@@ -262,7 +268,9 @@ void DownloadsManager::syncProgressToServer() {
 
     for (auto& item : itemsToSync) {
         // Update progress on the Audiobookshelf server
-        if (client.updateProgress(item.itemId, "", item.currentTime, item.duration)) {
+        // Signature: updateProgress(itemId, currentTime, duration, isFinished, episodeId)
+        bool isFinished = (item.duration > 0 && item.currentTime >= item.duration * 0.95f);
+        if (client.updateProgress(item.itemId, item.currentTime, item.duration, isFinished, item.episodeId)) {
             std::lock_guard<std::mutex> lock(m_mutex);
             // Update last synced time
             for (auto& d : m_downloads) {
@@ -283,7 +291,7 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
 
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
     std::string serverUrl = client.getServerUrl();
-    std::string token = client.getToken();
+    std::string token = client.getAuthToken();
 
     if (serverUrl.empty() || token.empty()) {
         brls::Logger::error("DownloadsManager: Not connected to server");
@@ -293,9 +301,15 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
     }
 
     // Get the download URL for the item
-    // Audiobookshelf provides direct file access at /api/items/:id/file/:ino
-    // Or we can use the stream URL for transcoded audio
-    std::string url = client.getStreamUrl(item.itemId, "");
+    // Audiobookshelf provides direct file access or stream URL
+    std::string url = client.getStreamUrl(item.itemId, item.episodeId);
+
+    if (url.empty()) {
+        brls::Logger::error("DownloadsManager: Failed to get stream URL for {}", item.itemId);
+        item.state = DownloadState::FAILED;
+        saveState();
+        return;
+    }
 
     brls::Logger::debug("DownloadsManager: Downloading from {}", url);
 
@@ -321,11 +335,10 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
     // Download with progress tracking
     HttpClient http;
 
-    // Add auth header
-    std::map<std::string, std::string> headers;
-    headers["Authorization"] = "Bearer " + token;
+    // Set auth header
+    http.setDefaultHeader("Authorization", "Bearer " + token);
 
-    bool success = http.downloadFileWithHeaders(url, headers,
+    bool success = http.downloadFile(url,
         [&](const char* data, size_t size) {
             // Write chunk to file
 #ifdef __vita__
@@ -336,14 +349,15 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
             item.downloadedBytes += size;
 
             // Call progress callback
-            if (m_progressCallback) {
-                m_progressCallback(item.downloadedBytes, item.size);
+            if (m_progressCallback && item.totalBytes > 0) {
+                m_progressCallback(static_cast<float>(item.downloadedBytes),
+                                   static_cast<float>(item.totalBytes));
             }
 
             return m_downloading; // Return false to cancel
         },
         [&](int64_t total) {
-            item.size = static_cast<float>(total);
+            item.totalBytes = total;
             brls::Logger::debug("DownloadsManager: Total size: {} bytes", total);
         }
     );
@@ -385,17 +399,20 @@ void DownloadsManager::saveState() {
         const auto& item = m_downloads[i];
         ss << "{\n"
            << "\"itemId\":\"" << item.itemId << "\",\n"
+           << "\"episodeId\":\"" << item.episodeId << "\",\n"
            << "\"title\":\"" << item.title << "\",\n"
-           << "\"audioPath\":\"" << item.audioPath << "\",\n"
+           << "\"authorName\":\"" << item.authorName << "\",\n"
+           << "\"parentTitle\":\"" << item.parentTitle << "\",\n"
            << "\"localPath\":\"" << item.localPath << "\",\n"
            << "\"coverUrl\":\"" << item.coverUrl << "\",\n"
            << "\"mediaType\":\"" << item.mediaType << "\",\n"
-           << "\"episodeId\":\"" << item.episodeId << "\",\n"
-           << "\"size\":" << item.size << ",\n"
+           << "\"seriesName\":\"" << item.seriesName << "\",\n"
+           << "\"totalBytes\":" << item.totalBytes << ",\n"
            << "\"downloadedBytes\":" << item.downloadedBytes << ",\n"
-           << "\"currentTime\":" << item.currentTime << ",\n"
            << "\"duration\":" << item.duration << ",\n"
            << "\"currentTime\":" << item.currentTime << ",\n"
+           << "\"viewOffset\":" << item.viewOffset << ",\n"
+           << "\"numChapters\":" << item.numChapters << ",\n"
            << "\"state\":" << static_cast<int>(item.state) << ",\n"
            << "\"lastSynced\":" << item.lastSynced << "\n"
            << "}";

@@ -81,7 +81,7 @@ void LibraryTab::loadSections() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<LibrarySection> sections;
 
-        if (client.fetchLibrarySections(sections)) {
+        if (client.fetchLibraries(sections)) {
             brls::Logger::info("LibraryTab: Got {} sections", sections.size());
 
             // Get hidden libraries setting
@@ -90,10 +90,10 @@ void LibraryTab::loadSections() {
             // Filter out hidden sections
             std::vector<LibrarySection> visibleSections;
             for (const auto& section : sections) {
-                if (!isLibraryHidden(section.key, hiddenLibraries)) {
+                if (!isLibraryHidden(section.id, hiddenLibraries)) {
                     visibleSections.push_back(section);
                 } else {
-                    brls::Logger::debug("LibraryTab: Hiding section: {}", section.title);
+                    brls::Logger::debug("LibraryTab: Hiding section: {}", section.name);
                 }
             }
 
@@ -103,9 +103,9 @@ void LibraryTab::loadSections() {
                 m_sectionsBox->clearViews();
 
                 for (const auto& section : m_sections) {
-                    brls::Logger::debug("LibraryTab: Adding section button: {}", section.title);
+                    brls::Logger::debug("LibraryTab: Adding section button: {}", section.name);
                     auto* btn = new brls::Button();
-                    btn->setText(section.title);
+                    btn->setText(section.name);
                     btn->setMarginRight(10);
 
                     LibrarySection capturedSection = section;
@@ -143,7 +143,7 @@ void LibraryTab::loadContent(const std::string& sectionKey) {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
-        if (client.fetchLibraryContent(key, items)) {
+        if (client.fetchLibraryItems(key, items)) {
             brls::Logger::info("LibraryTab: Got {} items for section {}", items.size(), key);
 
             // Update UI on main thread
@@ -158,15 +158,15 @@ void LibraryTab::loadContent(const std::string& sectionKey) {
 }
 
 void LibraryTab::onSectionSelected(const LibrarySection& section) {
-    m_currentSection = section.key;
-    m_titleLabel->setText("Library - " + section.title);
-    loadContent(section.key);
+    m_currentSection = section.id;
+    m_titleLabel->setText("Library - " + section.name);
+    loadContent(section.id);
 }
 
 void LibraryTab::onItemSelected(const MediaItem& item) {
     // For tracks, play directly instead of showing detail view
     if (item.mediaType == MediaType::MUSIC_TRACK) {
-        Application::getInstance().pushPlayerActivity(item.ratingKey);
+        Application::getInstance().pushPlayerActivity(item.id);
         return;
     }
 

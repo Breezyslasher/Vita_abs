@@ -124,7 +124,7 @@ void LibrarySectionTab::loadContent() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
-        if (client.fetchLibraryContent(key, items)) {
+        if (client.fetchLibraryItems(key, items)) {
             brls::Logger::info("LibrarySectionTab: Got {} items for section {}", items.size(), key);
 
             brls::sync([this, items, aliveWeak]() {
@@ -167,7 +167,7 @@ void LibrarySectionTab::loadCollections() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> collections;
 
-        if (client.fetchCollections(key, collections)) {
+        if (client.fetchLibraryCollections(key, collections)) {
             brls::Logger::info("LibrarySectionTab: Got {} collections for section {}", collections.size(), key);
 
             brls::sync([this, collections, aliveWeak]() {
@@ -275,7 +275,7 @@ void LibrarySectionTab::showCategories() {
     for (const auto& genre : m_genres) {
         MediaItem item;
         item.title = genre.title;
-        item.ratingKey = genre.key;  // Use genre key for filtering
+        item.id = genre.id;  // Use genre key for filtering
         item.type = "genre";
         item.mediaType = MediaType::UNKNOWN;
         genreItems.push_back(item);
@@ -313,14 +313,14 @@ void LibrarySectionTab::onItemSelected(const MediaItem& item) {
         // Selected a category/genre - filter by it
         GenreItem genre;
         genre.title = item.title;
-        genre.key = item.ratingKey;
+        genre.id = item.id;
         onGenreSelected(genre);
         return;
     }
 
     // Normal item selection
     if (item.mediaType == MediaType::MUSIC_TRACK) {
-        Application::getInstance().pushPlayerActivity(item.ratingKey);
+        Application::getInstance().pushPlayerActivity(item.id);
         return;
     }
 
@@ -333,7 +333,7 @@ void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
     brls::Logger::debug("LibrarySectionTab: Selected collection: {}", collection.title);
 
     m_filterTitle = collection.title;
-    std::string collectionKey = collection.ratingKey;
+    std::string collectionKey = collection.id;
     std::string filterTitle = m_filterTitle;
     std::weak_ptr<bool> aliveWeak = m_alive;
 
@@ -341,7 +341,7 @@ void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
-        if (client.fetchChildren(collectionKey, items)) {
+        if (client.fetchPodcastEpisodes(collectionKey, items)) {
             brls::Logger::info("LibrarySectionTab: Got {} items in collection", items.size());
 
             brls::sync([this, items, filterTitle, aliveWeak]() {
@@ -365,11 +365,11 @@ void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
 }
 
 void LibrarySectionTab::onGenreSelected(const GenreItem& genre) {
-    brls::Logger::debug("LibrarySectionTab: Selected genre: {} (key: {})", genre.title, genre.key);
+    brls::Logger::debug("LibrarySectionTab: Selected genre: {} (key: {})", genre.title, genre.id);
 
     m_filterTitle = genre.title;
     std::string key = m_sectionKey;
-    std::string genreKey = genre.key;
+    std::string genreKey = genre.id;
     std::string genreTitle = genre.title;
     std::string filterTitle = m_filterTitle;
     std::weak_ptr<bool> aliveWeak = m_alive;

@@ -83,7 +83,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         });
         leftBox->addView(m_playButton);
 
-        if (m_item.viewOffset > 0) {
+        if (m_item.currentTime > 0) {
             m_resumeButton = new brls::Button();
             m_resumeButton->setText("Resume");
             m_resumeButton->setWidth(200);
@@ -101,7 +101,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
             m_downloadButton = new brls::Button();
 
             // Check if already downloaded
-            if (DownloadsManager::getInstance().isDownloaded(m_item.ratingKey)) {
+            if (DownloadsManager::getInstance().isDownloaded(m_item.id)) {
                 m_downloadButton->setText("Downloaded");
             } else {
                 m_downloadButton->setText("Download");
@@ -269,7 +269,7 @@ void MediaDetailView::loadDetails() {
 
     // Load full details
     MediaItem fullItem;
-    if (client.fetchMediaDetails(m_item.ratingKey, fullItem)) {
+    if (client.fetchItem(m_item.id, fullItem)) {
         m_item = fullItem;
 
         // Update UI with full details
@@ -282,8 +282,8 @@ void MediaDetailView::loadDetails() {
         }
 
         // Update download button state now that we have the part path
-        if (m_downloadButton && !m_item.partPath.empty()) {
-            if (DownloadsManager::getInstance().isDownloaded(m_item.ratingKey)) {
+        if (m_downloadButton && !m_item.audioTracks.empty()) {
+            if (DownloadsManager::getInstance().isDownloaded(m_item.id)) {
                 m_downloadButton->setText("Downloaded");
             } else {
                 m_downloadButton->setText("Download");
@@ -293,7 +293,7 @@ void MediaDetailView::loadDetails() {
     }
 
     // Load thumbnail with appropriate aspect ratio
-    if (m_posterImage && !m_item.thumb.empty()) {
+    if (m_posterImage && !m_item.coverPath.empty()) {
         bool isMusic = (m_item.mediaType == MediaType::MUSIC_ARTIST ||
                         m_item.mediaType == MediaType::MUSIC_ALBUM ||
                         m_item.mediaType == MediaType::MUSIC_TRACK);
@@ -301,7 +301,7 @@ void MediaDetailView::loadDetails() {
         int width = isMusic ? 400 : 400;
         int height = isMusic ? 400 : 600;
 
-        std::string url = client.getThumbnailUrl(m_item.thumb, width, height);
+        std::string url = client.getCoverUrl(m_item.coverPath, width, height);
         ImageLoader::loadAsync(url, [this](brls::Image* image) {
             // Image loaded
         }, m_posterImage);
@@ -320,7 +320,7 @@ void MediaDetailView::loadChildren() {
 
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
-    if (client.fetchChildren(m_item.ratingKey, m_children)) {
+    if (client.fetchPodcastEpisodes(m_item.id, m_children)) {
         m_childrenBox->clearViews();
 
         for (const auto& child : m_children) {
@@ -349,7 +349,7 @@ void MediaDetailView::loadMusicCategories() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
         std::vector<MediaItem> allAlbums;
-        if (!client.fetchChildren(m_item.ratingKey, allAlbums)) {
+        if (!client.fetchPodcastEpisodes(m_item.id, allAlbums)) {
             brls::Logger::error("Failed to fetch albums for artist");
             return;
         }
@@ -430,7 +430,7 @@ void MediaDetailView::onPlay(bool resume) {
         m_item.mediaType == MediaType::EPISODE ||
         m_item.mediaType == MediaType::MUSIC_TRACK) {
 
-        Application::getInstance().pushPlayerActivity(m_item.ratingKey);
+        Application::getInstance().pushPlayerActivity(m_item.id);
     }
     // For shows/seasons/albums, play the first child item
     else if (m_item.mediaType == MediaType::SHOW ||
@@ -443,26 +443,26 @@ void MediaDetailView::onPlay(bool resume) {
             if (m_item.mediaType == MediaType::SHOW) {
                 AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
                 std::vector<MediaItem> episodes;
-                if (client.fetchChildren(m_children[0].ratingKey, episodes) && !episodes.empty()) {
-                    Application::getInstance().pushPlayerActivity(episodes[0].ratingKey);
+                if (client.fetchPodcastEpisodes(m_children[0].id, episodes) && !episodes.empty()) {
+                    Application::getInstance().pushPlayerActivity(episodes[0].id);
                 }
             } else {
                 // For seasons/albums, first child is directly playable
-                Application::getInstance().pushPlayerActivity(m_children[0].ratingKey);
+                Application::getInstance().pushPlayerActivity(m_children[0].id);
             }
         } else {
             // Fetch children and play first one
             AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
             std::vector<MediaItem> children;
-            if (client.fetchChildren(m_item.ratingKey, children) && !children.empty()) {
+            if (client.fetchPodcastEpisodes(m_item.id, children) && !children.empty()) {
                 if (m_item.mediaType == MediaType::SHOW) {
                     // First child is a season, get its episodes
                     std::vector<MediaItem> episodes;
-                    if (client.fetchChildren(children[0].ratingKey, episodes) && !episodes.empty()) {
-                        Application::getInstance().pushPlayerActivity(episodes[0].ratingKey);
+                    if (client.fetchPodcastEpisodes(children[0].id, episodes) && !episodes.empty()) {
+                        Application::getInstance().pushPlayerActivity(episodes[0].id);
                     }
                 } else {
-                    Application::getInstance().pushPlayerActivity(children[0].ratingKey);
+                    Application::getInstance().pushPlayerActivity(children[0].id);
                 }
             }
         }
@@ -471,21 +471,21 @@ void MediaDetailView::onPlay(bool resume) {
 
 void MediaDetailView::onDownload() {
     // Check if already downloaded
-    if (DownloadsManager::getInstance().isDownloaded(m_item.ratingKey)) {
+    if (DownloadsManager::getInstance().isDownloaded(m_item.id)) {
         brls::Application::notify("Already downloaded");
         return;
     }
 
     // Check if we have the part path (need to fetch full details first)
-    if (m_item.partPath.empty()) {
+    if (m_item.audioTracks.empty()) {
         brls::Application::notify("Loading media info...");
 
         // Try to load details now
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         MediaItem fullItem;
-        if (client.fetchMediaDetails(m_item.ratingKey, fullItem) && !fullItem.partPath.empty()) {
+        if (client.fetchItem(m_item.id, fullItem) && !fullItem.audioTracks.empty()) {
             m_item = fullItem;
-            brls::Logger::debug("onDownload: Loaded partPath={}", m_item.partPath);
+            brls::Logger::debug("onDownload: Loaded partPath={}", m_item.audioTracks.empty() ? "" : m_item.audioTracks[0].contentUrl);
         } else {
             brls::Logger::debug("onDownload: partPath is still empty, cannot download");
             brls::Application::notify("Unable to download - media info not available");
@@ -508,18 +508,18 @@ void MediaDetailView::onDownload() {
     int episodeNum = 0;
 
     if (m_item.mediaType == MediaType::EPISODE) {
-        parentTitle = m_item.grandparentTitle;  // Show name
+        parentTitle = m_item.seriesName;  // Show name
         seasonNum = m_item.parentIndex;  // Season number
         episodeNum = m_item.index;       // Episode number
     } else if (m_item.mediaType == MediaType::MUSIC_TRACK) {
-        parentTitle = m_item.grandparentTitle;  // Artist name
+        parentTitle = m_item.seriesName;  // Artist name
     }
 
     // Queue the download
     bool queued = DownloadsManager::getInstance().queueDownload(
-        m_item.ratingKey,
+        m_item.id,
         m_item.title,
-        m_item.partPath,
+        m_item.audioTracks.empty() ? "" : m_item.audioTracks[0].contentUrl,
         m_item.duration,
         mediaType,
         parentTitle,
@@ -539,7 +539,7 @@ void MediaDetailView::onDownload() {
         progressDialog->show();
 
         // Track the rating key to update button when done
-        std::string ratingKey = m_item.ratingKey;
+        std::string ratingKey = m_item.id;
         brls::Button* downloadBtn = m_downloadButton;
 
         // Set progress callback with speed display
@@ -725,7 +725,7 @@ void MediaDetailView::downloadAll() {
     progressDialog->setStatus("Fetching content list...");
     progressDialog->show();
 
-    std::string ratingKey = m_item.ratingKey;
+    std::string ratingKey = m_item.id;
     MediaType mediaType = m_item.mediaType;
     std::string parentTitle = m_item.title;
 
@@ -737,10 +737,10 @@ void MediaDetailView::downloadAll() {
         if (mediaType == MediaType::SHOW) {
             // Get all seasons first, then all episodes
             std::vector<MediaItem> seasons;
-            if (client.fetchChildren(ratingKey, seasons)) {
+            if (client.fetchPodcastEpisodes(ratingKey, seasons)) {
                 for (const auto& season : seasons) {
                     std::vector<MediaItem> episodes;
-                    if (client.fetchChildren(season.ratingKey, episodes)) {
+                    if (client.fetchPodcastEpisodes(season.id, episodes)) {
                         for (auto& ep : episodes) {
                             items.push_back(ep);
                         }
@@ -749,14 +749,14 @@ void MediaDetailView::downloadAll() {
             }
         } else if (mediaType == MediaType::SEASON || mediaType == MediaType::MUSIC_ALBUM) {
             // Get direct children (episodes or tracks)
-            client.fetchChildren(ratingKey, items);
+            client.fetchPodcastEpisodes(ratingKey, items);
         } else if (mediaType == MediaType::MUSIC_ARTIST) {
             // Get all albums, then all tracks
             std::vector<MediaItem> albums;
-            if (client.fetchChildren(ratingKey, albums)) {
+            if (client.fetchPodcastEpisodes(ratingKey, albums)) {
                 for (const auto& album : albums) {
                     std::vector<MediaItem> tracks;
-                    if (client.fetchChildren(album.ratingKey, tracks)) {
+                    if (client.fetchPodcastEpisodes(album.id, tracks)) {
                         for (auto& track : tracks) {
                             items.push_back(track);
                         }
@@ -788,15 +788,15 @@ void MediaDetailView::downloadAll() {
 
             // Get full details to get the part path
             MediaItem fullItem;
-            if (client.fetchMediaDetails(item.ratingKey, fullItem) && !fullItem.partPath.empty()) {
+            if (client.fetchItem(item.id, fullItem) && !fullItem.audioTracks.empty()) {
                 std::string itemMediaType = "episode";
                 if (fullItem.mediaType == MediaType::MOVIE) itemMediaType = "movie";
                 else if (fullItem.mediaType == MediaType::MUSIC_TRACK) itemMediaType = "track";
 
                 if (DownloadsManager::getInstance().queueDownload(
-                    fullItem.ratingKey,
+                    fullItem.id,
                     fullItem.title,
-                    fullItem.partPath,
+                    fullItem.audioTracks.empty() ? "" : fullItem.audioTracks[0].contentUrl,
                     fullItem.duration,
                     itemMediaType,
                     parentTitle,
@@ -833,7 +833,7 @@ void MediaDetailView::downloadUnwatched(int maxCount) {
     progressDialog->setStatus("Fetching unwatched content...");
     progressDialog->show();
 
-    std::string ratingKey = m_item.ratingKey;
+    std::string ratingKey = m_item.id;
     MediaType mediaType = m_item.mediaType;
     std::string parentTitle = m_item.title;
 
@@ -845,12 +845,12 @@ void MediaDetailView::downloadUnwatched(int maxCount) {
         if (mediaType == MediaType::SHOW) {
             // Get all seasons first, then unwatched episodes
             std::vector<MediaItem> seasons;
-            if (client.fetchChildren(ratingKey, seasons)) {
+            if (client.fetchPodcastEpisodes(ratingKey, seasons)) {
                 for (const auto& season : seasons) {
                     std::vector<MediaItem> episodes;
-                    if (client.fetchChildren(season.ratingKey, episodes)) {
+                    if (client.fetchPodcastEpisodes(season.id, episodes)) {
                         for (auto& ep : episodes) {
-                            if (!ep.watched && ep.viewOffset == 0) {
+                            if (!ep.isFinished && ep.currentTime == 0) {
                                 unwatchedItems.push_back(ep);
                                 if (maxCount > 0 && (int)unwatchedItems.size() >= maxCount) {
                                     break;
@@ -866,9 +866,9 @@ void MediaDetailView::downloadUnwatched(int maxCount) {
         } else if (mediaType == MediaType::SEASON) {
             // Get unwatched episodes in this season
             std::vector<MediaItem> episodes;
-            if (client.fetchChildren(ratingKey, episodes)) {
+            if (client.fetchPodcastEpisodes(ratingKey, episodes)) {
                 for (auto& ep : episodes) {
-                    if (!ep.watched && ep.viewOffset == 0) {
+                    if (!ep.isFinished && ep.currentTime == 0) {
                         unwatchedItems.push_back(ep);
                         if (maxCount > 0 && (int)unwatchedItems.size() >= maxCount) {
                             break;
@@ -901,13 +901,13 @@ void MediaDetailView::downloadUnwatched(int maxCount) {
 
             // Get full details to get the part path
             MediaItem fullItem;
-            if (client.fetchMediaDetails(item.ratingKey, fullItem) && !fullItem.partPath.empty()) {
+            if (client.fetchItem(item.id, fullItem) && !fullItem.audioTracks.empty()) {
                 std::string itemMediaType = "episode";
 
                 if (DownloadsManager::getInstance().queueDownload(
-                    fullItem.ratingKey,
+                    fullItem.id,
                     fullItem.title,
-                    fullItem.partPath,
+                    fullItem.audioTracks.empty() ? "" : fullItem.audioTracks[0].contentUrl,
                     fullItem.duration,
                     itemMediaType,
                     parentTitle,

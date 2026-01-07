@@ -149,7 +149,7 @@ void MusicTab::loadSections() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<LibrarySection> allSections;
 
-        if (client.fetchLibrarySections(allSections)) {
+        if (client.fetchLibraries(allSections)) {
             // Filter for music sections only (type = "artist")
             std::vector<LibrarySection> musicSections;
             for (const auto& section : allSections) {
@@ -169,9 +169,9 @@ void MusicTab::loadSections() {
                 m_sectionsBox->clearViews();
 
                 for (const auto& section : m_sections) {
-                    brls::Logger::debug("MusicTab: Adding section button: {}", section.title);
+                    brls::Logger::debug("MusicTab: Adding section button: {}", section.name);
                     auto* btn = new brls::Button();
-                    btn->setText(section.title);
+                    btn->setText(section.name);
                     btn->setMarginRight(10);
 
                     LibrarySection capturedSection = section;
@@ -225,7 +225,7 @@ void MusicTab::loadContent(const std::string& sectionKey) {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
-        if (client.fetchLibraryContent(key, items)) {
+        if (client.fetchLibraryItems(key, items)) {
             brls::Logger::info("MusicTab: Got {} items for section {}", items.size(), key);
 
             // Update UI on main thread
@@ -303,7 +303,7 @@ void MusicTab::loadCollections(const std::string& sectionKey) {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> collections;
 
-        if (client.fetchCollections(key, collections) && !collections.empty()) {
+        if (client.fetchLibraryCollections(key, collections) && !collections.empty()) {
             brls::Logger::info("MusicTab: Got {} collections for section {}", collections.size(), key);
 
             brls::sync([this, collections, aliveWeak]() {
@@ -349,7 +349,7 @@ void MusicTab::loadCollections(const std::string& sectionKey) {
 void MusicTab::onItemSelected(const MediaItem& item) {
     // For tracks, play directly
     if (item.mediaType == MediaType::MUSIC_TRACK) {
-        Application::getInstance().pushPlayerActivity(item.ratingKey);
+        Application::getInstance().pushPlayerActivity(item.id);
         return;
     }
 
@@ -361,7 +361,7 @@ void MusicTab::onItemSelected(const MediaItem& item) {
 void MusicTab::onPlaylistSelected(const MediaItem& playlist) {
     brls::Logger::debug("MusicTab: Selected playlist: {}", playlist.title);
 
-    std::string playlistKey = playlist.ratingKey;
+    std::string playlistKey = playlist.id;
     std::string playlistTitle = playlist.title;
     std::weak_ptr<bool> aliveWeak = m_alive;
 
@@ -369,7 +369,7 @@ void MusicTab::onPlaylistSelected(const MediaItem& playlist) {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
-        if (client.fetchChildren(playlistKey, items)) {
+        if (client.fetchPodcastEpisodes(playlistKey, items)) {
             brls::Logger::info("MusicTab: Got {} items in playlist", items.size());
 
             brls::sync([this, items, playlistTitle, aliveWeak]() {
@@ -389,7 +389,7 @@ void MusicTab::onPlaylistSelected(const MediaItem& playlist) {
 void MusicTab::onCollectionSelected(const MediaItem& collection) {
     brls::Logger::debug("MusicTab: Selected collection: {}", collection.title);
 
-    std::string collectionKey = collection.ratingKey;
+    std::string collectionKey = collection.id;
     std::string collectionTitle = collection.title;
     std::weak_ptr<bool> aliveWeak = m_alive;
 
@@ -397,7 +397,7 @@ void MusicTab::onCollectionSelected(const MediaItem& collection) {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
-        if (client.fetchChildren(collectionKey, items)) {
+        if (client.fetchPodcastEpisodes(collectionKey, items)) {
             brls::Logger::info("MusicTab: Got {} items in collection", items.size());
 
             brls::sync([this, items, collectionTitle, aliveWeak]() {
