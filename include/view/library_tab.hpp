@@ -6,7 +6,7 @@
 #pragma once
 
 #include <borealis.hpp>
-#include "app/plex_client.hpp"
+#include "app/audiobookshelf_client.hpp"
 #include "view/recycling_grid.hpp"
 
 namespace vitaabs {

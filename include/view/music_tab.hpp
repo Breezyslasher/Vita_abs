@@ -7,7 +7,7 @@
 
 #include <borealis.hpp>
 #include <memory>
-#include "app/plex_client.hpp"
+#include "app/audiobookshelf_client.hpp"
 #include "view/recycling_grid.hpp"
 
 namespace vitaabs {

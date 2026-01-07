@@ -7,7 +7,7 @@
 
 #include <borealis.hpp>
 #include <borealis/core/timer.hpp>
-#include "app/plex_client.hpp"
+#include "app/audiobookshelf_client.hpp"
 
 namespace vitaabs {
 

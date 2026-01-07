@@ -13,7 +13,7 @@
 #include "view/music_tab.hpp"
 #include "app/downloads_manager.hpp"
 #include "app/application.hpp"
-#include "app/plex_client.hpp"
+#include "app/audiobookshelf_client.hpp"
 #include "utils/async.hpp"
 
 #include <algorithm>

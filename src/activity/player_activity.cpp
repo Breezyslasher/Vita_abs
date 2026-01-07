@@ -3,7 +3,7 @@
  */
 
 #include "activity/player_activity.hpp"
-#include "app/plex_client.hpp"
+#include "app/audiobookshelf_client.hpp"
 #include "app/downloads_manager.hpp"
 #include "player/mpv_player.hpp"
 #include "utils/image_loader.hpp"

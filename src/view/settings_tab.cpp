@@ -4,7 +4,7 @@
 
 #include "view/settings_tab.hpp"
 #include "app/application.hpp"
-#include "app/plex_client.hpp"
+#include "app/audiobookshelf_client.hpp"
 #include "app/downloads_manager.hpp"
 #include "player/mpv_player.hpp"
 #include "activity/player_activity.hpp"

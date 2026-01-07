@@ -3,7 +3,7 @@
  */
 
 #include "app/application.hpp"
-#include "app/plex_client.hpp"
+#include "app/audiobookshelf_client.hpp"
 #include "activity/login_activity.hpp"
 #include "activity/main_activity.hpp"
 #include "activity/player_activity.hpp"
