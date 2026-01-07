@@ -11,7 +11,7 @@
 
 namespace vitaabs {
 
-LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::string& title, const std::string& sectionType)
+LibrarySectionTab::LibraryTab(const std::string& sectionKey, const std::string& title, const std::string& sectionType)
     : m_sectionKey(sectionKey), m_title(title), m_sectionType(sectionType) {
 
     // Create alive flag for async callback safety
@@ -94,16 +94,16 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
     this->addView(m_contentGrid);
 
     // Load content immediately
-    brls::Logger::debug("LibrarySectionTab: Created for section {} ({}) type={}", m_sectionKey, m_title, m_sectionType);
+    brls::Logger::debug("LibraryTab: Created for section {} ({}) type={}", m_sectionKey, m_title, m_sectionType);
     loadContent();
 }
 
-LibrarySectionTab::~LibrarySectionTab() {
+LibrarySectionTab::~LibraryTab() {
     // Mark as no longer alive to prevent async callbacks from updating destroyed UI
     if (m_alive) {
         *m_alive = false;
     }
-    brls::Logger::debug("LibrarySectionTab: Destroyed for section {}", m_sectionKey);
+    brls::Logger::debug("LibraryTab: Destroyed for section {}", m_sectionKey);
 }
 
 void LibrarySectionTab::onFocusGained() {
@@ -125,13 +125,13 @@ void LibrarySectionTab::loadContent() {
         std::vector<MediaItem> items;
 
         if (client.fetchLibraryItems(key, items)) {
-            brls::Logger::info("LibrarySectionTab: Got {} items for section {}", items.size(), key);
+            brls::Logger::info("LibraryTab: Got {} items for section {}", items.size(), key);
 
             brls::sync([this, items, aliveWeak]() {
                 // Check if object is still alive before updating UI
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) {
-                    brls::Logger::debug("LibrarySectionTab: Tab destroyed, skipping UI update");
+                    brls::Logger::debug("LibraryTab: Tab destroyed, skipping UI update");
                     return;
                 }
 
@@ -140,7 +140,7 @@ void LibrarySectionTab::loadContent() {
                 m_loaded = true;
             });
         } else {
-            brls::Logger::error("LibrarySectionTab: Failed to load content for section {}", key);
+            brls::Logger::error("LibraryTab: Failed to load content for section {}", key);
             brls::sync([this, aliveWeak]() {
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) return;
@@ -168,7 +168,7 @@ void LibrarySectionTab::loadCollections() {
         std::vector<MediaItem> collections;
 
         if (client.fetchLibraryCollections(key, collections)) {
-            brls::Logger::info("LibrarySectionTab: Got {} collections for section {}", collections.size(), key);
+            brls::Logger::info("LibraryTab: Got {} collections for section {}", collections.size(), key);
 
             brls::sync([this, collections, aliveWeak]() {
                 auto alive = aliveWeak.lock();
@@ -183,7 +183,7 @@ void LibrarySectionTab::loadCollections() {
                 }
             });
         } else {
-            brls::Logger::debug("LibrarySectionTab: No collections for section {}", key);
+            brls::Logger::debug("LibraryTab: No collections for section {}", key);
             brls::sync([this, aliveWeak]() {
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) return;
@@ -206,7 +206,7 @@ void LibrarySectionTab::loadGenres() {
         std::vector<GenreItem> genres;
 
         if (client.fetchGenreItems(key, genres) && !genres.empty()) {
-            brls::Logger::info("LibrarySectionTab: Got {} genres for section {}", genres.size(), key);
+            brls::Logger::info("LibraryTab: Got {} genres for section {}", genres.size(), key);
 
             brls::sync([this, genres, aliveWeak]() {
                 auto alive = aliveWeak.lock();
@@ -216,7 +216,7 @@ void LibrarySectionTab::loadGenres() {
                 m_genresLoaded = true;
             });
         } else {
-            brls::Logger::debug("LibrarySectionTab: No genres for section {}", key);
+            brls::Logger::debug("LibraryTab: No genres for section {}", key);
             brls::sync([this, aliveWeak]() {
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) return;
@@ -330,7 +330,7 @@ void LibrarySectionTab::onItemSelected(const MediaItem& item) {
 }
 
 void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
-    brls::Logger::debug("LibrarySectionTab: Selected collection: {}", collection.title);
+    brls::Logger::debug("LibraryTab: Selected collection: {}", collection.title);
 
     m_filterTitle = collection.title;
     std::string collectionKey = collection.id;
@@ -342,7 +342,7 @@ void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
         std::vector<MediaItem> items;
 
         if (client.fetchPodcastEpisodes(collectionKey, items)) {
-            brls::Logger::info("LibrarySectionTab: Got {} items in collection", items.size());
+            brls::Logger::info("LibraryTab: Got {} items in collection", items.size());
 
             brls::sync([this, items, filterTitle, aliveWeak]() {
                 auto alive = aliveWeak.lock();
@@ -354,7 +354,7 @@ void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
                 updateViewModeButtons();
             });
         } else {
-            brls::Logger::error("LibrarySectionTab: Failed to load collection content");
+            brls::Logger::error("LibraryTab: Failed to load collection content");
             brls::sync([aliveWeak]() {
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) return;
@@ -365,7 +365,7 @@ void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
 }
 
 void LibrarySectionTab::onGenreSelected(const GenreItem& genre) {
-    brls::Logger::debug("LibrarySectionTab: Selected genre: {} (key: {})", genre.title, genre.id);
+    brls::Logger::debug("LibraryTab: Selected genre: {} (key: {})", genre.title, genre.id);
 
     m_filterTitle = genre.title;
     std::string key = m_sectionKey;
@@ -380,7 +380,7 @@ void LibrarySectionTab::onGenreSelected(const GenreItem& genre) {
 
         // Try with genre key first, fall back to title
         if (client.fetchByGenreKey(key, genreKey, items) || client.fetchByGenre(key, genreTitle, items)) {
-            brls::Logger::info("LibrarySectionTab: Got {} items for genre", items.size());
+            brls::Logger::info("LibraryTab: Got {} items for genre", items.size());
 
             brls::sync([this, items, filterTitle, aliveWeak]() {
                 auto alive = aliveWeak.lock();
@@ -392,7 +392,7 @@ void LibrarySectionTab::onGenreSelected(const GenreItem& genre) {
                 updateViewModeButtons();
             });
         } else {
-            brls::Logger::error("LibrarySectionTab: Failed to load genre content");
+            brls::Logger::error("LibraryTab: Failed to load genre content");
             brls::sync([aliveWeak]() {
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) return;

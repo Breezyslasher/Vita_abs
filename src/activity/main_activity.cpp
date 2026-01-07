@@ -21,7 +21,7 @@
 namespace vitaabs {
 
 // Cached library sections for sidebar mode
-static std::vector<LibrarySection> s_cachedSections;
+static std::vector<Library> s_cachedSections;
 
 // Helper to calculate text width (approximate based on character count)
 // Average character width at default font size is about 8-10 pixels
@@ -59,11 +59,11 @@ void MainActivity::onContentAvailable() {
         // If showing libraries in sidebar, check library names too
         if (settings.showLibrariesInSidebar) {
             AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-            std::vector<LibrarySection> sections;
-            if (client.fetchLibrarySections(sections)) {
+            std::vector<Library> sections;
+            if (client.fetchLibraries(sections)) {
                 s_cachedSections = sections;  // Cache for later use
                 for (const auto& section : sections) {
-                    sidebarWidth = std::max(sidebarWidth, calculateTextWidth(section.title));
+                    sidebarWidth = std::max(sidebarWidth, calculateTextWidth(section.name));
                 }
             }
         }
@@ -101,41 +101,10 @@ void MainActivity::onContentAvailable() {
                 tabFrame->addTab("Live TV", []() { return new LiveTVTab(); });
             }
         } else {
-            // Standard mode with premade tabs
-            // Add tabs based on sidebar order setting
-            std::string sidebarOrder = settings.sidebarOrder;
-
-            // Parse the order or use default
-            std::vector<std::string> order;
-            if (!sidebarOrder.empty()) {
-                std::string orderStr = sidebarOrder;
-                size_t pos = 0;
-                while ((pos = orderStr.find(',')) != std::string::npos) {
-                    order.push_back(orderStr.substr(0, pos));
-                    orderStr.erase(0, pos + 1);
-                }
-                if (!orderStr.empty()) {
-                    order.push_back(orderStr);
-                }
-            } else {
-                // Default order
-                order = {"home", "library", "music", "search", "livetv"};
-            }
-
-            // Add tabs in specified order
-            for (const std::string& item : order) {
-                if (item == "home") {
-                    tabFrame->addTab("Home", []() { return new HomeTab(); });
-                } else if (item == "library") {
-                    tabFrame->addTab("Library", []() { return new LibraryTab(); });
-                } else if (item == "music") {
-                    tabFrame->addTab("Music", []() { return new MusicTab(); });
-                } else if (item == "search") {
-                    tabFrame->addTab("Search", []() { return new SearchTab(); });
-                } else if (item == "livetv" && hasLiveTV) {
-                    tabFrame->addTab("Live TV", []() { return new LiveTVTab(); });
-                }
-            }
+            // Standard mode with premade tabs for Audiobookshelf
+            tabFrame->addTab("Home", []() { return new HomeTab(); });
+            tabFrame->addTab("Library", []() { return new LibraryTab(); });
+            tabFrame->addTab("Search", []() { return new SearchTab(); });
         }
 
         // Downloads tab (always available)
@@ -158,41 +127,41 @@ void MainActivity::loadLibrariesToSidebar() {
 
     // Fetch libraries synchronously to maintain correct sidebar order
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-    std::vector<LibrarySection> sections;
+    std::vector<Library> sections;
 
-    if (client.fetchLibrarySections(sections)) {
+    if (client.fetchLibraries(sections)) {
         brls::Logger::info("MainActivity: Got {} library sections", sections.size());
 
         // Get hidden libraries setting
         std::string hiddenLibraries = Application::getInstance().getSettings().hiddenLibraries;
 
         // Helper to check if hidden
-        auto isHidden = [&hiddenLibraries](const std::string& key) -> bool {
+        auto isHidden = [&hiddenLibraries](const std::string& id) -> bool {
             if (hiddenLibraries.empty()) return false;
             std::string hidden = hiddenLibraries;
             size_t pos = 0;
             while ((pos = hidden.find(',')) != std::string::npos) {
-                if (hidden.substr(0, pos) == key) return true;
+                if (hidden.substr(0, pos) == id) return true;
                 hidden.erase(0, pos + 1);
             }
-            return (hidden == key);
+            return (hidden == id);
         };
 
         // Add library tabs
         for (const auto& section : sections) {
-            if (isHidden(section.key)) {
-                brls::Logger::debug("MainActivity: Hiding library: {}", section.title);
+            if (isHidden(section.id)) {
+                brls::Logger::debug("MainActivity: Hiding library: {}", section.name);
                 continue;
             }
 
-            std::string key = section.key;
-            std::string title = section.title;
+            std::string id = section.id;
+            std::string name = section.name;
 
-            tabFrame->addTab(title, [key, title]() {
-                return new LibrarySectionTab(key, title);
+            tabFrame->addTab(name, [id, name]() {
+                return new LibrarySectionTab(id, name);
             });
 
-            brls::Logger::debug("MainActivity: Added sidebar tab for library: {}", title);
+            brls::Logger::debug("MainActivity: Added sidebar tab for library: {}", name);
         }
     } else {
         brls::Logger::error("MainActivity: Failed to fetch library sections");

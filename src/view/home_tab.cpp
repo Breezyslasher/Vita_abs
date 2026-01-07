@@ -171,7 +171,7 @@ void HomeTab::loadContent() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
         // First get all library sections
-        std::vector<LibrarySection> sections;
+        std::vector<Library> sections;
         if (!client.fetchLibraries(sections)) {
             brls::Logger::error("HomeTab: Failed to fetch library sections");
             return;

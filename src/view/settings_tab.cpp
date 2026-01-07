@@ -564,7 +564,7 @@ void SettingsTab::onManageHiddenLibraries() {
     AppSettings& settings = app.getSettings();
 
     // Fetch library sections
-    std::vector<LibrarySection> sections;
+    std::vector<Library> sections;
     AudiobookshelfClient::getInstance().fetchLibraries(sections);
 
     if (sections.empty()) {

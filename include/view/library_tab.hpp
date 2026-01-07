@@ -20,7 +20,7 @@ public:
 private:
     void loadSections();
     void loadContent(const std::string& sectionKey);
-    void onSectionSelected(const LibrarySection& section);
+    void onSectionSelected(const Library& section);
     void onItemSelected(const MediaItem& item);
 
     brls::Label* m_titleLabel = nullptr;
@@ -28,7 +28,7 @@ private:
     brls::Box* m_sectionsBox = nullptr;
     RecyclingGrid* m_contentGrid = nullptr;
 
-    std::vector<LibrarySection> m_sections;
+    std::vector<Library> m_sections;
     std::vector<MediaItem> m_items;
     std::string m_currentSection;
     bool m_loaded = false;

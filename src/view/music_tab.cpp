@@ -147,11 +147,11 @@ void MusicTab::loadSections() {
     asyncRun([this, aliveWeak]() {
         brls::Logger::debug("MusicTab: Fetching library sections (async)...");
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-        std::vector<LibrarySection> allSections;
+        std::vector<Library> allSections;
 
         if (client.fetchLibraries(allSections)) {
             // Filter for music sections only (type = "artist")
-            std::vector<LibrarySection> musicSections;
+            std::vector<Library> musicSections;
             for (const auto& section : allSections) {
                 if (section.type == "artist") {
                     musicSections.push_back(section);
@@ -174,7 +174,7 @@ void MusicTab::loadSections() {
                     btn->setText(section.name);
                     btn->setMarginRight(10);
 
-                    LibrarySection capturedSection = section;
+                    Library capturedSection = section;
                     btn->registerClickAction([this, capturedSection](brls::View* view) {
                         m_currentSection = capturedSection.key;
                         m_titleLabel->setText("Music - " + capturedSection.title);

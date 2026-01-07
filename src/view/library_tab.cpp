@@ -79,7 +79,7 @@ void LibraryTab::loadSections() {
     asyncRun([this]() {
         brls::Logger::debug("LibraryTab: Fetching library sections (async)...");
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-        std::vector<LibrarySection> sections;
+        std::vector<Library> sections;
 
         if (client.fetchLibraries(sections)) {
             brls::Logger::info("LibraryTab: Got {} sections", sections.size());
@@ -88,7 +88,7 @@ void LibraryTab::loadSections() {
             std::string hiddenLibraries = Application::getInstance().getSettings().hiddenLibraries;
 
             // Filter out hidden sections
-            std::vector<LibrarySection> visibleSections;
+            std::vector<Library> visibleSections;
             for (const auto& section : sections) {
                 if (!isLibraryHidden(section.id, hiddenLibraries)) {
                     visibleSections.push_back(section);
@@ -108,7 +108,7 @@ void LibraryTab::loadSections() {
                     btn->setText(section.name);
                     btn->setMarginRight(10);
 
-                    LibrarySection capturedSection = section;
+                    Library capturedSection = section;
                     btn->registerClickAction([this, capturedSection](brls::View* view) {
                         onSectionSelected(capturedSection);
                         return true;
@@ -157,7 +157,7 @@ void LibraryTab::loadContent(const std::string& sectionKey) {
     });
 }
 
-void LibraryTab::onSectionSelected(const LibrarySection& section) {
+void LibraryTab::onSectionSelected(const Library& section) {
     m_currentSection = section.id;
     m_titleLabel->setText("Library - " + section.name);
     loadContent(section.id);

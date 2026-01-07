@@ -48,7 +48,7 @@ private:
     // Main content grid
     RecyclingGrid* m_contentGrid = nullptr;
 
-    std::vector<LibrarySection> m_sections;  // Music sections only
+    std::vector<Library> m_sections;  // Music sections only
     std::vector<MediaItem> m_items;
     std::vector<MediaItem> m_playlists;
     std::vector<MediaItem> m_collections;
