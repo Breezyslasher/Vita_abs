@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Plex Client for PlayStation Vita
+ * VitaABS - Audiobookshelf Client for PlayStation Vita
  * Main entry point with Borealis UI framework
  *
  * Based on switchfin architecture (https://github.com/dragonflylee/switchfin)
@@ -8,7 +8,7 @@
 
 #include <borealis.hpp>
 #include "app/application.hpp"
-#include "app/plex_client.hpp"
+#include "app/audiobookshelf_client.hpp"
 #include "view/media_item_cell.hpp"
 #include "view/recycling_grid.hpp"
 #include "view/media_detail_view.hpp"
@@ -128,7 +128,7 @@ static bool initVitaNetwork() {
     }
 
     // Initialize curl
-    vitaplex::HttpClient::globalInit();
+    vitaabs::HttpClient::globalInit();
 
     brls::Logger::info("Networking initialized");
     return true;
@@ -138,7 +138,7 @@ static bool initVitaNetwork() {
  * Cleanup networking
  */
 static void cleanupVitaNetwork() {
-    vitaplex::HttpClient::globalCleanup();
+    vitaabs::HttpClient::globalCleanup();
     sceHttpTerm();
     sceSslTerm();
     sceNetCtlTerm();
@@ -150,9 +150,9 @@ static void cleanupVitaNetwork() {
  * Register custom views
  */
 static void registerCustomViews() {
-    brls::Application::registerXMLView("MediaItemCell", vitaplex::MediaItemCell::create);
-    brls::Application::registerXMLView("RecyclingGrid", vitaplex::RecyclingGrid::create);
-    brls::Application::registerXMLView("vitaplex:VideoView", vitaplex::VideoView::create);
+    brls::Application::registerXMLView("MediaItemCell", vitaabs::MediaItemCell::create);
+    brls::Application::registerXMLView("RecyclingGrid", vitaabs::RecyclingGrid::create);
+    brls::Application::registerXMLView("vitaabs:VideoView", vitaabs::VideoView::create);
 }
 
 /**
@@ -175,13 +175,11 @@ int main(int argc, char* argv[]) {
     }
 
     // Create log directory and file on Vita
-    sceIoMkdir("ux0:data/VitaPlex", 0777);
-    static FILE* logFile = std::fopen("ux0:data/VitaPlex/vitaplex.log", "w");
+    sceIoMkdir("ux0:data/VitaABS", 0777);
+    static FILE* logFile = std::fopen("ux0:data/VitaABS/vitaabs.log", "w");
     if (logFile) {
         // Use line buffering so logs are written immediately
         setvbuf(logFile, NULL, _IOLBF, 0);
-        // Note: brls::Logger::setLogOutput doesn't work on Vita (uses sceClibPrintf)
-        // We'll subscribe to log events after Borealis init
     }
 #endif
 
@@ -199,7 +197,7 @@ int main(int argc, char* argv[]) {
     }
 
 #ifdef __vita__
-    // Subscribe to log events to write to file (since setLogOutput doesn't work on Vita)
+    // Subscribe to log events to write to file
     if (logFile) {
         brls::Logger::getLogEvent()->subscribe([](brls::Logger::TimePoint time, brls::LogLevel level, std::string log) {
             if (!logFile) return;
@@ -222,7 +220,7 @@ int main(int argc, char* argv[]) {
                     time_tm.tm_hour, time_tm.tm_min, time_tm.tm_sec,
                     (int)ms, levelStr, log.c_str());
         });
-        brls::Logger::info("Log file initialized: ux0:data/VitaPlex/vitaplex.log");
+        brls::Logger::info("Log file initialized: ux0:data/VitaABS/vitaabs.log");
     }
 #endif
 
@@ -232,22 +230,22 @@ int main(int argc, char* argv[]) {
     style.addMetric("brls/sidebar/padding_right", 20.0f);
 
     // Create window
-    brls::Application::createWindow("VitaPlex");
+    brls::Application::createWindow("VitaABS");
 
-    // Set theme colors (Plex-like)
+    // Set theme colors
     brls::Application::getPlatform()->getThemeVariant();
 
     // Register custom views
     registerCustomViews();
 
     // Initialize downloads manager
-    vitaplex::DownloadsManager::getInstance().init();
+    vitaabs::DownloadsManager::getInstance().init();
 
     // Initialize application
-    vitaplex::Application& app = vitaplex::Application::getInstance();
+    vitaabs::Application& app = vitaabs::Application::getInstance();
 
     if (!app.init()) {
-        brls::Logger::error("Failed to initialize VitaPlex");
+        brls::Logger::error("Failed to initialize VitaABS");
 #ifdef __vita__
         cleanupVitaNetwork();
         sceKernelExitProcess(1);

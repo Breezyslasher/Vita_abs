@@ -1,10 +1,6 @@
 /**
- * VitaPlex - Downloads Manager
- * Handles offline media downloads and progress sync
- *
- * API References:
- * - Download: GET /{part_path}?download=1&X-Plex-Token={token}
- * - Timeline: GET /:/timeline?ratingKey={key}&time={ms}&state={state}&duration={ms}&offline=1
+ * VitaABS - Downloads Manager
+ * Handles offline audiobook downloads and progress sync
  */
 
 #pragma once
@@ -14,7 +10,7 @@
 #include <functional>
 #include <mutex>
 
-namespace vitaplex {
+namespace vitaabs {
 
 // Download state
 enum class DownloadState {
@@ -27,20 +23,20 @@ enum class DownloadState {
 
 // Download item information
 struct DownloadItem {
-    std::string ratingKey;      // Plex rating key
+    std::string itemId;         // Audiobookshelf item ID
+    std::string episodeId;      // Episode ID (for podcasts)
     std::string title;          // Display title
-    std::string partPath;       // Path to media file on server
+    std::string authorName;     // Author/narrator name
     std::string localPath;      // Local storage path
-    std::string thumbUrl;       // Thumbnail URL
+    std::string coverUrl;       // Cover image URL
     int64_t totalBytes = 0;     // Total file size
     int64_t downloadedBytes = 0; // Downloaded so far
-    int64_t duration = 0;       // Media duration in ms
-    int64_t viewOffset = 0;     // Watch progress in ms
+    float duration = 0.0f;      // Media duration in seconds
+    float currentTime = 0.0f;   // Watch progress in seconds
     DownloadState state = DownloadState::QUEUED;
-    std::string mediaType;      // "movie", "episode"
-    std::string parentTitle;    // Show name for episodes
-    int seasonNum = 0;          // Season number for episodes
-    int episodeNum = 0;         // Episode number for episodes
+    std::string mediaType;      // "book", "podcast"
+    std::string seriesName;     // Series name for audiobooks
+    int numChapters = 0;        // Number of chapters
     time_t lastSynced = 0;      // Last time progress was synced to server
 };
 
@@ -54,12 +50,12 @@ public:
     // Initialize downloads directory and load saved state
     bool init();
 
-    // Queue a media item for download
-    bool queueDownload(const std::string& ratingKey, const std::string& title,
-                       const std::string& partPath, int64_t duration,
-                       const std::string& mediaType = "movie",
-                       const std::string& parentTitle = "",
-                       int seasonNum = 0, int episodeNum = 0);
+    // Queue an audiobook for download
+    bool queueDownload(const std::string& itemId, const std::string& title,
+                       const std::string& authorName, float duration,
+                       const std::string& mediaType = "book",
+                       const std::string& seriesName = "",
+                       const std::string& episodeId = "");
 
     // Start downloading queued items
     void startDownloads();
@@ -68,25 +64,25 @@ public:
     void pauseDownloads();
 
     // Cancel a specific download
-    bool cancelDownload(const std::string& ratingKey);
+    bool cancelDownload(const std::string& itemId);
 
     // Delete a downloaded item
-    bool deleteDownload(const std::string& ratingKey);
+    bool deleteDownload(const std::string& itemId);
 
     // Get all download items
     std::vector<DownloadItem> getDownloads() const;
 
-    // Get a specific download by rating key
-    DownloadItem* getDownload(const std::string& ratingKey);
+    // Get a specific download by item ID
+    DownloadItem* getDownload(const std::string& itemId);
 
     // Check if media is downloaded
-    bool isDownloaded(const std::string& ratingKey) const;
+    bool isDownloaded(const std::string& itemId) const;
 
     // Get local playback path for downloaded media
-    std::string getLocalPath(const std::string& ratingKey) const;
+    std::string getLocalPath(const std::string& itemId) const;
 
     // Update watch progress for downloaded media
-    void updateProgress(const std::string& ratingKey, int64_t viewOffset);
+    void updateProgress(const std::string& itemId, float currentTime);
 
     // Sync all offline progress to server (call when online)
     void syncProgressToServer();
@@ -110,9 +106,6 @@ private:
     // Download a single item (runs in background)
     void downloadItem(DownloadItem& item);
 
-    // Report timeline to server
-    bool reportTimeline(const DownloadItem& item, const std::string& state);
-
     std::vector<DownloadItem> m_downloads;
     mutable std::mutex m_mutex;
     bool m_downloading = false;
@@ -121,4 +114,4 @@ private:
     std::string m_downloadsPath;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

@@ -1,16 +1,16 @@
 /**
- * VitaPlex - Video View
- * Custom view for rendering video frames from MPV player
+ * VitaABS - Video View
+ * Custom view for rendering audio visualization or cover art during playback
  */
 
 #pragma once
 
 #include <borealis.hpp>
 
-namespace vitaplex {
+namespace vitaabs {
 
 /**
- * VideoView - renders video frames from MPV player using NanoVG
+ * VideoView - renders cover art or audio visualization
  */
 class VideoView : public brls::Box {
 public:
@@ -29,4 +29,4 @@ private:
     bool m_videoVisible = false;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

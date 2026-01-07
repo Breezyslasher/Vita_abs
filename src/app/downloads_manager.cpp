@@ -1,10 +1,10 @@
 /**
- * VitaPlex - Downloads Manager Implementation
+ * VitaABS - Downloads Manager Implementation
  * Handles offline media downloads and progress sync
  */
 
 #include "app/downloads_manager.hpp"
-#include "app/plex_client.hpp"
+#include "app/audiobookshelf_client.hpp"
 #include "app/application.hpp"
 #include "utils/http_client.hpp"
 #include "utils/async.hpp"
@@ -22,12 +22,12 @@
 #include <psp2/kernel/threadmgr.h>
 #endif
 
-namespace vitaplex {
+namespace vitaabs {
 
 // Downloads directory on Vita
 #ifdef __vita__
-static const char* DOWNLOADS_DIR = "ux0:data/VitaPlex/downloads";
-static const char* STATE_FILE = "ux0:data/VitaPlex/downloads/state.json";
+static const char* DOWNLOADS_DIR = "ux0:data/VitaABS/downloads";
+static const char* STATE_FILE = "ux0:data/VitaABS/downloads/state.json";
 #else
 static const char* DOWNLOADS_DIR = "./downloads";
 static const char* STATE_FILE = "./downloads/state.json";
@@ -45,7 +45,7 @@ bool DownloadsManager::init() {
 
 #ifdef __vita__
     // Create downloads directory if it doesn't exist
-    sceIoMkdir("ux0:data/VitaPlex", 0777);
+    sceIoMkdir("ux0:data/VitaABS", 0777);
     sceIoMkdir(DOWNLOADS_DIR, 0777);
 #else
     // Create directory on other platforms
@@ -60,8 +60,8 @@ bool DownloadsManager::init() {
     return true;
 }
 
-bool DownloadsManager::queueDownload(const std::string& ratingKey, const std::string& title,
-                                      const std::string& partPath, int64_t duration,
+bool DownloadsManager::queueDownload(const std::string& itemId, const std::string& title,
+                                      const std::string& audioPath, float duration,
                                       const std::string& mediaType,
                                       const std::string& parentTitle,
                                       int seasonNum, int episodeNum) {
@@ -69,16 +69,16 @@ bool DownloadsManager::queueDownload(const std::string& ratingKey, const std::st
 
     // Check if already in queue
     for (const auto& item : m_downloads) {
-        if (item.ratingKey == ratingKey) {
+        if (item.itemId == itemId) {
             brls::Logger::warning("DownloadsManager: {} already in queue", title);
             return false;
         }
     }
 
     DownloadItem item;
-    item.ratingKey = ratingKey;
+    item.itemId = itemId;
     item.title = title;
-    item.partPath = partPath;
+    item.audioPath = audioPath;
     item.duration = duration;
     item.mediaType = mediaType;
     item.parentTitle = parentTitle;
@@ -86,9 +86,15 @@ bool DownloadsManager::queueDownload(const std::string& ratingKey, const std::st
     item.episodeNum = episodeNum;
     item.state = DownloadState::QUEUED;
 
-    // Generate local path with appropriate extension for transcoded format
-    std::string extension = (mediaType == "track") ? ".mp3" : ".mp4";
-    std::string filename = ratingKey + extension;
+    // Generate local path - audiobooks are typically m4b, mp3, or other audio formats
+    std::string extension;
+    if (mediaType == "episode") {
+        extension = ".mp3";
+    } else {
+        // For audiobooks, use m4b (common audiobook format) or mp3
+        extension = ".m4b";
+    }
+    std::string filename = itemId + extension;
     item.localPath = m_downloadsPath + "/" + filename;
 
     m_downloads.push_back(item);
@@ -149,11 +155,11 @@ void DownloadsManager::pauseDownloads() {
     saveState();
 }
 
-bool DownloadsManager::cancelDownload(const std::string& ratingKey) {
+bool DownloadsManager::cancelDownload(const std::string& itemId) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     for (auto it = m_downloads.begin(); it != m_downloads.end(); ++it) {
-        if (it->ratingKey == ratingKey) {
+        if (it->itemId == itemId) {
             // Delete partial file if exists
             if (!it->localPath.empty()) {
 #ifdef __vita__
@@ -170,11 +176,11 @@ bool DownloadsManager::cancelDownload(const std::string& ratingKey) {
     return false;
 }
 
-bool DownloadsManager::deleteDownload(const std::string& ratingKey) {
+bool DownloadsManager::deleteDownload(const std::string& itemId) {
     std::lock_guard<std::mutex> lock(m_mutex);
 
     for (auto it = m_downloads.begin(); it != m_downloads.end(); ++it) {
-        if (it->ratingKey == ratingKey) {
+        if (it->itemId == itemId) {
             // Delete file
             if (!it->localPath.empty()) {
 #ifdef __vita__
@@ -185,7 +191,7 @@ bool DownloadsManager::deleteDownload(const std::string& ratingKey) {
             }
             m_downloads.erase(it);
             saveState();
-            brls::Logger::info("DownloadsManager: Deleted download {}", ratingKey);
+            brls::Logger::info("DownloadsManager: Deleted download {}", itemId);
             return true;
         }
     }
@@ -197,43 +203,43 @@ std::vector<DownloadItem> DownloadsManager::getDownloads() const {
     return m_downloads;
 }
 
-DownloadItem* DownloadsManager::getDownload(const std::string& ratingKey) {
+DownloadItem* DownloadsManager::getDownload(const std::string& itemId) {
     std::lock_guard<std::mutex> lock(m_mutex);
     for (auto& item : m_downloads) {
-        if (item.ratingKey == ratingKey) {
+        if (item.itemId == itemId) {
             return &item;
         }
     }
     return nullptr;
 }
 
-bool DownloadsManager::isDownloaded(const std::string& ratingKey) const {
+bool DownloadsManager::isDownloaded(const std::string& itemId) const {
     std::lock_guard<std::mutex> lock(m_mutex);
     for (const auto& item : m_downloads) {
-        if (item.ratingKey == ratingKey && item.state == DownloadState::COMPLETED) {
+        if (item.itemId == itemId && item.state == DownloadState::COMPLETED) {
             return true;
         }
     }
     return false;
 }
 
-std::string DownloadsManager::getLocalPath(const std::string& ratingKey) const {
+std::string DownloadsManager::getLocalPath(const std::string& itemId) const {
     std::lock_guard<std::mutex> lock(m_mutex);
     for (const auto& item : m_downloads) {
-        if (item.ratingKey == ratingKey && item.state == DownloadState::COMPLETED) {
+        if (item.itemId == itemId && item.state == DownloadState::COMPLETED) {
             return item.localPath;
         }
     }
     return "";
 }
 
-void DownloadsManager::updateProgress(const std::string& ratingKey, int64_t viewOffset) {
+void DownloadsManager::updateProgress(const std::string& itemId, float currentTime) {
     std::lock_guard<std::mutex> lock(m_mutex);
     for (auto& item : m_downloads) {
-        if (item.ratingKey == ratingKey) {
-            item.viewOffset = viewOffset;
-            brls::Logger::debug("DownloadsManager: Updated progress for {} to {}ms",
-                               item.title, viewOffset);
+        if (item.itemId == itemId) {
+            item.currentTime = currentTime;
+            brls::Logger::debug("DownloadsManager: Updated progress for {} to {}s",
+                               item.title, currentTime);
             break;
         }
     }
@@ -246,7 +252,7 @@ void DownloadsManager::syncProgressToServer() {
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         for (auto& item : m_downloads) {
-            if (item.state == DownloadState::COMPLETED && item.viewOffset > 0) {
+            if (item.state == DownloadState::COMPLETED && item.currentTime > 0) {
                 itemsToSync.push_back(item);
             }
         }
@@ -254,16 +260,20 @@ void DownloadsManager::syncProgressToServer() {
 
     brls::Logger::info("DownloadsManager: Syncing {} items to server", itemsToSync.size());
 
+    AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+
     for (auto& item : itemsToSync) {
-        if (reportTimeline(item, "stopped")) {
+        // Update progress on the Audiobookshelf server
+        if (client.updateProgress(item.itemId, "", item.currentTime, item.duration)) {
             std::lock_guard<std::mutex> lock(m_mutex);
             // Update last synced time
             for (auto& d : m_downloads) {
-                if (d.ratingKey == item.ratingKey) {
+                if (d.itemId == item.itemId) {
                     d.lastSynced = std::time(nullptr);
                     break;
                 }
             }
+            brls::Logger::debug("DownloadsManager: Synced progress for {}", item.title);
         }
     }
 
@@ -273,7 +283,7 @@ void DownloadsManager::syncProgressToServer() {
 void DownloadsManager::downloadItem(DownloadItem& item) {
     brls::Logger::info("DownloadsManager: Starting download of {}", item.title);
 
-    PlexClient& client = PlexClient::getInstance();
+    AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
     std::string serverUrl = client.getServerUrl();
     std::string token = client.getAuthToken();
 
@@ -284,54 +294,10 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
         return;
     }
 
-    // Build transcode URL for Vita-compatible format
-    // URL-encode the path
-    std::string encodedPath = HttpClient::urlEncode(item.partPath);
-
-    std::string url = serverUrl;
-    bool isAudio = (item.mediaType == "track");
-
-    if (isAudio) {
-        // Audio transcode - convert to MP3 which the Vita can play
-        url += "/music/:/transcode/universal/start.mp3?";
-        url += "path=" + encodedPath;
-        url += "&mediaIndex=0&partIndex=0";
-        url += "&protocol=http";
-        url += "&directPlay=0&directStream=0";  // Force transcode
-        url += "&audioCodec=mp3&audioBitrate=320";
-    } else {
-        // Video transcode - convert to H.264/AAC which the Vita can decode
-        url += "/video/:/transcode/universal/start.mp4?";
-        url += "path=" + encodedPath;
-        url += "&mediaIndex=0&partIndex=0";
-        url += "&protocol=http";
-        url += "&fastSeek=1";
-        url += "&directPlay=0&directStream=0";  // Force transcode
-
-        // Get quality settings
-        AppSettings& settings = Application::getInstance().getSettings();
-        int bitrate = settings.maxBitrate > 0 ? settings.maxBitrate : 4000;
-
-        char bitrateStr[64];
-        snprintf(bitrateStr, sizeof(bitrateStr), "&videoBitrate=%d", bitrate);
-        url += bitrateStr;
-        url += "&videoCodec=h264";
-        url += "&maxWidth=960&maxHeight=544";  // Vita screen resolution
-        url += "&audioCodec=aac&audioChannels=2";
-    }
-
-    // Add authentication and client identification
-    url += "&X-Plex-Token=" + token;
-    url += "&X-Plex-Client-Identifier=VitaPlex";
-    url += "&X-Plex-Product=VitaPlex";
-    url += "&X-Plex-Version=1.0.0";
-    url += "&X-Plex-Platform=PlayStation%20Vita";
-    url += "&X-Plex-Device=PS%20Vita";
-
-    // Generate a session ID for this transcode request
-    char sessionId[32];
-    snprintf(sessionId, sizeof(sessionId), "&session=%lu", (unsigned long)time(nullptr));
-    url += sessionId;
+    // Get the download URL for the item
+    // Audiobookshelf provides direct file access at /api/items/:id/file/:ino
+    // Or we can use the stream URL for transcoded audio
+    std::string url = client.getStreamUrl(item.itemId, "");
 
     brls::Logger::debug("DownloadsManager: Downloading from {}", url);
 
@@ -356,7 +322,12 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
 
     // Download with progress tracking
     HttpClient http;
-    bool success = http.downloadFile(url,
+
+    // Add auth header
+    std::map<std::string, std::string> headers;
+    headers["Authorization"] = "Bearer " + token;
+
+    bool success = http.downloadFileWithHeaders(url, headers,
         [&](const char* data, size_t size) {
             // Write chunk to file
 #ifdef __vita__
@@ -405,40 +376,6 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
     saveState();
 }
 
-bool DownloadsManager::reportTimeline(const DownloadItem& item, const std::string& state) {
-    PlexClient& client = PlexClient::getInstance();
-    std::string serverUrl = client.getServerUrl();
-    std::string token = client.getAuthToken();
-
-    if (serverUrl.empty() || token.empty()) {
-        return false;
-    }
-
-    // Build timeline URL
-    // GET /:/timeline?ratingKey={key}&key=/library/metadata/{key}&time={ms}&state={state}&duration={ms}&offline=1
-    std::stringstream url;
-    url << serverUrl << "/:/timeline"
-        << "?ratingKey=" << item.ratingKey
-        << "&key=/library/metadata/" << item.ratingKey
-        << "&identifier=com.plexapp.plugins.library"
-        << "&time=" << item.viewOffset
-        << "&state=" << state
-        << "&duration=" << item.duration
-        << "&offline=1"
-        << "&X-Plex-Token=" << token;
-
-    HttpClient http;
-    std::string response;
-    if (http.get(url.str(), response)) {
-        brls::Logger::debug("DownloadsManager: Reported timeline for {} ({}ms)",
-                           item.title, item.viewOffset);
-        return true;
-    }
-
-    brls::Logger::error("DownloadsManager: Failed to report timeline for {}", item.title);
-    return false;
-}
-
 void DownloadsManager::saveState() {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -449,14 +386,14 @@ void DownloadsManager::saveState() {
     for (size_t i = 0; i < m_downloads.size(); ++i) {
         const auto& item = m_downloads[i];
         ss << "{\n"
-           << "\"ratingKey\":\"" << item.ratingKey << "\",\n"
+           << "\"itemId\":\"" << item.itemId << "\",\n"
            << "\"title\":\"" << item.title << "\",\n"
-           << "\"partPath\":\"" << item.partPath << "\",\n"
+           << "\"audioPath\":\"" << item.audioPath << "\",\n"
            << "\"localPath\":\"" << item.localPath << "\",\n"
            << "\"totalBytes\":" << item.totalBytes << ",\n"
            << "\"downloadedBytes\":" << item.downloadedBytes << ",\n"
            << "\"duration\":" << item.duration << ",\n"
-           << "\"viewOffset\":" << item.viewOffset << ",\n"
+           << "\"currentTime\":" << item.currentTime << ",\n"
            << "\"state\":" << static_cast<int>(item.state) << ",\n"
            << "\"mediaType\":\"" << item.mediaType << "\",\n"
            << "\"parentTitle\":\"" << item.parentTitle << "\",\n"
@@ -517,7 +454,6 @@ void DownloadsManager::loadState() {
     }
 
     // Simple parsing - in production use proper JSON parser
-    // For now, just log that we would parse
     brls::Logger::info("DownloadsManager: Loading saved state...");
 
     // TODO: Implement proper JSON parsing for download items
@@ -532,4 +468,4 @@ std::string DownloadsManager::getDownloadsPath() const {
     return m_downloadsPath;
 }
 
-} // namespace vitaplex
+} // namespace vitaabs

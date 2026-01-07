@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Downloads Tab
+ * VitaABS - Downloads Tab
  * View for managing offline downloads
  */
 
@@ -7,7 +7,7 @@
 
 #include <borealis.hpp>
 
-namespace vitaplex {
+namespace vitaabs {
 
 class DownloadsTab : public brls::Box {
 public:
@@ -18,10 +18,10 @@ public:
 
 private:
     void refresh();
-    void showDownloadOptions(const std::string& ratingKey, const std::string& title);
+    void showDownloadOptions(const std::string& itemId, const std::string& title);
 
     brls::Box* m_listContainer = nullptr;
     brls::Label* m_emptyLabel = nullptr;
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

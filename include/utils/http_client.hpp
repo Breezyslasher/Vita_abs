@@ -1,5 +1,5 @@
 /**
- * VitaPlex - HTTP Client
+ * VitaABS - HTTP Client
  * Using libcurl for network requests
  */
 
@@ -9,7 +9,7 @@
 #include <map>
 #include <functional>
 
-namespace vitaplex {
+namespace vitaabs {
 
 // HTTP response
 struct HttpResponse {
@@ -66,8 +66,6 @@ public:
     bool get(const std::string& url, std::string& response);
 
     // Download file with progress callbacks
-    // writeCallback: receives data chunks, return false to cancel
-    // sizeCallback: called with total file size when known
     using WriteCallback = std::function<bool(const char* data, size_t size)>;
     using SizeCallback = std::function<void(int64_t totalSize)>;
     bool downloadFile(const std::string& url, WriteCallback writeCallback, SizeCallback sizeCallback = nullptr);
@@ -87,4 +85,4 @@ private:
     static size_t headerCallback(void* contents, size_t size, size_t nmemb, void* userp);
 };
 
-} // namespace vitaplex
+} // namespace vitaabs

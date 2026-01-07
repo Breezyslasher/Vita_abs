@@ -1,5 +1,5 @@
 /**
- * VitaPlex - Home Tab implementation
+ * VitaABS - Home Tab implementation
  */
 
 #include "view/home_tab.hpp"
@@ -8,7 +8,7 @@
 #include "app/application.hpp"
 #include "utils/async.hpp"
 
-namespace vitaplex {
+namespace vitaabs {
 
 HomeTab::HomeTab() {
     this->setAxis(brls::Axis::COLUMN);
@@ -33,48 +33,37 @@ HomeTab::HomeTab() {
     m_titleLabel->setMarginBottom(20);
     m_scrollContent->addView(m_titleLabel);
 
-    // Continue Watching section
+    // Continue Listening section
     auto* continueLabel = new brls::Label();
-    continueLabel->setText("Continue Watching");
+    continueLabel->setText("Continue Listening");
     continueLabel->setFontSize(22);
     continueLabel->setMarginBottom(10);
     m_scrollContent->addView(continueLabel);
 
-    m_continueWatchingRow = createMediaRow(&m_continueWatchingContent);
-    m_scrollContent->addView(m_continueWatchingRow);
+    m_continueListeningRow = createMediaRow(&m_continueListeningContent);
+    m_scrollContent->addView(m_continueListeningRow);
 
-    // Recently Added Movies section
-    auto* moviesLabel = new brls::Label();
-    moviesLabel->setText("Recently Added Movies");
-    moviesLabel->setFontSize(22);
-    moviesLabel->setMarginBottom(10);
-    moviesLabel->setMarginTop(15);
-    m_scrollContent->addView(moviesLabel);
+    // Recent Audiobooks section
+    auto* audiobooksLabel = new brls::Label();
+    audiobooksLabel->setText("Recent Audiobooks");
+    audiobooksLabel->setFontSize(22);
+    audiobooksLabel->setMarginBottom(10);
+    audiobooksLabel->setMarginTop(15);
+    m_scrollContent->addView(audiobooksLabel);
 
-    m_moviesRow = createMediaRow(&m_moviesContent);
-    m_scrollContent->addView(m_moviesRow);
+    m_audiobooksRow = createMediaRow(&m_audiobooksContent);
+    m_scrollContent->addView(m_audiobooksRow);
 
-    // Recently Added TV Shows section
-    auto* showsLabel = new brls::Label();
-    showsLabel->setText("Recently Added TV Shows");
-    showsLabel->setFontSize(22);
-    showsLabel->setMarginBottom(10);
-    showsLabel->setMarginTop(15);
-    m_scrollContent->addView(showsLabel);
+    // Recent Podcasts section
+    auto* podcastsLabel = new brls::Label();
+    podcastsLabel->setText("Recent Podcasts");
+    podcastsLabel->setFontSize(22);
+    podcastsLabel->setMarginBottom(10);
+    podcastsLabel->setMarginTop(15);
+    m_scrollContent->addView(podcastsLabel);
 
-    m_showsRow = createMediaRow(&m_showsContent);
-    m_scrollContent->addView(m_showsRow);
-
-    // Recently Added Music section
-    auto* musicLabel = new brls::Label();
-    musicLabel->setText("Recently Added Music");
-    musicLabel->setFontSize(22);
-    musicLabel->setMarginBottom(10);
-    musicLabel->setMarginTop(15);
-    m_scrollContent->addView(musicLabel);
-
-    m_musicRow = createMediaRow(&m_musicContent);
-    m_scrollContent->addView(m_musicRow);
+    m_podcastsRow = createMediaRow(&m_podcastsContent);
+    m_scrollContent->addView(m_podcastsRow);
 
     m_scrollView->setContentView(m_scrollContent);
     this->addView(m_scrollView);
@@ -146,92 +135,87 @@ void HomeTab::onFocusGained() {
 void HomeTab::loadContent() {
     brls::Logger::debug("HomeTab::loadContent - Starting async load");
 
-    // Load continue watching asynchronously
+    // Load continue listening asynchronously
     asyncRun([this]() {
-        brls::Logger::debug("HomeTab: Fetching continue watching (async)...");
-        PlexClient& client = PlexClient::getInstance();
+        brls::Logger::debug("HomeTab: Fetching continue listening (async)...");
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
 
-        if (client.fetchContinueWatching(items)) {
-            brls::Logger::info("HomeTab: Got {} continue watching items", items.size());
+        if (client.fetchItemsInProgress(items)) {
+            brls::Logger::info("HomeTab: Got {} continue listening items", items.size());
 
             brls::sync([this, items]() {
-                m_continueWatching = items;
-                populateRow(m_continueWatchingContent, m_continueWatching);
+                m_continueListening = items;
+                populateRow(m_continueListeningContent, m_continueListening);
             });
         } else {
-            brls::Logger::error("HomeTab: Failed to fetch continue watching");
+            brls::Logger::error("HomeTab: Failed to fetch continue listening");
         }
     });
 
-    // Load recently added by fetching from library sections
+    // Load personalized content from libraries
     asyncRun([this]() {
-        brls::Logger::debug("HomeTab: Fetching library sections for recently added...");
-        PlexClient& client = PlexClient::getInstance();
+        brls::Logger::debug("HomeTab: Fetching library content for home...");
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
-        // First get all library sections
-        std::vector<LibrarySection> sections;
-        if (!client.fetchLibrarySections(sections)) {
-            brls::Logger::error("HomeTab: Failed to fetch library sections");
+        // First get all libraries
+        std::vector<Library> libraries;
+        if (!client.fetchLibraries(libraries)) {
+            brls::Logger::error("HomeTab: Failed to fetch libraries");
             return;
         }
 
         // Get hidden libraries setting
         std::string hiddenLibraries = Application::getInstance().getSettings().hiddenLibraries;
 
-        std::vector<MediaItem> movies;
-        std::vector<MediaItem> shows;
-        std::vector<MediaItem> music;
+        std::vector<MediaItem> audiobooks;
+        std::vector<MediaItem> podcasts;
 
         // Helper to check if library is hidden
-        auto isHidden = [&hiddenLibraries](const std::string& key) -> bool {
+        auto isHidden = [&hiddenLibraries](const std::string& id) -> bool {
             if (hiddenLibraries.empty()) return false;
             std::string hidden = hiddenLibraries;
             size_t pos = 0;
             while ((pos = hidden.find(',')) != std::string::npos) {
-                if (hidden.substr(0, pos) == key) return true;
+                if (hidden.substr(0, pos) == id) return true;
                 hidden.erase(0, pos + 1);
             }
-            return (hidden == key);
+            return (hidden == id);
         };
 
-        // Fetch recently added from each section by type
-        for (const auto& section : sections) {
+        // Fetch recent items from each library
+        for (const auto& library : libraries) {
             // Skip hidden libraries
-            if (isHidden(section.key)) {
-                brls::Logger::debug("HomeTab: Skipping hidden library: {}", section.title);
+            if (isHidden(library.id)) {
+                brls::Logger::debug("HomeTab: Skipping hidden library: {}", library.name);
                 continue;
             }
 
-            std::vector<MediaItem> sectionItems;
+            std::vector<MediaItem> libraryItems;
 
-            // Fetch recently added using the correct API endpoint
-            if (client.fetchSectionRecentlyAdded(section.key, sectionItems)) {
-                // Sort items by type
-                for (auto& item : sectionItems) {
-                    if (section.type == "movie") {
-                        if (movies.size() < 20) movies.push_back(item);
-                    } else if (section.type == "show") {
-                        if (shows.size() < 20) shows.push_back(item);
-                    } else if (section.type == "artist") {
-                        if (music.size() < 20) music.push_back(item);
+            // Fetch recent items using library endpoint
+            if (client.fetchLibraryItems(library.id, libraryItems, 0, 20, "recent")) {
+                // Sort items by library type
+                for (auto& item : libraryItems) {
+                    if (library.mediaType == "book") {
+                        if (audiobooks.size() < 20) audiobooks.push_back(item);
+                    } else if (library.mediaType == "podcast") {
+                        if (podcasts.size() < 20) podcasts.push_back(item);
                     }
                 }
             }
         }
 
-        brls::Logger::info("HomeTab: Got {} movies, {} shows, {} music items",
-                           movies.size(), shows.size(), music.size());
+        brls::Logger::info("HomeTab: Got {} audiobooks, {} podcasts",
+                           audiobooks.size(), podcasts.size());
 
         // Update UI on main thread
-        brls::sync([this, movies, shows, music]() {
-            m_recentMovies = movies;
-            m_recentShows = shows;
-            m_recentMusic = music;
+        brls::sync([this, audiobooks, podcasts]() {
+            m_recentAudiobooks = audiobooks;
+            m_recentPodcasts = podcasts;
 
-            populateRow(m_moviesContent, m_recentMovies);
-            populateRow(m_showsContent, m_recentShows);
-            populateRow(m_musicContent, m_recentMusic);
+            populateRow(m_audiobooksContent, m_recentAudiobooks);
+            populateRow(m_podcastsContent, m_recentPodcasts);
         });
     });
 
@@ -240,15 +224,15 @@ void HomeTab::loadContent() {
 }
 
 void HomeTab::onItemSelected(const MediaItem& item) {
-    // For tracks, play directly instead of showing detail view
-    if (item.mediaType == MediaType::MUSIC_TRACK) {
-        Application::getInstance().pushPlayerActivity(item.ratingKey);
+    // For podcast episodes, play directly
+    if (item.mediaType == MediaType::PODCAST_EPISODE) {
+        Application::getInstance().pushPlayerActivity(item.id, item.episodeId);
         return;
     }
 
-    // Show media detail view for other types
+    // Show media detail view for audiobooks and podcasts
     auto* detailView = new MediaDetailView(item);
     brls::Application::pushActivity(new brls::Activity(detailView));
 }
 
-} // namespace vitaplex
+} // namespace vitaabs
