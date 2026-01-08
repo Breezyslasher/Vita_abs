@@ -72,7 +72,6 @@ bool MpvPlayer::init() {
     // ========================================
 
     mpv_set_option_string(m_mpv, "osd-level", "0");
-    mpv_set_option_string(m_mpv, "video-timing-offset", "0");
     mpv_set_option_string(m_mpv, "keep-open", "yes");
     mpv_set_option_string(m_mpv, "idle", "yes");
     mpv_set_option_string(m_mpv, "input-default-bindings", "no");
@@ -80,27 +79,15 @@ bool MpvPlayer::init() {
     mpv_set_option_string(m_mpv, "terminal", "no");
 
     // ========================================
-    // Video output configuration (matching switchfin for Vita)
+    // AUDIO-ONLY MODE - Disable all video
+    // This is an audiobook player, we don't need video decoding
+    // This also prevents crashes from embedded album art (PNG) in MP3s
     // ========================================
 
-    // Use libmpv for video output - we'll create a render context
-    mpv_set_option_string(m_mpv, "vo", "libmpv");
-
-#ifdef __vita__
-    // Vita-specific settings from switchfin
-    mpv_set_option_string(m_mpv, "vd-lavc-threads", "4");
-    mpv_set_option_string(m_mpv, "vd-lavc-skiploopfilter", "all");
-    mpv_set_option_string(m_mpv, "vd-lavc-fast", "yes");
-
-    // Use Vita hardware decoding (from switchfin)
-    mpv_set_option_string(m_mpv, "hwdec", "vita-copy");
-
-    // GXM-specific settings from switchfin
-    mpv_set_option_string(m_mpv, "fbo-format", "rgba8");
-    mpv_set_option_string(m_mpv, "video-latency-hacks", "yes");
-#else
-    mpv_set_option_string(m_mpv, "hwdec", "no");
-#endif
+    mpv_set_option_string(m_mpv, "video", "no");       // Disable video decoding entirely
+    mpv_set_option_string(m_mpv, "vo", "null");        // No video output
+    mpv_set_option_string(m_mpv, "aid", "auto");       // Auto-select audio track
+    mpv_set_option_string(m_mpv, "vid", "no");         // No video track selection
 
     // ========================================
     // Audio output configuration
@@ -168,13 +155,11 @@ bool MpvPlayer::init() {
     brls::Logger::debug("MpvPlayer: mpv_initialize succeeded");
 
     // ========================================
-    // Set up render context for video display
+    // Skip render context - audio-only mode
+    // We don't need GXM rendering for audiobooks
     // ========================================
 
-    if (!initRenderContext()) {
-        brls::Logger::error("MpvPlayer: Failed to create render context, falling back to audio-only");
-        // Don't fail - we can still play audio
-    }
+    brls::Logger::info("MpvPlayer: Audio-only mode, skipping render context");
 
     // ========================================
     // Set up property observers (matching switchfin IDs)
