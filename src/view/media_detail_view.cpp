@@ -694,14 +694,6 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                 // Download-only mode: download ALL tracks first, combine, register, no playback
                 brls::Logger::info("Download-only mode: Downloading all {} tracks for multi-file audiobook", numTracks);
 
-                int64_t grandTotalSize = 0;
-                int64_t grandTotalDownloaded = 0;
-
-                // First pass: get total size of all tracks
-                for (const auto& track : session.audioTracks) {
-                    grandTotalSize += track.size;
-                }
-
                 // Download all tracks sequentially
                 for (int trackIdx = 0; trackIdx < numTracks && downloadSuccess; trackIdx++) {
                     const AudioTrack& track = session.audioTracks[trackIdx];
@@ -737,7 +729,7 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                     }
 
                     int64_t trackDownloaded = 0;
-                    int64_t trackSize = track.size;
+                    int64_t trackSize = 0;
 
                     bool trackOk = httpClient.downloadFile(trackUrl,
                         [&](const char* data, size_t size) -> bool {
@@ -745,11 +737,17 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                             if (written < 0) return false;
                             trackDownloaded += size;
 
-                            // Update progress with total across all tracks
-                            int64_t currentTotal = grandTotalDownloaded + trackDownloaded;
-                            if (grandTotalSize > 0) {
-                                brls::sync([progressDialog, currentTotal, grandTotalSize]() {
-                                    progressDialog->updateDownloadProgress(currentTotal, grandTotalSize);
+                            // Update progress for this track
+                            if (trackSize > 0) {
+                                int64_t currentTrackNum = currentTrack;
+                                brls::sync([progressDialog, trackDownloaded, trackSize, currentTrackNum, numTracks]() {
+                                    char buf[96];
+                                    int percent = static_cast<int>((trackDownloaded * 100) / trackSize);
+                                    int dlMB = static_cast<int>(trackDownloaded / (1024 * 1024));
+                                    int totalMB = static_cast<int>(trackSize / (1024 * 1024));
+                                    snprintf(buf, sizeof(buf), "Track %d/%d: %d%% (%d/%d MB)",
+                                            static_cast<int>(currentTrackNum) + 1, numTracks, percent, dlMB, totalMB);
+                                    progressDialog->setStatus(buf);
                                 });
                             }
                             return true;
@@ -766,8 +764,7 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                         sceIoRemove(trackPath.c_str());
                         downloadSuccess = false;
                     } else {
-                        grandTotalDownloaded += trackDownloaded;
-                        totalDownloaded = grandTotalDownloaded;
+                        totalDownloaded += trackDownloaded;
                         brls::Logger::info("Track {}/{} complete ({} bytes)", trackIdx + 1, numTracks, trackDownloaded);
                     }
                 }
@@ -912,25 +909,18 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                         std::vector<std::string> allTrackFiles(allTracks.size());
                         allTrackFiles[currentTrackIdx] = currentTrackPath;
 
-                        // Calculate total size for progress tracking
-                        int64_t grandTotalSize = 0;
-                        int64_t grandDownloaded = 0;
-                        for (const auto& track : allTracks) {
-                            grandTotalSize += track.size;
-                        }
-                        // Account for already downloaded first track
-                        if (currentTrackIdx < static_cast<int>(allTracks.size())) {
-                            grandDownloaded = allTracks[currentTrackIdx].size;
-                        }
+                        // Track progress by track count (we don't have size info from AudioTrack)
+                        int tracksDownloaded = 1;  // Already downloaded current track
+                        int totalTracksToDownload = static_cast<int>(allTracks.size());
 
                         // Set initial background progress
                         BackgroundDownloadProgress bgProgress;
                         bgProgress.active = true;
                         bgProgress.itemId = itemId;
                         bgProgress.currentTrack = currentTrackIdx + 1;
-                        bgProgress.totalTracks = static_cast<int>(allTracks.size());
-                        bgProgress.downloadedBytes = grandDownloaded;
-                        bgProgress.totalBytes = grandTotalSize;
+                        bgProgress.totalTracks = totalTracksToDownload;
+                        bgProgress.downloadedBytes = 0;  // Will track per-track progress
+                        bgProgress.totalBytes = 0;       // Unknown total
                         bgProgress.status = "Downloading remaining tracks...";
                         Application::getInstance().setBackgroundDownloadProgress(bgProgress);
 
@@ -976,6 +966,7 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                             }
 
                             int64_t trackDownloaded = 0;
+                            int64_t trackTotalSize = 0;
                             bool trackOk = bgHttpClient.downloadFile(trackUrl,
                                 [&](const char* data, size_t size) -> bool {
                                     int written = sceIoWrite(fd, data, size);
@@ -983,12 +974,15 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                                     trackDownloaded += size;
                                     // Update progress periodically (every 64KB)
                                     if ((trackDownloaded % (64 * 1024)) < size) {
-                                        bgProgress.downloadedBytes = grandDownloaded + trackDownloaded;
+                                        bgProgress.downloadedBytes = trackDownloaded;
+                                        bgProgress.totalBytes = trackTotalSize;
                                         Application::getInstance().setBackgroundDownloadProgress(bgProgress);
                                     }
                                     return true;
                                 },
-                                nullptr
+                                [&](int64_t size) {
+                                    if (size > 0) trackTotalSize = size;
+                                }
                             );
 
                             sceIoClose(fd);
@@ -998,8 +992,9 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                                 sceIoRemove(trackPath.c_str());
                                 allDownloaded = false;
                             } else {
-                                grandDownloaded += trackDownloaded;
-                                bgProgress.downloadedBytes = grandDownloaded;
+                                tracksDownloaded++;
+                                bgProgress.downloadedBytes = 0;  // Reset for next track
+                                bgProgress.totalBytes = 0;
                                 Application::getInstance().setBackgroundDownloadProgress(bgProgress);
                             }
                         }
