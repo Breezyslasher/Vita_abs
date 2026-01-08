@@ -156,6 +156,9 @@ private:
     // Download a single item (runs in background)
     void downloadItem(DownloadItem& item);
 
+    // Internal save without locking (caller must hold m_mutex)
+    void saveStateUnlocked();
+
     std::vector<DownloadItem> m_downloads;
     mutable std::mutex m_mutex;
     bool m_downloading = false;

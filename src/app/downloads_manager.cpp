@@ -930,7 +930,10 @@ static std::string escapeJsonString(const std::string& str) {
 
 void DownloadsManager::saveState() {
     std::lock_guard<std::mutex> lock(m_mutex);
+    saveStateUnlocked();
+}
 
+void DownloadsManager::saveStateUnlocked() {
     // Simple JSON-like format for state
     std::stringstream ss;
     ss << "{\n\"downloads\":[\n";
@@ -1375,7 +1378,7 @@ bool DownloadsManager::registerCompletedDownload(const std::string& itemId, cons
                 item.numChapters = static_cast<int>(chapters.size());
             }
             brls::Logger::info("DownloadsManager: Updated existing download: {}", title);
-            saveState();
+            saveStateUnlocked();  // Already holding the lock
             return true;
         }
     }
@@ -1403,7 +1406,7 @@ bool DownloadsManager::registerCompletedDownload(const std::string& itemId, cons
     brls::Logger::info("DownloadsManager: Registered completed download: {} ({} bytes, cover: {})",
                        title, fileSize, !localCoverPath.empty() ? "yes" : "no");
 
-    saveState();
+    saveStateUnlocked();  // Already holding the lock
     return true;
 }
 
