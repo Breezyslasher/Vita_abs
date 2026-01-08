@@ -109,15 +109,18 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${APP_INCLUDES})
 
 # Link libraries - borealis + app platform libs from toolchain
 # Order matters: libraries that PROVIDE symbols must come AFTER libraries that NEED them
+# FFmpeg/mpv have complex circular dependencies, so list them multiple times
 target_link_libraries(${PROJECT_NAME}
     borealis
     ${APP_PLATFORM_LIB}
 
-    # External libraries first (they depend on Vita stubs)
-    # FFmpeg has circular dependencies - list avcodec multiple times
+    # External libraries (curl with SSL)
     curl
     ssl
     crypto
+
+    # MPV and FFmpeg - circular deps require multiple listings
+    # mpv depends on FFmpeg, FFmpeg libs depend on each other
     mpv
     avfilter
     avformat
@@ -125,7 +128,15 @@ target_link_libraries(${PROJECT_NAME}
     swresample
     swscale
     avutil
+    # List again to resolve circular dependencies
+    avformat
     avcodec
+    avutil
+    mpv
+    avcodec
+    avformat
+
+    # Audio/compression libraries
     mp3lame
     zstd
     ass
@@ -152,7 +163,7 @@ target_link_libraries(${PROJECT_NAME}
     SceVshBridge_stub
     SceAppMgr_stub
 
-    # Standard libraries last (m is provided by libstdc++)
+    # Standard libraries last
     z
     c
 )
