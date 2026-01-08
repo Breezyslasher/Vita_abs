@@ -1034,10 +1034,11 @@ void MediaDetailView::batchDownloadEpisodes(const std::vector<MediaItem>& episod
     auto* progressDialog = ProgressDialog::showDownloading("Downloading Episodes");
     progressDialog->setStatus("Preparing downloads...");
 
-    // Store data for async operation
+    // Store data for async operation - use parent podcast ID for all episodes
     std::string podcastTitle = m_item.title;
+    std::string podcastId = m_item.id;  // Parent podcast ID
 
-    asyncRun([this, progressDialog, episodes, podcastTitle]() {
+    asyncRun([this, progressDialog, episodes, podcastTitle, podcastId]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
         downloadsMgr.init();
@@ -1048,7 +1049,8 @@ void MediaDetailView::batchDownloadEpisodes(const std::vector<MediaItem>& episod
 
         for (size_t i = 0; i < episodes.size(); i++) {
             const auto& ep = episodes[i];
-            std::string itemId = ep.podcastId.empty() ? ep.id : ep.podcastId;
+            // Use parent podcast ID, not episode's podcastId field (which may be empty)
+            std::string itemId = podcastId;
             std::string episodeId = ep.episodeId;
 
             brls::Logger::info("batchDownloadEpisodes: Downloading episode {} of {}: {} (episodeId: {})",
