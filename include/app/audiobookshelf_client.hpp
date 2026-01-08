@@ -163,6 +163,7 @@ struct PlaybackSession {
     std::string playMethod;        // "directplay" or "transcode"
     std::string deviceInfo;
     int64_t updatedAt = 0;
+    std::vector<AudioTrack> audioTracks;  // Audio tracks with streaming URLs
 };
 
 // Personalized shelf (for home screen)

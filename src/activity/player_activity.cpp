@@ -257,8 +257,18 @@ void PlayerActivity::loadMedia() {
             return;
         }
 
-        // Get stream URL for the item
-        std::string streamUrl = client.getStreamUrl(m_itemId, m_episodeId);
+        // Get stream URL from the session's audio tracks
+        std::string streamUrl;
+        if (!session.audioTracks.empty() && !session.audioTracks[0].contentUrl.empty()) {
+            // Use the contentUrl from the first audio track
+            streamUrl = client.getStreamUrl(session.audioTracks[0].contentUrl, "");
+            brls::Logger::debug("Using audio track contentUrl: {}", session.audioTracks[0].contentUrl);
+        } else {
+            // Fallback to direct file URL
+            streamUrl = client.getDirectStreamUrl(m_itemId, 0);
+            brls::Logger::debug("Fallback to direct stream URL");
+        }
+
         if (streamUrl.empty()) {
             brls::Logger::error("Failed to get stream URL for: {}", m_itemId);
             m_loadingMedia = false;

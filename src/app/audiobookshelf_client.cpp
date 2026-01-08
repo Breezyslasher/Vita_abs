@@ -1177,8 +1177,8 @@ bool AudiobookshelfClient::startPlaybackSession(const std::string& itemId, Playb
     req.headers["Content-Type"] = "application/json";
     req.headers["Authorization"] = "Bearer " + m_authToken;
 
-    // Request body with device info
-    req.body = "{\"deviceInfo\":{\"clientName\":\"VitaABS\",\"clientVersion\":\"1.0.0\",\"deviceId\":\"vita-abs-client\"},\"forceDirectPlay\":false,\"forceTranscode\":false,\"supportedMimeTypes\":[\"audio/mpeg\",\"audio/mp4\",\"audio/x-m4a\",\"audio/aac\"]}";
+    // Request body with device info - force direct play for Vita
+    req.body = "{\"deviceInfo\":{\"clientName\":\"VitaABS\",\"clientVersion\":\"1.0.0\",\"deviceId\":\"vita-abs-client\"},\"forceDirectPlay\":true,\"forceTranscode\":false,\"supportedMimeTypes\":[\"audio/mpeg\",\"audio/mp4\",\"audio/x-m4a\",\"audio/aac\",\"audio/ogg\",\"audio/flac\"]}";
 
     HttpResponse resp = client.request(req);
 
@@ -1194,7 +1194,45 @@ bool AudiobookshelfClient::startPlaybackSession(const std::string& itemId, Playb
     session.duration = extractJsonFloat(resp.body, "duration");
     session.playMethod = extractJsonValue(resp.body, "playMethod");
 
-    brls::Logger::info("Started playback session: {}", session.id);
+    // Parse audioTracks array to get streaming URLs
+    session.audioTracks.clear();
+    std::string tracksArray = extractJsonArray(resp.body, "audioTracks");
+    if (!tracksArray.empty()) {
+        size_t pos = 0;
+        while ((pos = tracksArray.find("\"contentUrl\"", pos)) != std::string::npos) {
+            size_t objStart = tracksArray.rfind('{', pos);
+            if (objStart == std::string::npos) {
+                pos++;
+                continue;
+            }
+
+            int braceCount = 1;
+            size_t objEnd = objStart + 1;
+            while (braceCount > 0 && objEnd < tracksArray.length()) {
+                if (tracksArray[objEnd] == '{') braceCount++;
+                else if (tracksArray[objEnd] == '}') braceCount--;
+                objEnd++;
+            }
+
+            std::string trackObj = tracksArray.substr(objStart, objEnd - objStart);
+            AudioTrack track;
+            track.index = extractJsonInt(trackObj, "index");
+            track.title = extractJsonValue(trackObj, "title");
+            track.contentUrl = extractJsonValue(trackObj, "contentUrl");
+            track.startOffset = extractJsonFloat(trackObj, "startOffset");
+            track.duration = extractJsonFloat(trackObj, "duration");
+            track.mimeType = extractJsonValue(trackObj, "mimeType");
+
+            if (!track.contentUrl.empty()) {
+                session.audioTracks.push_back(track);
+                brls::Logger::debug("Found audio track: {} url={}", track.index, track.contentUrl);
+            }
+
+            pos = objEnd;
+        }
+    }
+
+    brls::Logger::info("Started playback session: {} with {} audio tracks", session.id, session.audioTracks.size());
     return true;
 }
 
@@ -1242,11 +1280,21 @@ bool AudiobookshelfClient::closePlaybackSession(const std::string& sessionId, fl
 }
 
 std::string AudiobookshelfClient::getStreamUrl(const std::string& itemId, const std::string& episodeId) {
-    // Build streaming URL
-    std::string url = m_serverUrl + "/api/items/" + itemId + "/play";
-    if (!episodeId.empty()) {
-        url += "/" + episodeId;
+    // This method now expects a relative contentUrl from a playback session's audioTracks
+    // If itemId looks like a relative URL (starts with /), use it directly
+    if (!itemId.empty() && itemId[0] == '/') {
+        std::string url = m_serverUrl + itemId;
+        // Add token if not already present
+        if (url.find("token=") == std::string::npos) {
+            url += (url.find('?') != std::string::npos ? "&" : "?");
+            url += "token=" + m_authToken;
+        }
+        return url;
     }
+
+    // Fallback: build direct file URL (for first audio file)
+    // This is a fallback and may not work for all items
+    std::string url = m_serverUrl + "/api/items/" + itemId + "/file/0";
     url += "?token=" + m_authToken;
     return url;
 }
