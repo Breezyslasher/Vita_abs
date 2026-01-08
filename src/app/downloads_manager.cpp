@@ -300,7 +300,114 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
         return;
     }
 
-    // Get the download URL for the item (using file API like Kodi addon)
+    // Check if this is a multi-file audiobook
+    std::vector<AudioFileInfo> audioFiles;
+    if (item.episodeId.empty() && item.mediaType == "book") {
+        client.getAudioFiles(item.itemId, audioFiles);
+    }
+
+    if (audioFiles.size() > 1) {
+        // Multi-file audiobook - download all files
+        brls::Logger::info("DownloadsManager: Multi-file audiobook with {} files", audioFiles.size());
+
+        item.numFiles = static_cast<int>(audioFiles.size());
+        item.files.clear();
+
+        // Create folder for multi-file item
+        std::string folderPath = m_downloadsPath + "/" + item.itemId;
+#ifdef __vita__
+        sceIoMkdir(folderPath.c_str(), 0777);
+#else
+        std::system(("mkdir -p \"" + folderPath + "\"").c_str());
+#endif
+        item.localPath = folderPath;
+
+        // Calculate total size
+        item.totalBytes = 0;
+        for (const auto& af : audioFiles) {
+            DownloadFileInfo fi;
+            fi.ino = af.ino;
+            fi.filename = af.filename;
+            fi.localPath = folderPath + "/" + af.filename;
+            fi.size = af.size;
+            fi.downloaded = false;
+            item.files.push_back(fi);
+            item.totalBytes += af.size;
+        }
+
+        // Download each file
+        HttpClient http;
+        http.setDefaultHeader("Authorization", "Bearer " + token);
+
+        for (size_t i = 0; i < item.files.size() && m_downloading; ++i) {
+            auto& fi = item.files[i];
+            item.currentFileIndex = static_cast<int>(i);
+
+            std::string url = client.getFileDownloadUrlByIno(item.itemId, fi.ino);
+            brls::Logger::info("DownloadsManager: Downloading file {}/{}: {}",
+                              i + 1, item.files.size(), fi.filename);
+
+#ifdef __vita__
+            SceUID fd = sceIoOpen(fi.localPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+            if (fd < 0) {
+                brls::Logger::error("DownloadsManager: Failed to create file {}", fi.localPath);
+                continue;
+            }
+#else
+            std::ofstream file(fi.localPath, std::ios::binary);
+            if (!file.is_open()) {
+                brls::Logger::error("DownloadsManager: Failed to create file {}", fi.localPath);
+                continue;
+            }
+#endif
+
+            bool success = http.downloadFile(url,
+                [&](const char* data, size_t size) {
+#ifdef __vita__
+                    sceIoWrite(fd, data, size);
+#else
+                    file.write(data, size);
+#endif
+                    item.downloadedBytes += size;
+                    if (m_progressCallback && item.totalBytes > 0) {
+                        m_progressCallback(static_cast<float>(item.downloadedBytes),
+                                           static_cast<float>(item.totalBytes));
+                    }
+                    return m_downloading;
+                },
+                [&](int64_t total) {
+                    brls::Logger::debug("DownloadsManager: File size: {} bytes", total);
+                }
+            );
+
+#ifdef __vita__
+            sceIoClose(fd);
+#else
+            file.close();
+#endif
+
+            fi.downloaded = success;
+        }
+
+        // Check if all files downloaded
+        bool allComplete = true;
+        for (const auto& fi : item.files) {
+            if (!fi.downloaded) allComplete = false;
+        }
+
+        if (allComplete) {
+            item.state = DownloadState::COMPLETED;
+            brls::Logger::info("DownloadsManager: Completed download of all {} files", item.files.size());
+        } else if (!m_downloading) {
+            item.state = DownloadState::PAUSED;
+        } else {
+            item.state = DownloadState::FAILED;
+        }
+        saveState();
+        return;
+    }
+
+    // Single file download (original logic)
     std::string url = client.getFileDownloadUrl(item.itemId, item.episodeId);
 
     if (url.empty()) {

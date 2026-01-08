@@ -20,7 +20,8 @@ public:
     PlayerActivity(const std::string& itemId);
 
     // Play podcast episode or audiobook with specific episode
-    PlayerActivity(const std::string& itemId, const std::string& episodeId);
+    PlayerActivity(const std::string& itemId, const std::string& episodeId,
+                   float startTime = -1.0f);
 
     // Play local downloaded file
     PlayerActivity(const std::string& itemId, bool isLocalFile);

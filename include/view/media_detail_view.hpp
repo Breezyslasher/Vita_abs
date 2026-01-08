@@ -34,6 +34,9 @@ private:
     void downloadNewEpisodesToServer(const std::string& podcastId,
                                       const std::vector<MediaItem>& episodes);
 
+    // Chapter display for audiobooks
+    void populateChapters();
+
     brls::HScrollingFrame* createMediaRow(const std::string& title, brls::Box** contentOut);
 
     MediaItem m_item;
@@ -54,6 +57,10 @@ private:
     brls::Button* m_downloadButton = nullptr;
     brls::Button* m_findEpisodesButton = nullptr;  // Find New Episodes button for podcasts
     brls::Box* m_childrenBox = nullptr;
+
+    // Chapters list for audiobooks
+    brls::ScrollingFrame* m_chaptersScroll = nullptr;
+    brls::Box* m_chaptersBox = nullptr;
 
     // Music category rows for artists
     brls::Box* m_musicCategoriesBox = nullptr;

@@ -30,6 +30,15 @@ struct AudioTrack {
     std::string mimeType;
 };
 
+// Audio file info for downloads
+struct AudioFileInfo {
+    std::string ino;           // File inode for download URL
+    std::string filename;      // Original filename
+    float duration = 0.0f;     // Duration in seconds
+    int64_t size = 0;          // File size in bytes
+    std::string mimeType;
+};
+
 // Chapter info
 struct Chapter {
     int id = 0;
@@ -242,6 +251,10 @@ public:
 
     // File download (for local downloads - uses /api/items/{id}/file/{ino})
     std::string getFileDownloadUrl(const std::string& itemId, const std::string& episodeId = "");
+
+    // Get all audio files for multi-file audiobooks
+    bool getAudioFiles(const std::string& itemId, std::vector<AudioFileInfo>& files);
+    std::string getFileDownloadUrlByIno(const std::string& itemId, const std::string& ino);
 
     // Progress
     bool updateProgress(const std::string& itemId, float currentTime, float duration,

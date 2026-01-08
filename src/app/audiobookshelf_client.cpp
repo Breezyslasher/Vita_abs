@@ -1424,6 +1424,80 @@ std::string AudiobookshelfClient::getFileDownloadUrl(const std::string& itemId, 
     return url;
 }
 
+bool AudiobookshelfClient::getAudioFiles(const std::string& itemId, std::vector<AudioFileInfo>& files) {
+    brls::Logger::debug("Getting audio files for item: {}", itemId);
+
+    files.clear();
+
+    HttpClient client;
+    HttpRequest req;
+    req.url = buildApiUrl("/api/items/" + itemId);
+    req.method = "GET";
+    req.headers["Accept"] = "application/json";
+    req.headers["Authorization"] = "Bearer " + m_authToken;
+
+    HttpResponse resp = client.request(req);
+
+    if (resp.statusCode != 200) {
+        brls::Logger::error("Failed to get item for audio files: {}", resp.statusCode);
+        return false;
+    }
+
+    std::string mediaObj = extractJsonObject(resp.body, "media");
+    std::string audioFilesArray = extractJsonArray(mediaObj, "audioFiles");
+
+    if (audioFilesArray.empty()) {
+        brls::Logger::debug("No audio files in item");
+        return false;
+    }
+
+    // Parse each audio file
+    size_t pos = 0;
+    while (true) {
+        size_t objStart = audioFilesArray.find('{', pos);
+        if (objStart == std::string::npos) break;
+
+        int braceCount = 1;
+        size_t objEnd = objStart + 1;
+        while (braceCount > 0 && objEnd < audioFilesArray.length()) {
+            if (audioFilesArray[objEnd] == '{') braceCount++;
+            else if (audioFilesArray[objEnd] == '}') braceCount--;
+            objEnd++;
+        }
+
+        std::string fileObj = audioFilesArray.substr(objStart, objEnd - objStart);
+
+        AudioFileInfo info;
+        info.ino = extractJsonValue(fileObj, "ino");
+
+        // Get metadata from nested object
+        std::string metadataObj = extractJsonObject(fileObj, "metadata");
+        if (!metadataObj.empty()) {
+            info.filename = extractJsonValue(metadataObj, "filename");
+            info.size = extractJsonInt(metadataObj, "size");
+        }
+
+        info.duration = extractJsonFloat(fileObj, "duration");
+        info.mimeType = extractJsonValue(fileObj, "mimeType");
+
+        if (!info.ino.empty()) {
+            files.push_back(info);
+            brls::Logger::debug("Found audio file: {} (ino: {})", info.filename, info.ino);
+        }
+
+        pos = objEnd;
+    }
+
+    brls::Logger::info("Found {} audio files for item", files.size());
+    return !files.empty();
+}
+
+std::string AudiobookshelfClient::getFileDownloadUrlByIno(const std::string& itemId, const std::string& ino) {
+    std::string url = m_serverUrl + "/api/items/" + itemId + "/file/" + ino;
+    url += "?token=" + m_authToken;
+    return url;
+}
+
 bool AudiobookshelfClient::updateProgress(const std::string& itemId, float currentTime, float duration,
                                            bool isFinished, const std::string& episodeId) {
     brls::Logger::debug("Updating progress for item: {} at {}s", itemId, currentTime);

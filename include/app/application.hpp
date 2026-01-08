@@ -128,7 +128,8 @@ public:
     // Navigation
     void pushLoginActivity();
     void pushMainActivity();
-    void pushPlayerActivity(const std::string& itemId, const std::string& episodeId = "");
+    void pushPlayerActivity(const std::string& itemId, const std::string& episodeId = "",
+                            float startTime = -1.0f);
 
     // Authentication state
     bool isLoggedIn() const { return !m_authToken.empty(); }

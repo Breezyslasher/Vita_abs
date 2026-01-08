@@ -21,6 +21,15 @@ enum class DownloadState {
     FAILED
 };
 
+// Download file info (for multi-file audiobooks)
+struct DownloadFileInfo {
+    std::string ino;            // File inode for download URL
+    std::string filename;       // Local filename
+    std::string localPath;      // Full local path
+    int64_t size = 0;           // File size
+    bool downloaded = false;    // Download complete
+};
+
 // Download item information
 struct DownloadItem {
     std::string itemId;         // Audiobookshelf item ID
@@ -28,9 +37,9 @@ struct DownloadItem {
     std::string title;          // Display title
     std::string authorName;     // Author/narrator name
     std::string parentTitle;    // Series name or parent title (for display)
-    std::string localPath;      // Local storage path
+    std::string localPath;      // Local storage path (folder for multi-file)
     std::string coverUrl;       // Cover image URL
-    int64_t totalBytes = 0;     // Total file size
+    int64_t totalBytes = 0;     // Total file size (all files combined)
     int64_t downloadedBytes = 0; // Downloaded so far
     float duration = 0.0f;      // Media duration in seconds
     float currentTime = 0.0f;   // Watch progress in seconds
@@ -39,6 +48,9 @@ struct DownloadItem {
     std::string mediaType;      // "book", "podcast"
     std::string seriesName;     // Series name for audiobooks
     int numChapters = 0;        // Number of chapters
+    int numFiles = 1;           // Number of audio files (1 = single file)
+    int currentFileIndex = 0;   // Current file being downloaded
+    std::vector<DownloadFileInfo> files;  // Multi-file info
     time_t lastSynced = 0;      // Last time progress was synced to server
 };
 

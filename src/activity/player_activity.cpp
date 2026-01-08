@@ -16,9 +16,15 @@ PlayerActivity::PlayerActivity(const std::string& itemId)
     brls::Logger::debug("PlayerActivity created for item: {}", itemId);
 }
 
-PlayerActivity::PlayerActivity(const std::string& itemId, const std::string& episodeId)
+PlayerActivity::PlayerActivity(const std::string& itemId, const std::string& episodeId,
+                               float startTime)
     : m_itemId(itemId), m_episodeId(episodeId), m_isLocalFile(false) {
     brls::Logger::debug("PlayerActivity created for item: {}, episode: {}", itemId, episodeId);
+    // If startTime is specified (>= 0), use it as pending seek position
+    if (startTime >= 0) {
+        m_pendingSeek = static_cast<double>(startTime);
+        brls::Logger::debug("Starting at position: {}s", startTime);
+    }
 }
 
 PlayerActivity::PlayerActivity(const std::string& itemId, bool isLocalFile)

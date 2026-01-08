@@ -95,8 +95,9 @@ void Application::pushMainActivity() {
     brls::Application::pushActivity(new MainActivity());
 }
 
-void Application::pushPlayerActivity(const std::string& itemId, const std::string& episodeId) {
-    brls::Application::pushActivity(new PlayerActivity(itemId, episodeId));
+void Application::pushPlayerActivity(const std::string& itemId, const std::string& episodeId,
+                                      float startTime) {
+    brls::Application::pushActivity(new PlayerActivity(itemId, episodeId, startTime));
 }
 
 void Application::applyTheme() {

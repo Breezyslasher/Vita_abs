@@ -47,7 +47,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
     topRow->setAlignItems(brls::AlignItems::FLEX_START);
     topRow->setMarginBottom(20);
 
-    // Left side - poster
+    // Left side - poster (square for book/podcast covers)
     auto* leftBox = new brls::Box();
     leftBox->setAxis(brls::Axis::COLUMN);
     leftBox->setWidth(200);
@@ -55,7 +55,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
 
     m_posterImage = new brls::Image();
     m_posterImage->setWidth(200);
-    m_posterImage->setHeight(300);
+    m_posterImage->setHeight(200);  // Square cover
     m_posterImage->setScalingType(brls::ImageScalingType::FIT);
     leftBox->addView(m_posterImage);
 
@@ -217,12 +217,24 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
     }
 
     // Chapters container for books
-    if (m_item.mediaType == MediaType::BOOK && m_item.numChapters > 0) {
+    if (m_item.mediaType == MediaType::BOOK) {
         auto* chaptersLabel = new brls::Label();
-        chaptersLabel->setText("Chapters: " + std::to_string(m_item.numChapters));
-        chaptersLabel->setFontSize(18);
+        chaptersLabel->setText("Chapters");
+        chaptersLabel->setFontSize(20);
         chaptersLabel->setMarginBottom(10);
+        chaptersLabel->setMarginTop(10);
         m_mainContent->addView(chaptersLabel);
+
+        // Scrollable chapters list
+        m_chaptersScroll = new brls::ScrollingFrame();
+        m_chaptersScroll->setHeight(250);
+        m_chaptersScroll->setMarginBottom(20);
+
+        m_chaptersBox = new brls::Box();
+        m_chaptersBox->setAxis(brls::Axis::COLUMN);
+
+        m_chaptersScroll->setContentView(m_chaptersBox);
+        m_mainContent->addView(m_chaptersScroll);
     }
 
     m_scrollView->setContentView(m_mainContent);
@@ -305,6 +317,11 @@ void MediaDetailView::loadDetails() {
     if (m_item.mediaType == MediaType::PODCAST) {
         loadChildren();
     }
+
+    // Populate chapters for audiobooks
+    if (m_item.mediaType == MediaType::BOOK) {
+        populateChapters();
+    }
 }
 
 void MediaDetailView::loadChildren() {
@@ -340,6 +357,106 @@ void MediaDetailView::loadChildren() {
 
 void MediaDetailView::loadMusicCategories() {
     // Not used for Audiobookshelf
+}
+
+void MediaDetailView::populateChapters() {
+    if (!m_chaptersBox) return;
+
+    m_chaptersBox->clearViews();
+
+    // Check if we have chapters
+    if (m_item.chapters.empty()) {
+        // Show message if no chapters
+        auto* noChaptersLabel = new brls::Label();
+        noChaptersLabel->setText("No chapter information available");
+        noChaptersLabel->setFontSize(14);
+        noChaptersLabel->setTextColor(nvgRGB(150, 150, 150));
+        noChaptersLabel->setMarginTop(10);
+        m_chaptersBox->addView(noChaptersLabel);
+        return;
+    }
+
+    // Helper to format time
+    auto formatTime = [](float seconds) -> std::string {
+        int totalSec = static_cast<int>(seconds);
+        int hours = totalSec / 3600;
+        int mins = (totalSec % 3600) / 60;
+        int secs = totalSec % 60;
+
+        char buf[32];
+        if (hours > 0) {
+            snprintf(buf, sizeof(buf), "%d:%02d:%02d", hours, mins, secs);
+        } else {
+            snprintf(buf, sizeof(buf), "%d:%02d", mins, secs);
+        }
+        return std::string(buf);
+    };
+
+    // Current playback position for highlighting
+    float currentTime = m_item.currentTime;
+
+    for (size_t i = 0; i < m_item.chapters.size(); ++i) {
+        const auto& chapter = m_item.chapters[i];
+
+        auto* chapterRow = new brls::Box();
+        chapterRow->setAxis(brls::Axis::ROW);
+        chapterRow->setAlignItems(brls::AlignItems::CENTER);
+        chapterRow->setHeight(50);
+        chapterRow->setMarginBottom(8);
+        chapterRow->setPadding(12);
+        chapterRow->setCornerRadius(6);
+        chapterRow->setFocusable(true);
+
+        // Highlight current chapter
+        bool isCurrentChapter = (currentTime >= chapter.start && currentTime < chapter.end);
+        if (isCurrentChapter) {
+            chapterRow->setBackgroundColor(nvgRGBA(80, 120, 80, 255));
+        } else {
+            chapterRow->setBackgroundColor(nvgRGBA(50, 50, 50, 255));
+        }
+
+        // Chapter number
+        auto* numLabel = new brls::Label();
+        numLabel->setText(std::to_string(i + 1));
+        numLabel->setFontSize(14);
+        numLabel->setWidth(35);
+        numLabel->setTextColor(nvgRGB(150, 150, 150));
+        chapterRow->addView(numLabel);
+
+        // Chapter title
+        auto* titleLabel = new brls::Label();
+        std::string title = chapter.title;
+        if (title.empty()) {
+            title = "Chapter " + std::to_string(i + 1);
+        }
+        // Truncate if too long
+        if (title.length() > 45) {
+            title = title.substr(0, 42) + "...";
+        }
+        titleLabel->setText(title);
+        titleLabel->setFontSize(15);
+        titleLabel->setGrow(1.0f);
+        chapterRow->addView(titleLabel);
+
+        // Duration/time
+        auto* timeLabel = new brls::Label();
+        float duration = chapter.end - chapter.start;
+        timeLabel->setText(formatTime(chapter.start) + " (" + formatTime(duration) + ")");
+        timeLabel->setFontSize(13);
+        timeLabel->setTextColor(nvgRGB(150, 150, 150));
+        chapterRow->addView(timeLabel);
+
+        // Click to play from chapter
+        std::string itemId = m_item.id;
+        float chapterStart = chapter.start;
+        chapterRow->registerClickAction([itemId, chapterStart](brls::View*) {
+            // Start playback from this chapter's start time
+            Application::getInstance().pushPlayerActivity(itemId, "", chapterStart);
+            return true;
+        });
+
+        m_chaptersBox->addView(chapterRow);
+    }
 }
 
 void MediaDetailView::onPlay(bool resume) {
