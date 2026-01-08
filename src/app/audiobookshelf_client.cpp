@@ -984,11 +984,16 @@ bool AudiobookshelfClient::fetchItem(const std::string& itemId, MediaItem& item)
 
     item = parseMediaItem(resp.body);
 
-    // Parse chapters
+    // Parse chapters - try root level first, then media.chapters
     std::string chaptersArray = extractJsonArray(resp.body, "chapters");
+    if (chaptersArray.empty()) {
+        std::string mediaObj = extractJsonObject(resp.body, "media");
+        chaptersArray = extractJsonArray(mediaObj, "chapters");
+    }
     if (!chaptersArray.empty()) {
         size_t pos = 0;
-        while ((pos = chaptersArray.find("\"id\"", pos)) != std::string::npos) {
+        // Look for "start" field which all chapters have (some don't have "id")
+        while ((pos = chaptersArray.find("\"start\"", pos)) != std::string::npos) {
             size_t objStart = chaptersArray.rfind('{', pos);
             if (objStart == std::string::npos) {
                 pos++;

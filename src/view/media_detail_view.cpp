@@ -863,9 +863,8 @@ void MediaDetailView::showNewEpisodesDialog(const std::vector<MediaItem>& episod
         auto* episodeRow = new brls::Box();
         episodeRow->setAxis(brls::Axis::ROW);
         episodeRow->setAlignItems(brls::AlignItems::CENTER);
-        episodeRow->setMinHeight(70);  // Minimum height for multi-line titles
-        episodeRow->setMarginBottom(12);  // More space between episodes
-        episodeRow->setPadding(12);
+        episodeRow->setMarginBottom(15);  // More space between episodes
+        episodeRow->setPadding(15);
         episodeRow->setBackgroundColor(nvgRGBA(60, 60, 60, 255));
         episodeRow->setCornerRadius(8);
         episodeRow->setFocusable(true);
@@ -876,42 +875,46 @@ void MediaDetailView::showNewEpisodesDialog(const std::vector<MediaItem>& episod
         infoBox->setGrow(1.0f);
         infoBox->setJustifyContent(brls::JustifyContent::CENTER);
 
+        // Title - show first line
         auto* titleLabel = new brls::Label();
-        // Allow longer titles on multiple lines (wrap instead of truncate)
         std::string title = ep.title;
-        // Insert line breaks for very long titles (approximately every 50 chars at word boundary)
-        if (title.length() > 55) {
-            std::string wrappedTitle;
-            size_t lineStart = 0;
-            while (lineStart < title.length()) {
-                size_t lineEnd = std::min(lineStart + 55, title.length());
-                if (lineEnd < title.length()) {
-                    // Find last space before lineEnd
-                    size_t lastSpace = title.rfind(' ', lineEnd);
-                    if (lastSpace > lineStart && lastSpace != std::string::npos) {
-                        lineEnd = lastSpace;
-                    }
+        std::string title2;
+
+        // Split long titles into two lines
+        if (title.length() > 50) {
+            size_t splitPos = title.rfind(' ', 50);
+            if (splitPos != std::string::npos && splitPos > 20) {
+                title2 = title.substr(splitPos + 1);
+                title = title.substr(0, splitPos);
+                // Truncate second line if still too long
+                if (title2.length() > 50) {
+                    title2 = title2.substr(0, 47) + "...";
                 }
-                if (!wrappedTitle.empty()) wrappedTitle += "\n";
-                wrappedTitle += title.substr(lineStart, lineEnd - lineStart);
-                lineStart = lineEnd + 1;
-                if (wrappedTitle.length() > 120) {  // Max 2 lines
-                    wrappedTitle += "...";
-                    break;
-                }
+            } else {
+                // No good split point, just truncate
+                title = title.substr(0, 47) + "...";
             }
-            title = wrappedTitle;
         }
         titleLabel->setText(title);
         titleLabel->setFontSize(15);
         infoBox->addView(titleLabel);
+
+        // Second line of title if needed
+        if (!title2.empty()) {
+            auto* title2Label = new brls::Label();
+            title2Label->setText(title2);
+            title2Label->setFontSize(14);
+            title2Label->setTextColor(nvgRGB(200, 200, 200));
+            title2Label->setMarginTop(2);
+            infoBox->addView(title2Label);
+        }
 
         if (!ep.pubDate.empty()) {
             auto* dateLabel = new brls::Label();
             dateLabel->setText(ep.pubDate);
             dateLabel->setFontSize(12);
             dateLabel->setTextColor(nvgRGB(150, 150, 150));
-            dateLabel->setMarginTop(4);
+            dateLabel->setMarginTop(6);
             infoBox->addView(dateLabel);
         }
 
