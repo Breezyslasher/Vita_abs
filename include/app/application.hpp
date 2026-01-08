@@ -69,7 +69,6 @@ struct AppSettings {
     bool debugLogging = true;
 
     // Layout Settings
-    bool showLibrariesInSidebar = false;
     bool collapseSidebar = false;
     std::string hiddenLibraries;       // Comma-separated list of library IDs to hide
 

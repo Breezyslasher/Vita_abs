@@ -282,9 +282,9 @@ void MediaDetailView::loadDetails() {
         }
     }
 
-    // Load thumbnail
-    if (m_posterImage && !m_item.coverPath.empty()) {
-        std::string url = client.getCoverUrl(m_item.coverPath, 400, 600);
+    // Load thumbnail - use item ID for cover URL
+    if (m_posterImage && !m_item.id.empty()) {
+        std::string url = client.getCoverUrl(m_item.id, 400, 400);
         ImageLoader::loadAsync(url, [this](brls::Image* image) {
             // Image loaded
         }, m_posterImage);

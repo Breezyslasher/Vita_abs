@@ -134,14 +134,6 @@ void SettingsTab::createLayoutSection() {
     header->setTitle("Layout");
     m_contentBox->addView(header);
 
-    // Show libraries in sidebar toggle
-    m_sidebarLibrariesToggle = new brls::BooleanCell();
-    m_sidebarLibrariesToggle->init("Libraries in Sidebar", settings.showLibrariesInSidebar, [&settings](bool value) {
-        settings.showLibrariesInSidebar = value;
-        Application::getInstance().saveSettings();
-    });
-    m_contentBox->addView(m_sidebarLibrariesToggle);
-
     // Collapse sidebar toggle
     m_collapseSidebarToggle = new brls::BooleanCell();
     m_collapseSidebarToggle->init("Collapse Sidebar", settings.collapseSidebar, [&settings](bool value) {

@@ -73,8 +73,6 @@ set(APP_SOURCES
     src/activity/player_activity.cpp
 
     # Views
-    src/view/home_tab.cpp
-    src/view/library_tab.cpp
     src/view/library_section_tab.cpp
     src/view/search_tab.cpp
     src/view/settings_tab.cpp

@@ -17,10 +17,10 @@ MediaItemCell::MediaItemCell() {
     this->setCornerRadius(8);
     this->setBackgroundColor(nvgRGBA(50, 50, 50, 255));
 
-    // Thumbnail image
+    // Thumbnail image - square for audiobook/podcast covers
     m_thumbnailImage = new brls::Image();
-    m_thumbnailImage->setWidth(110);
-    m_thumbnailImage->setHeight(165);
+    m_thumbnailImage->setWidth(120);
+    m_thumbnailImage->setHeight(120);
     m_thumbnailImage->setScalingType(brls::ImageScalingType::FIT);
     m_thumbnailImage->setCornerRadius(4);
     this->addView(m_thumbnailImage);
@@ -58,10 +58,9 @@ MediaItemCell::MediaItemCell() {
 void MediaItemCell::setItem(const MediaItem& item) {
     m_item = item;
 
-    // Audiobookshelf uses square covers for most items
-    // Portrait poster style
-    m_thumbnailImage->setWidth(110);
-    m_thumbnailImage->setHeight(165);
+    // Audiobookshelf uses square covers
+    m_thumbnailImage->setWidth(120);
+    m_thumbnailImage->setHeight(120);
 
     // Set title
     if (m_titleLabel) {
@@ -92,7 +91,7 @@ void MediaItemCell::setItem(const MediaItem& item) {
     // Show progress bar for items with listening progress
     if (m_progressBar && item.currentTime > 0 && item.duration > 0) {
         float progress = item.currentTime / item.duration;
-        m_progressBar->setWidth(110 * progress);
+        m_progressBar->setWidth(120 * progress);
         m_progressBar->setVisibility(brls::Visibility::VISIBLE);
     }
 
@@ -105,13 +104,13 @@ void MediaItemCell::loadThumbnail() {
 
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
-    int width = 220;
-    int height = 330;
+    // Use square dimensions for audiobook/podcast covers
+    int size = 240;
 
-    std::string thumbPath = m_item.coverPath;
-    if (thumbPath.empty()) return;
+    // Use item ID for cover URL, not coverPath
+    if (m_item.id.empty()) return;
 
-    std::string url = client.getCoverUrl(thumbPath, width, height);
+    std::string url = client.getCoverUrl(m_item.id, size, size);
 
     ImageLoader::loadAsync(url, [this](brls::Image* image) {
         // Image loaded callback

@@ -306,7 +306,6 @@ bool Application::loadSettings() {
     m_settings.debugLogging = extractBool("debugLogging", true);
 
     // Load layout settings
-    m_settings.showLibrariesInSidebar = extractBool("showLibrariesInSidebar", false);
     m_settings.collapseSidebar = extractBool("collapseSidebar", false);
     m_settings.hiddenLibraries = extractString("hiddenLibraries");
 
@@ -385,7 +384,6 @@ bool Application::saveSettings() {
     json += "  \"debugLogging\": " + std::string(m_settings.debugLogging ? "true" : "false") + ",\n";
 
     // Layout settings
-    json += "  \"showLibrariesInSidebar\": " + std::string(m_settings.showLibrariesInSidebar ? "true" : "false") + ",\n";
     json += "  \"collapseSidebar\": " + std::string(m_settings.collapseSidebar ? "true" : "false") + ",\n";
     json += "  \"hiddenLibraries\": \"" + m_settings.hiddenLibraries + "\",\n";
 
