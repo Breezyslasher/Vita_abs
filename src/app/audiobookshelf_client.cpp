@@ -99,10 +99,34 @@ int64_t AudiobookshelfClient::extractJsonInt64(const std::string& json, const st
 std::string AudiobookshelfClient::extractJsonArray(const std::string& json, const std::string& key) {
     std::string searchKey = "\"" + key + "\"";
     size_t keyPos = json.find(searchKey);
-    if (keyPos == std::string::npos) return "";
+    if (keyPos == std::string::npos) {
+        brls::Logger::debug("extractJsonArray: key '{}' not found", key);
+        return "";
+    }
 
-    size_t arrStart = json.find('[', keyPos);
-    if (arrStart == std::string::npos) return "";
+    // Find the colon after the key
+    size_t colonPos = json.find(':', keyPos + searchKey.length());
+    if (colonPos == std::string::npos) {
+        brls::Logger::debug("extractJsonArray: no colon after key '{}'", key);
+        return "";
+    }
+
+    // Find the array bracket after the colon
+    size_t arrStart = json.find('[', colonPos);
+    if (arrStart == std::string::npos) {
+        brls::Logger::debug("extractJsonArray: no '[' after key '{}'", key);
+        return "";
+    }
+
+    // Make sure there's nothing but whitespace between colon and bracket
+    // This prevents matching arrays from other fields
+    for (size_t i = colonPos + 1; i < arrStart; i++) {
+        char c = json[i];
+        if (c != ' ' && c != '\t' && c != '\n' && c != '\r') {
+            brls::Logger::debug("extractJsonArray: non-whitespace '{}' between colon and '[' for key '{}'", c, key);
+            return "";
+        }
+    }
 
     int bracketCount = 1;
     size_t arrEnd = arrStart + 1;
@@ -112,16 +136,41 @@ std::string AudiobookshelfClient::extractJsonArray(const std::string& json, cons
         arrEnd++;
     }
 
-    return json.substr(arrStart, arrEnd - arrStart);
+    std::string result = json.substr(arrStart, arrEnd - arrStart);
+    brls::Logger::debug("extractJsonArray: found array for '{}' with {} chars", key, result.length());
+    return result;
 }
 
 std::string AudiobookshelfClient::extractJsonObject(const std::string& json, const std::string& key) {
     std::string searchKey = "\"" + key + "\"";
     size_t keyPos = json.find(searchKey);
-    if (keyPos == std::string::npos) return "";
+    if (keyPos == std::string::npos) {
+        brls::Logger::debug("extractJsonObject: key '{}' not found", key);
+        return "";
+    }
 
-    size_t objStart = json.find('{', keyPos);
-    if (objStart == std::string::npos) return "";
+    // Find the colon after the key
+    size_t colonPos = json.find(':', keyPos + searchKey.length());
+    if (colonPos == std::string::npos) {
+        brls::Logger::debug("extractJsonObject: no colon after key '{}'", key);
+        return "";
+    }
+
+    // Find the object bracket after the colon
+    size_t objStart = json.find('{', colonPos);
+    if (objStart == std::string::npos) {
+        brls::Logger::debug("extractJsonObject: no '{{' after key '{}'", key);
+        return "";
+    }
+
+    // Make sure there's nothing but whitespace between colon and bracket
+    for (size_t i = colonPos + 1; i < objStart; i++) {
+        char c = json[i];
+        if (c != ' ' && c != '\t' && c != '\n' && c != '\r') {
+            brls::Logger::debug("extractJsonObject: non-whitespace '{}' between colon and '{{' for key '{}'", c, key);
+            return "";
+        }
+    }
 
     int braceCount = 1;
     size_t objEnd = objStart + 1;
@@ -131,7 +180,9 @@ std::string AudiobookshelfClient::extractJsonObject(const std::string& json, con
         objEnd++;
     }
 
-    return json.substr(objStart, objEnd - objStart);
+    std::string result = json.substr(objStart, objEnd - objStart);
+    brls::Logger::debug("extractJsonObject: found object for '{}' with {} chars", key, result.length());
+    return result;
 }
 
 MediaItem AudiobookshelfClient::parseMediaItem(const std::string& json) {

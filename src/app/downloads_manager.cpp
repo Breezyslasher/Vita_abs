@@ -72,11 +72,14 @@ bool DownloadsManager::queueDownload(const std::string& itemId, const std::strin
 
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    // Check if already in queue
+    // Check if already in queue - for episodes, check both itemId AND episodeId
     for (const auto& item : m_downloads) {
         if (item.itemId == itemId) {
-            brls::Logger::warning("DownloadsManager: {} already in queue", title);
-            return false;
+            // For podcast episodes, also check episodeId since multiple episodes share podcastId
+            if (episodeId.empty() || item.episodeId == episodeId) {
+                brls::Logger::warning("DownloadsManager: {} already in queue", title);
+                return false;
+            }
         }
     }
 
@@ -95,15 +98,22 @@ bool DownloadsManager::queueDownload(const std::string& itemId, const std::strin
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
     item.coverUrl = client.getCoverUrl(itemId);
 
-    // Generate local path - audiobooks are typically m4b, mp3, or other audio formats
+    // Generate local path - for episodes use episodeId to ensure unique filenames
     std::string extension;
-    if (mediaType == "podcast" || !episodeId.empty()) {
+    std::string fileId;
+    if (!episodeId.empty()) {
+        // Podcast episode - use episodeId for unique filename
         extension = ".mp3";
+        fileId = episodeId;
+    } else if (mediaType == "podcast") {
+        extension = ".mp3";
+        fileId = itemId;
     } else {
-        // For audiobooks, use m4b (common audiobook format) or mp3
+        // For audiobooks, use m4b (common audiobook format)
         extension = ".m4b";
+        fileId = itemId;
     }
-    std::string filename = itemId + extension;
+    std::string filename = fileId + extension;
     item.localPath = m_downloadsPath + "/" + filename;
 
     brls::Logger::info("DownloadsManager: Local path: {}", item.localPath);
