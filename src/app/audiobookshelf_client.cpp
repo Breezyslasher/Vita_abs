@@ -970,7 +970,9 @@ bool AudiobookshelfClient::fetchItem(const std::string& itemId, MediaItem& item)
 
     HttpClient client;
     HttpRequest req;
-    req.url = buildApiUrl("/api/items/" + itemId + "?expanded=1");
+    // Use expanded=1 to get full response including chapters and audio files
+    // This matches the Kodi addon behavior for fetching complete item details
+    req.url = buildApiUrl("/api/items/" + itemId + "?expanded=1&include=progress");
     req.method = "GET";
     req.headers["Accept"] = "application/json";
     req.headers["Authorization"] = "Bearer " + m_authToken;
@@ -1077,6 +1079,55 @@ bool AudiobookshelfClient::fetchItemWithProgress(const std::string& itemId, Medi
     }
 
     item = parseMediaItem(resp.body);
+
+    // Extract chapters from the expanded response (same as fetchItem)
+    std::string mediaObj = extractJsonObject(resp.body, "media");
+    if (!mediaObj.empty()) {
+        size_t chaptersPos = mediaObj.find("\"chapters\"");
+        if (chaptersPos != std::string::npos) {
+            size_t colonPos = mediaObj.find(':', chaptersPos);
+            if (colonPos != std::string::npos) {
+                size_t arrStart = mediaObj.find('[', colonPos);
+                if (arrStart != std::string::npos) {
+                    int bracketCount = 1;
+                    size_t arrEnd = arrStart + 1;
+                    while (bracketCount > 0 && arrEnd < mediaObj.length()) {
+                        char c = mediaObj[arrEnd];
+                        if (c == '[') bracketCount++;
+                        else if (c == ']') bracketCount--;
+                        arrEnd++;
+                    }
+                    std::string chaptersArray = mediaObj.substr(arrStart, arrEnd - arrStart);
+
+                    // Parse individual chapters
+                    if (!chaptersArray.empty() && chaptersArray != "[]") {
+                        size_t pos = 0;
+                        while ((pos = chaptersArray.find("\"start\"", pos)) != std::string::npos) {
+                            size_t objStart = chaptersArray.rfind('{', pos);
+                            if (objStart == std::string::npos) { pos++; continue; }
+
+                            int braceCount = 1;
+                            size_t objEnd = objStart + 1;
+                            while (braceCount > 0 && objEnd < chaptersArray.length()) {
+                                if (chaptersArray[objEnd] == '{') braceCount++;
+                                else if (chaptersArray[objEnd] == '}') braceCount--;
+                                objEnd++;
+                            }
+
+                            std::string chObj = chaptersArray.substr(objStart, objEnd - objStart);
+                            Chapter ch = parseChapter(chObj);
+                            if (ch.end > ch.start) {
+                                item.chapters.push_back(ch);
+                            }
+                            pos = objEnd;
+                        }
+                        brls::Logger::debug("Parsed {} chapters", item.chapters.size());
+                    }
+                }
+            }
+        }
+    }
+
     return true;
 }
 
@@ -1254,6 +1305,263 @@ std::string AudiobookshelfClient::getStreamUrl(const std::string& itemId, const 
 std::string AudiobookshelfClient::getDirectStreamUrl(const std::string& itemId, int fileIndex) {
     // Direct file streaming URL
     std::string url = m_serverUrl + "/api/items/" + itemId + "/file/" + std::to_string(fileIndex);
+    url += "?token=" + m_authToken;
+    return url;
+}
+
+std::string AudiobookshelfClient::getFileDownloadUrl(const std::string& itemId, const std::string& episodeId) {
+    // Fetch item to get file info (like Kodi addon does)
+    // Kodi: item = self.get_library_item_by_id(iid, expanded=1, episode=episode_id)
+    brls::Logger::info("Getting file download URL for item: {}, episode: {}",
+                       itemId, episodeId.empty() ? "(none)" : episodeId);
+
+    HttpClient client;
+    HttpRequest req;
+    // Use expanded=1 for file URL like Kodi does in get_file_url()
+    req.url = buildApiUrl("/api/items/" + itemId + "?expanded=1");
+    req.method = "GET";
+    req.headers["Accept"] = "application/json";
+    req.headers["Authorization"] = "Bearer " + m_authToken;
+
+    HttpResponse resp = client.request(req);
+
+    if (resp.statusCode != 200) {
+        brls::Logger::error("Failed to get item for download URL: {}", resp.statusCode);
+        return "";
+    }
+
+    brls::Logger::debug("Response length: {} chars", resp.body.length());
+
+    std::string fileIno;
+    std::string mediaObj = extractJsonObject(resp.body, "media");
+
+    if (mediaObj.empty()) {
+        brls::Logger::error("Media object not found in response");
+        return "";
+    }
+
+    brls::Logger::debug("Media object: {} chars", mediaObj.length());
+
+    if (!episodeId.empty()) {
+        // Podcast episode - find the episode and get its audioFile.ino
+        // Kodi: episodes = item.get('media', {}).get('episodes', [])
+        brls::Logger::info("Looking for podcast episode: {}", episodeId);
+
+        std::string episodesArray = extractJsonArray(mediaObj, "episodes");
+        brls::Logger::debug("Episodes array: {} chars", episodesArray.length());
+
+        if (!episodesArray.empty()) {
+            size_t pos = 0;
+            while ((pos = episodesArray.find("\"id\"", pos)) != std::string::npos) {
+                size_t objStart = episodesArray.rfind('{', pos);
+                if (objStart == std::string::npos) { pos++; continue; }
+
+                int braceCount = 1;
+                size_t objEnd = objStart + 1;
+                while (braceCount > 0 && objEnd < episodesArray.length()) {
+                    if (episodesArray[objEnd] == '{') braceCount++;
+                    else if (episodesArray[objEnd] == '}') braceCount--;
+                    objEnd++;
+                }
+
+                std::string epObj = episodesArray.substr(objStart, objEnd - objStart);
+                std::string epId = extractJsonValue(epObj, "id");
+
+                if (epId == episodeId) {
+                    brls::Logger::info("Found episode: {}", episodeId);
+                    // Kodi: audio_file = episode_data['audioFile']
+                    //       ino = audio_file.get('ino')
+                    std::string audioFileObj = extractJsonObject(epObj, "audioFile");
+                    if (!audioFileObj.empty()) {
+                        fileIno = extractJsonValue(audioFileObj, "ino");
+                        brls::Logger::info("Episode audio file ino: {}", fileIno);
+                    } else {
+                        brls::Logger::warning("Episode has no audioFile - not downloaded on server?");
+                    }
+                    break;
+                }
+                pos = objEnd;
+            }
+
+            if (fileIno.empty()) {
+                brls::Logger::error("Episode {} not found in episodes list", episodeId);
+            }
+        } else {
+            brls::Logger::error("No episodes array found in media object");
+        }
+    } else {
+        // Audiobook - get audio file ino from media.audioFiles
+        // Kodi: audio_files = media.get('audioFiles', [])
+        //       sorted_files = sorted(audio_files, key=lambda x: x.get('index', 0))
+        //       ino = sorted_files[0].get('ino')
+        brls::Logger::info("Looking for audiobook audio files");
+
+        std::string audioFilesArray = extractJsonArray(mediaObj, "audioFiles");
+        brls::Logger::debug("audioFiles array: {} chars", audioFilesArray.length());
+
+        if (!audioFilesArray.empty()) {
+            // Find first audio file (lowest index)
+            size_t objStart = audioFilesArray.find('{');
+            if (objStart != std::string::npos) {
+                int braceCount = 1;
+                size_t objEnd = objStart + 1;
+                while (braceCount > 0 && objEnd < audioFilesArray.length()) {
+                    if (audioFilesArray[objEnd] == '{') braceCount++;
+                    else if (audioFilesArray[objEnd] == '}') braceCount--;
+                    objEnd++;
+                }
+                std::string firstFile = audioFilesArray.substr(objStart, objEnd - objStart);
+                fileIno = extractJsonValue(firstFile, "ino");
+                brls::Logger::info("First audio file ino: {}", fileIno);
+            }
+        }
+
+        // Fallback: check media.tracks for contentUrl (single file like m4b)
+        // Kodi: tracks = media.get('tracks', [])
+        //       content_url = tracks[0].get('contentUrl')
+        if (fileIno.empty()) {
+            brls::Logger::debug("No ino found, checking tracks for contentUrl");
+            std::string tracksArray = extractJsonArray(mediaObj, "tracks");
+            if (!tracksArray.empty()) {
+                size_t objStart = tracksArray.find('{');
+                if (objStart != std::string::npos) {
+                    int braceCount = 1;
+                    size_t objEnd = objStart + 1;
+                    while (braceCount > 0 && objEnd < tracksArray.length()) {
+                        if (tracksArray[objEnd] == '{') braceCount++;
+                        else if (tracksArray[objEnd] == '}') braceCount--;
+                        objEnd++;
+                    }
+                    std::string firstTrack = tracksArray.substr(objStart, objEnd - objStart);
+                    std::string contentUrl = extractJsonValue(firstTrack, "contentUrl");
+                    if (!contentUrl.empty()) {
+                        // Use contentUrl directly
+                        std::string url = m_serverUrl + contentUrl + "?token=" + m_authToken;
+                        brls::Logger::info("Using track contentUrl: {}", url);
+                        return url;
+                    }
+                }
+            }
+        }
+
+        // Fallback to libraryFiles if audioFiles doesn't have ino
+        if (fileIno.empty()) {
+            brls::Logger::debug("Trying libraryFiles fallback");
+            std::string libFilesArray = extractJsonArray(resp.body, "libraryFiles");
+            if (!libFilesArray.empty()) {
+                // Find first audio file
+                size_t pos = 0;
+                while ((pos = libFilesArray.find("\"ino\"", pos)) != std::string::npos) {
+                    size_t objStart = libFilesArray.rfind('{', pos);
+                    if (objStart == std::string::npos) { pos++; continue; }
+
+                    int braceCount = 1;
+                    size_t objEnd = objStart + 1;
+                    while (braceCount > 0 && objEnd < libFilesArray.length()) {
+                        if (libFilesArray[objEnd] == '{') braceCount++;
+                        else if (libFilesArray[objEnd] == '}') braceCount--;
+                        objEnd++;
+                    }
+
+                    std::string fileObj = libFilesArray.substr(objStart, objEnd - objStart);
+                    std::string fileType = extractJsonValue(fileObj, "fileType");
+
+                    // Check if it's an audio file
+                    if (fileType == "audio") {
+                        fileIno = extractJsonValue(fileObj, "ino");
+                        break;
+                    }
+                    pos = objEnd;
+                }
+            }
+        }
+    }
+
+    if (fileIno.empty()) {
+        brls::Logger::error("Could not find file ino for item: {}", itemId);
+        // Fallback to old method
+        return getDirectStreamUrl(itemId, 0);
+    }
+
+    // Build URL: /api/items/{id}/file/{ino}?token={token}
+    std::string url = m_serverUrl + "/api/items/" + itemId + "/file/" + fileIno;
+    url += "?token=" + m_authToken;
+
+    brls::Logger::debug("File download URL: {}", url);
+    return url;
+}
+
+bool AudiobookshelfClient::getAudioFiles(const std::string& itemId, std::vector<AudioFileInfo>& files) {
+    brls::Logger::debug("Getting audio files for item: {}", itemId);
+
+    files.clear();
+
+    HttpClient client;
+    HttpRequest req;
+    req.url = buildApiUrl("/api/items/" + itemId);
+    req.method = "GET";
+    req.headers["Accept"] = "application/json";
+    req.headers["Authorization"] = "Bearer " + m_authToken;
+
+    HttpResponse resp = client.request(req);
+
+    if (resp.statusCode != 200) {
+        brls::Logger::error("Failed to get item for audio files: {}", resp.statusCode);
+        return false;
+    }
+
+    std::string mediaObj = extractJsonObject(resp.body, "media");
+    std::string audioFilesArray = extractJsonArray(mediaObj, "audioFiles");
+
+    if (audioFilesArray.empty()) {
+        brls::Logger::debug("No audio files in item");
+        return false;
+    }
+
+    // Parse each audio file
+    size_t pos = 0;
+    while (true) {
+        size_t objStart = audioFilesArray.find('{', pos);
+        if (objStart == std::string::npos) break;
+
+        int braceCount = 1;
+        size_t objEnd = objStart + 1;
+        while (braceCount > 0 && objEnd < audioFilesArray.length()) {
+            if (audioFilesArray[objEnd] == '{') braceCount++;
+            else if (audioFilesArray[objEnd] == '}') braceCount--;
+            objEnd++;
+        }
+
+        std::string fileObj = audioFilesArray.substr(objStart, objEnd - objStart);
+
+        AudioFileInfo info;
+        info.ino = extractJsonValue(fileObj, "ino");
+
+        // Get metadata from nested object
+        std::string metadataObj = extractJsonObject(fileObj, "metadata");
+        if (!metadataObj.empty()) {
+            info.filename = extractJsonValue(metadataObj, "filename");
+            // Use int64 for file size to support files > 2GB
+            info.size = extractJsonInt64(metadataObj, "size");
+        }
+
+        info.duration = extractJsonFloat(fileObj, "duration");
+        info.mimeType = extractJsonValue(fileObj, "mimeType");
+
+        if (!info.ino.empty()) {
+            files.push_back(info);
+            brls::Logger::debug("Found audio file: {} (ino: {})", info.filename, info.ino);
+        }
+
+        pos = objEnd;
+    }
+
+    brls::Logger::info("Found {} audio files for item", files.size());
+    return !files.empty();
+}
+
+std::string AudiobookshelfClient::getFileDownloadUrlByIno(const std::string& itemId, const std::string& ino) {
+    std::string url = m_serverUrl + "/api/items/" + itemId + "/file/" + ino;
     url += "?token=" + m_authToken;
     return url;
 }

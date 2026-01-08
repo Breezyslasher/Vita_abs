@@ -231,6 +231,23 @@ std::string DownloadsManager::getLocalPath(const std::string& itemId) const {
     return "";
 }
 
+std::string DownloadsManager::getPlaybackPath(const std::string& itemId) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (const auto& item : m_downloads) {
+        if (item.itemId == itemId && item.state == DownloadState::COMPLETED) {
+            // For multi-file audiobooks, return the first file
+            if (item.numFiles > 1 && !item.files.empty()) {
+                brls::Logger::debug("DownloadsManager: Multi-file audiobook, returning first file: {}",
+                                   item.files[0].localPath);
+                return item.files[0].localPath;
+            }
+            // Single file or direct path
+            return item.localPath;
+        }
+    }
+    return "";
+}
+
 void DownloadsManager::updateProgress(const std::string& itemId, float currentTime) {
     std::lock_guard<std::mutex> lock(m_mutex);
     for (auto& item : m_downloads) {
@@ -396,9 +413,27 @@ void DownloadsManager::saveState() {
            << "\"currentTime\":" << item.currentTime << ",\n"
            << "\"duration\":" << item.duration << ",\n"
            << "\"currentTime\":" << item.currentTime << ",\n"
+           << "\"viewOffset\":" << item.viewOffset << ",\n"
+           << "\"numChapters\":" << item.numChapters << ",\n"
+           << "\"numFiles\":" << item.numFiles << ",\n"
            << "\"state\":" << static_cast<int>(item.state) << ",\n"
-           << "\"lastSynced\":" << item.lastSynced << "\n"
-           << "}";
+           << "\"lastSynced\":" << item.lastSynced << ",\n";
+
+        // Save multi-file info
+        ss << "\"files\":[";
+        for (size_t j = 0; j < item.files.size(); ++j) {
+            const auto& fi = item.files[j];
+            ss << "{"
+               << "\"ino\":\"" << fi.ino << "\","
+               << "\"filename\":\"" << fi.filename << "\","
+               << "\"localPath\":\"" << fi.localPath << "\","
+               << "\"size\":" << fi.size << ","
+               << "\"downloaded\":" << (fi.downloaded ? "true" : "false")
+               << "}";
+            if (j < item.files.size() - 1) ss << ",";
+        }
+        ss << "]\n}";
+
         if (i < m_downloads.size() - 1) ss << ",";
         ss << "\n";
     }
@@ -451,10 +486,159 @@ void DownloadsManager::loadState() {
         return;
     }
 
-    // Simple parsing - in production use proper JSON parser
     brls::Logger::info("DownloadsManager: Loading saved state...");
 
-    // TODO: Implement proper JSON parsing for download items
+    // Helper to extract string value from JSON
+    auto extractValue = [](const std::string& json, const std::string& key) -> std::string {
+        std::string searchKey = "\"" + key + "\":";
+        size_t keyPos = json.find(searchKey);
+        if (keyPos == std::string::npos) return "";
+
+        size_t valueStart = json.find_first_not_of(" \t\n\r", keyPos + searchKey.length());
+        if (valueStart == std::string::npos) return "";
+
+        if (json[valueStart] == '"') {
+            size_t valueEnd = valueStart + 1;
+            while (valueEnd < json.length()) {
+                if (json[valueEnd] == '"' && json[valueEnd - 1] != '\\') break;
+                valueEnd++;
+            }
+            return json.substr(valueStart + 1, valueEnd - valueStart - 1);
+        } else if (json[valueStart] == 't' || json[valueStart] == 'f') {
+            // Boolean
+            if (json.substr(valueStart, 4) == "true") return "true";
+            if (json.substr(valueStart, 5) == "false") return "false";
+            return "";
+        } else {
+            size_t valueEnd = json.find_first_of(",}]", valueStart);
+            if (valueEnd == std::string::npos) return "";
+            std::string value = json.substr(valueStart, valueEnd - valueStart);
+            while (!value.empty() && (value.back() == ' ' || value.back() == '\n' || value.back() == '\r')) {
+                value.pop_back();
+            }
+            return value;
+        }
+    };
+
+    // Find downloads array
+    size_t arrStart = content.find("[");
+    if (arrStart == std::string::npos) {
+        brls::Logger::warning("DownloadsManager: Invalid state format");
+        return;
+    }
+
+    // Parse each download item object
+    size_t pos = arrStart;
+    while (true) {
+        size_t objStart = content.find('{', pos);
+        if (objStart == std::string::npos) break;
+
+        // Skip the files array objects - look for itemId to identify download items
+        size_t itemIdPos = content.find("\"itemId\"", objStart);
+        if (itemIdPos == std::string::npos) break;
+
+        // Check if this itemId is within a reasonable distance (not a nested object)
+        if (itemIdPos - objStart > 50) {
+            pos = objStart + 1;
+            continue;
+        }
+
+        // Find the end of this object (matching braces)
+        int braceCount = 1;
+        size_t objEnd = objStart + 1;
+        while (braceCount > 0 && objEnd < content.length()) {
+            if (content[objEnd] == '{') braceCount++;
+            else if (content[objEnd] == '}') braceCount--;
+            objEnd++;
+        }
+
+        std::string itemJson = content.substr(objStart, objEnd - objStart);
+
+        DownloadItem item;
+        item.itemId = extractValue(itemJson, "itemId");
+        item.episodeId = extractValue(itemJson, "episodeId");
+        item.title = extractValue(itemJson, "title");
+        item.authorName = extractValue(itemJson, "authorName");
+        item.parentTitle = extractValue(itemJson, "parentTitle");
+        item.localPath = extractValue(itemJson, "localPath");
+        item.coverUrl = extractValue(itemJson, "coverUrl");
+        item.mediaType = extractValue(itemJson, "mediaType");
+        item.seriesName = extractValue(itemJson, "seriesName");
+
+        std::string totalBytesStr = extractValue(itemJson, "totalBytes");
+        item.totalBytes = totalBytesStr.empty() ? 0 : std::stoll(totalBytesStr);
+
+        std::string downloadedBytesStr = extractValue(itemJson, "downloadedBytes");
+        item.downloadedBytes = downloadedBytesStr.empty() ? 0 : std::stoll(downloadedBytesStr);
+
+        std::string durationStr = extractValue(itemJson, "duration");
+        item.duration = durationStr.empty() ? 0.0f : std::stof(durationStr);
+
+        std::string currentTimeStr = extractValue(itemJson, "currentTime");
+        item.currentTime = currentTimeStr.empty() ? 0.0f : std::stof(currentTimeStr);
+
+        std::string viewOffsetStr = extractValue(itemJson, "viewOffset");
+        item.viewOffset = viewOffsetStr.empty() ? 0 : std::stoll(viewOffsetStr);
+
+        std::string numChaptersStr = extractValue(itemJson, "numChapters");
+        item.numChapters = numChaptersStr.empty() ? 0 : std::stoi(numChaptersStr);
+
+        std::string numFilesStr = extractValue(itemJson, "numFiles");
+        item.numFiles = numFilesStr.empty() ? 1 : std::stoi(numFilesStr);
+
+        std::string stateStr = extractValue(itemJson, "state");
+        item.state = stateStr.empty() ? DownloadState::QUEUED : static_cast<DownloadState>(std::stoi(stateStr));
+
+        std::string lastSyncedStr = extractValue(itemJson, "lastSynced");
+        item.lastSynced = lastSyncedStr.empty() ? 0 : std::stoll(lastSyncedStr);
+
+        // Parse files array for multi-file downloads
+        size_t filesStart = itemJson.find("\"files\":[");
+        if (filesStart != std::string::npos) {
+            size_t filesArrStart = itemJson.find('[', filesStart);
+            size_t filesArrEnd = itemJson.find(']', filesArrStart);
+            if (filesArrStart != std::string::npos && filesArrEnd != std::string::npos) {
+                std::string filesJson = itemJson.substr(filesArrStart, filesArrEnd - filesArrStart + 1);
+
+                size_t filePos = 0;
+                while (true) {
+                    size_t fileObjStart = filesJson.find('{', filePos);
+                    if (fileObjStart == std::string::npos) break;
+
+                    size_t fileObjEnd = filesJson.find('}', fileObjStart);
+                    if (fileObjEnd == std::string::npos) break;
+
+                    std::string fileJson = filesJson.substr(fileObjStart, fileObjEnd - fileObjStart + 1);
+
+                    DownloadFileInfo fi;
+                    fi.ino = extractValue(fileJson, "ino");
+                    fi.filename = extractValue(fileJson, "filename");
+                    fi.localPath = extractValue(fileJson, "localPath");
+
+                    std::string sizeStr = extractValue(fileJson, "size");
+                    fi.size = sizeStr.empty() ? 0 : std::stoll(sizeStr);
+
+                    fi.downloaded = extractValue(fileJson, "downloaded") == "true";
+
+                    if (!fi.localPath.empty()) {
+                        item.files.push_back(fi);
+                    }
+
+                    filePos = fileObjEnd + 1;
+                }
+            }
+        }
+
+        if (!item.itemId.empty()) {
+            m_downloads.push_back(item);
+            brls::Logger::debug("DownloadsManager: Loaded download: {} (state: {})",
+                               item.title, static_cast<int>(item.state));
+        }
+
+        pos = objEnd;
+    }
+
+    brls::Logger::info("DownloadsManager: Loaded {} downloads from state", m_downloads.size());
 }
 
 void DownloadsManager::setProgressCallback(DownloadProgressCallback callback) {

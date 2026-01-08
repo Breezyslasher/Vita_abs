@@ -81,6 +81,9 @@ public:
     // Get local playback path for downloaded media
     std::string getLocalPath(const std::string& itemId) const;
 
+    // Get playback path for multi-file audiobooks (returns first file or single file path)
+    std::string getPlaybackPath(const std::string& itemId) const;
+
     // Update watch progress for downloaded media
     void updateProgress(const std::string& itemId, float currentTime);
 

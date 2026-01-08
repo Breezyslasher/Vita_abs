@@ -195,7 +195,15 @@ void PlayerActivity::loadMedia() {
             return;
         }
 
-        brls::Logger::info("PlayerActivity: Playing local file: {}", download->localPath);
+        // Get the playback path (handles multi-file audiobooks)
+        std::string playbackPath = downloads.getPlaybackPath(m_itemId);
+        if (playbackPath.empty()) {
+            brls::Logger::error("PlayerActivity: Could not get playback path for: {}", m_itemId);
+            m_loadingMedia = false;
+            return;
+        }
+
+        brls::Logger::info("PlayerActivity: Playing local file: {}", playbackPath);
 
         if (titleLabel) {
             std::string title = download->title;
@@ -215,9 +223,9 @@ void PlayerActivity::loadMedia() {
             }
         }
 
-        // Load local file
-        if (!player.loadUrl(download->localPath, download->title)) {
-            brls::Logger::error("Failed to load local file: {}", download->localPath);
+        // Load local file (using playback path for multi-file support)
+        if (!player.loadUrl(playbackPath, download->title)) {
+            brls::Logger::error("Failed to load local file: {}", playbackPath);
             m_loadingMedia = false;
             return;
         }
