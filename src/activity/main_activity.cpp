@@ -49,14 +49,14 @@ void MainActivity::onContentAvailable() {
             // Offline mode - show only Downloads and Settings
             brls::Logger::info("MainActivity: Offline mode - showing Downloads and Settings only");
 
-            // Set sidebar width for offline mode
+            // Set sidebar width for offline mode (wider to fit "Offline Mode" text)
             brls::View* sidebar = tabFrame->getView("brls/tab_frame/sidebar");
             if (sidebar) {
-                sidebar->setWidth(200);
+                sidebar->setWidth(220);
             }
 
             // Add offline notice tab
-            tabFrame->addTab("Offline Mode", []() {
+            tabFrame->addTab("Offline", []() {
                 auto* box = new brls::Box();
                 box->setAxis(brls::Axis::COLUMN);
                 box->setPadding(40);
