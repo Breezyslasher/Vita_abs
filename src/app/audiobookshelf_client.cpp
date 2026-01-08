@@ -655,6 +655,18 @@ bool AudiobookshelfClient::fetchLibraryItems(const std::string& libraryId, std::
 
     items.clear();
 
+    // Get library mediaType from response to set on items that don't have it
+    std::string libraryMediaType = extractJsonValue(resp.body, "mediaType");
+    if (libraryMediaType.empty()) {
+        // Try to get it from the library info
+        Library lib;
+        if (fetchLibrary(libraryId, lib)) {
+            libraryMediaType = lib.mediaType;
+        }
+    }
+    MediaType defaultMediaType = parseMediaType(libraryMediaType);
+    brls::Logger::debug("Library media type: {} (enum: {})", libraryMediaType, static_cast<int>(defaultMediaType));
+
     // Parse results array
     std::string resultsArray = extractJsonArray(resp.body, "results");
     if (resultsArray.empty()) {
@@ -680,6 +692,12 @@ bool AudiobookshelfClient::fetchLibraryItems(const std::string& libraryId, std::
         std::string obj = resultsArray.substr(objStart, objEnd - objStart);
         MediaItem item = parseMediaItem(obj);
 
+        // If mediaType wasn't set from item JSON, use library's mediaType
+        if (item.mediaType == MediaType::UNKNOWN && defaultMediaType != MediaType::UNKNOWN) {
+            item.mediaType = defaultMediaType;
+            item.type = libraryMediaType;
+        }
+
         if (!item.id.empty() && !item.title.empty()) {
             items.push_back(item);
         }
@@ -693,6 +711,11 @@ bool AudiobookshelfClient::fetchLibraryItems(const std::string& libraryId, std::
 
 bool AudiobookshelfClient::fetchLibraryPersonalized(const std::string& libraryId, std::vector<PersonalizedShelf>& shelves) {
     brls::Logger::debug("Fetching personalized content for library: {}", libraryId);
+
+    // Get library info for mediaType
+    Library lib;
+    fetchLibrary(libraryId, lib);
+    MediaType defaultMediaType = parseMediaType(lib.mediaType);
 
     HttpClient client;
     HttpRequest req;
@@ -765,6 +788,12 @@ bool AudiobookshelfClient::fetchLibraryPersonalized(const std::string& libraryId
 
                 std::string entObj = entitiesArray.substr(entStart, entEnd - entStart);
                 MediaItem item = parseMediaItem(entObj);
+
+                // Set mediaType from library if not set
+                if (item.mediaType == MediaType::UNKNOWN && defaultMediaType != MediaType::UNKNOWN) {
+                    item.mediaType = defaultMediaType;
+                    item.type = lib.mediaType;
+                }
 
                 if (!item.id.empty() && !item.title.empty()) {
                     shelf.entities.push_back(item);
@@ -964,6 +993,11 @@ bool AudiobookshelfClient::fetchLibraryAuthors(const std::string& libraryId, std
 bool AudiobookshelfClient::fetchRecentlyAdded(const std::string& libraryId, std::vector<MediaItem>& items) {
     brls::Logger::debug("Fetching recently added for library: {}", libraryId);
 
+    // Get library info for mediaType
+    Library lib;
+    fetchLibrary(libraryId, lib);
+    MediaType defaultMediaType = parseMediaType(lib.mediaType);
+
     // Use library items with sort by addedAt descending
     HttpClient client;
     HttpRequest req;
@@ -1004,6 +1038,12 @@ bool AudiobookshelfClient::fetchRecentlyAdded(const std::string& libraryId, std:
 
         std::string obj = resultsArray.substr(objStart, objEnd - objStart);
         MediaItem item = parseMediaItem(obj);
+
+        // Set mediaType from library if not set
+        if (item.mediaType == MediaType::UNKNOWN && defaultMediaType != MediaType::UNKNOWN) {
+            item.mediaType = defaultMediaType;
+            item.type = lib.mediaType;
+        }
 
         if (!item.id.empty() && !item.title.empty()) {
             items.push_back(item);

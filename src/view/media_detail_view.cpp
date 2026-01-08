@@ -303,6 +303,29 @@ void MediaDetailView::loadDetails() {
                 m_downloadButton->setText("Download");
             }
         }
+
+        // Create chapters container if it wasn't created in constructor
+        // (happens when mediaType wasn't known from library listing)
+        if (m_item.mediaType == MediaType::BOOK && !m_chaptersBox && m_mainContent) {
+            brls::Logger::debug("Creating chapters container after loading full item details");
+
+            auto* chaptersLabel = new brls::Label();
+            chaptersLabel->setText("Chapters");
+            chaptersLabel->setFontSize(20);
+            chaptersLabel->setMarginBottom(10);
+            chaptersLabel->setMarginTop(10);
+            m_mainContent->addView(chaptersLabel);
+
+            m_chaptersScroll = new brls::ScrollingFrame();
+            m_chaptersScroll->setHeight(250);
+            m_chaptersScroll->setMarginBottom(20);
+
+            m_chaptersBox = new brls::Box();
+            m_chaptersBox->setAxis(brls::Axis::COLUMN);
+
+            m_chaptersScroll->setContentView(m_chaptersBox);
+            m_mainContent->addView(m_chaptersScroll);
+        }
     }
 
     // Load thumbnail - use item ID for cover URL
@@ -320,6 +343,7 @@ void MediaDetailView::loadDetails() {
 
     // Populate chapters for audiobooks
     if (m_item.mediaType == MediaType::BOOK) {
+        brls::Logger::debug("Populating chapters for book: {} chapters available", m_item.chapters.size());
         populateChapters();
     }
 }
