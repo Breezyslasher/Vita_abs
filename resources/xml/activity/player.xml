@@ -125,16 +125,17 @@
         <brls:Button
             id="player/btnForward"
             style="borderless"
-            width="90"
+            width="100"
             height="70"
-            marginLeft="25">
+            marginLeft="20">
             <brls:Label
                 id="player/forwardLabel"
                 text="+30"
                 fontSize="18"
                 textColor="#ffffff"
                 horizontalAlign="center"
-                width="90"/>
+                width="100"
+                singleLine="true"/>
         </brls:Button>
 
     </brls:Box>
