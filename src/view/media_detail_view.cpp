@@ -813,7 +813,7 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                 // Continue to the result handling below (will register download and update UI)
 
             } else {
-                // Play mode: download first track, start playback, download rest in background
+                // Play mode: download track containing resume position, start playback, download rest in background
                 std::string currentTrackPath;
                 int currentTrackIdx = 0;
                 float trackSeekTime = startTime;
@@ -832,10 +832,11 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                     }
                 }
 
-                // Download all tracks, starting with the current one
-                brls::Logger::info("Downloading {} tracks for multi-file audiobook", numTracks);
+                // Download track containing resume position first, then rest in background
+                brls::Logger::info("Downloading {} tracks for multi-file audiobook (starting with track {} for resume)",
+                                  numTracks, currentTrackIdx + 1);
 
-                // First, download the current track so we can start playing
+                // First, download the track containing resume position so we can start playing
                 {
                     const AudioTrack& track = session.audioTracks[currentTrackIdx];
                     std::string trackUrl = client.getStreamUrl(track.contentUrl, "");
