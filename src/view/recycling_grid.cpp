@@ -16,8 +16,8 @@ RecyclingGrid::RecyclingGrid() {
     m_contentBox->setPadding(10);
     this->setContentView(m_contentBox);
 
-    // PS Vita screen: 960x544, so 4 columns of ~120px items works well
-    m_columns = 6;
+    // PS Vita screen: 960x544, use 5 columns of 150px square items
+    m_columns = 5;
     m_visibleRows = 3;
 }
 
@@ -50,8 +50,8 @@ void RecyclingGrid::rebuildGrid() {
 
         auto* cell = new MediaItemCell();
         cell->setItem(m_items[i]);
-        cell->setWidth(140);
-        cell->setHeight(200);
+        cell->setWidth(150);
+        cell->setHeight(185);  // Square cover (140) + labels (~45)
         cell->setMarginRight(10);
 
         int index = (int)i;

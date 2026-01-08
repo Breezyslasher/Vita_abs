@@ -108,19 +108,33 @@ PodcastSearchTab::PodcastSearchTab(const std::string& libraryId)
     subtitleLabel->setMarginBottom(20);
     this->addView(subtitleLabel);
 
-    // Search input (using DetailCell as a button to trigger input)
-    brls::DetailCell* searchCell = new brls::DetailCell();
-    searchCell->init("Search", "Tap to search for podcasts...", [this](brls::View*) {
+    // Search input (using Label as a clickable button to trigger keyboard)
+    m_searchBox = new brls::Box();
+    m_searchBox->setAxis(brls::Axis::ROW);
+    m_searchBox->setAlignItems(brls::AlignItems::CENTER);
+    m_searchBox->setPadding(15);
+    m_searchBox->setBackgroundColor(nvgRGBA(60, 60, 60, 255));
+    m_searchBox->setCornerRadius(8);
+    m_searchBox->setMarginBottom(20);
+    m_searchBox->setFocusable(true);
+
+    brls::Label* searchLabel = new brls::Label();
+    searchLabel->setText("Tap to search for podcasts...");
+    searchLabel->setFontSize(16);
+    searchLabel->setTextColor(nvgRGB(180, 180, 180));
+    m_searchBox->addView(searchLabel);
+
+    m_searchBox->registerClickAction([this, searchLabel](brls::View*) {
         // Open on-screen keyboard for search
-        brls::Swkbd::openForText([this](std::string query) {
+        brls::Application::getImeManager()->openForText([this, searchLabel](std::string query) {
             if (!query.empty()) {
+                searchLabel->setText("Search: " + query);
                 onSearch(query);
             }
-        }, "Search Podcasts", "", 100, "", 0, 0);
+        }, "Search Podcasts", "Enter podcast name", 100, "");
         return true;
     });
-    searchCell->setMarginBottom(20);
-    this->addView(searchCell);
+    this->addView(m_searchBox);
 
     // Results scroll container
     m_resultsScroll = new brls::ScrollingFrame();
@@ -151,7 +165,7 @@ void PodcastSearchTab::onSearch(const std::string& query) {
 
     // Perform search asynchronously
     std::string searchQuery = query;
-    Async::run([this, searchQuery]() {
+    asyncRun([this, searchQuery]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<PodcastSearchResult> results;
         client.searchPodcasts(searchQuery, results);
@@ -208,7 +222,7 @@ void PodcastSearchTab::onPodcastSelected(const PodcastSearchResult& podcast) {
 void PodcastSearchTab::addPodcast(const PodcastSearchResult& podcast) {
     brls::Logger::info("PodcastSearchTab: Adding podcast from feed: {}", podcast.feedUrl);
 
-    Async::run([this, podcast]() {
+    asyncRun([this, podcast]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         bool success = client.addPodcastToLibrary(m_libraryId, podcast.feedUrl);
 

@@ -19,8 +19,8 @@ MediaItemCell::MediaItemCell() {
 
     // Thumbnail image - square for audiobook/podcast covers
     m_thumbnailImage = new brls::Image();
-    m_thumbnailImage->setWidth(120);
-    m_thumbnailImage->setHeight(120);
+    m_thumbnailImage->setWidth(140);
+    m_thumbnailImage->setHeight(140);
     m_thumbnailImage->setScalingType(brls::ImageScalingType::FIT);
     m_thumbnailImage->setCornerRadius(4);
     this->addView(m_thumbnailImage);
@@ -59,15 +59,15 @@ void MediaItemCell::setItem(const MediaItem& item) {
     m_item = item;
 
     // Audiobookshelf uses square covers
-    m_thumbnailImage->setWidth(120);
-    m_thumbnailImage->setHeight(120);
+    m_thumbnailImage->setWidth(140);
+    m_thumbnailImage->setHeight(140);
 
     // Set title
     if (m_titleLabel) {
         std::string title = item.title;
         // Truncate long titles
-        if (title.length() > 15) {
-            title = title.substr(0, 13) + "...";
+        if (title.length() > 18) {
+            title = title.substr(0, 16) + "...";
         }
         m_originalTitle = title;  // Store truncated title for focus restore
         m_titleLabel->setText(title);
@@ -91,7 +91,7 @@ void MediaItemCell::setItem(const MediaItem& item) {
     // Show progress bar for items with listening progress
     if (m_progressBar && item.currentTime > 0 && item.duration > 0) {
         float progress = item.currentTime / item.duration;
-        m_progressBar->setWidth(120 * progress);
+        m_progressBar->setWidth(140 * progress);
         m_progressBar->setVisibility(brls::Visibility::VISIBLE);
     }
 
@@ -104,16 +104,20 @@ void MediaItemCell::loadThumbnail() {
 
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
-    // Use square dimensions for audiobook/podcast covers
-    int size = 240;
+    // Use square dimensions for audiobook/podcast covers (request larger size for quality)
+    int size = 280;
 
     // Use item ID for cover URL, not coverPath
-    if (m_item.id.empty()) return;
+    if (m_item.id.empty()) {
+        brls::Logger::debug("MediaItemCell: No item ID for cover");
+        return;
+    }
 
     std::string url = client.getCoverUrl(m_item.id, size, size);
+    brls::Logger::debug("MediaItemCell: Loading cover from {}", url);
 
     ImageLoader::loadAsync(url, [this](brls::Image* image) {
-        // Image loaded callback
+        brls::Logger::debug("MediaItemCell: Cover loaded for {}", m_item.title);
     }, m_thumbnailImage);
 }
 
