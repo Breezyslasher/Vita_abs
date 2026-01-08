@@ -1771,9 +1771,39 @@ bool AudiobookshelfClient::searchPodcasts(const std::string& query, std::vector<
     return true;
 }
 
-bool AudiobookshelfClient::addPodcastToLibrary(const std::string& libraryId, const std::string& feedUrl,
+bool AudiobookshelfClient::addPodcastToLibrary(const std::string& libraryId, const PodcastSearchResult& podcast,
                                                 const std::string& folderId) {
-    brls::Logger::debug("Adding podcast to library {} from feed: {}", libraryId, feedUrl);
+    brls::Logger::debug("Adding podcast '{}' to library {} from feed: {}", podcast.title, libraryId, podcast.feedUrl);
+
+    // Get folder ID if not provided - fetch from library
+    std::string folder = folderId;
+    if (folder.empty()) {
+        // Fetch library to get first folder
+        HttpClient libClient;
+        HttpRequest libReq;
+        libReq.url = buildApiUrl("/api/libraries/" + libraryId);
+        libReq.method = "GET";
+        libReq.headers["Accept"] = "application/json";
+        libReq.headers["Authorization"] = "Bearer " + m_authToken;
+
+        HttpResponse libResp = libClient.request(libReq);
+        if (libResp.statusCode == 200) {
+            // Extract first folder ID
+            std::string foldersArray = extractJsonArray(libResp.body, "folders");
+            if (!foldersArray.empty()) {
+                size_t idPos = foldersArray.find("\"id\"");
+                if (idPos != std::string::npos) {
+                    folder = extractJsonValue(foldersArray, "id");
+                    brls::Logger::debug("Using folder ID: {}", folder);
+                }
+            }
+        }
+    }
+
+    if (folder.empty()) {
+        brls::Logger::error("No folder ID available for library {}", libraryId);
+        return false;
+    }
 
     HttpClient client;
     HttpRequest req;
@@ -1783,20 +1813,50 @@ bool AudiobookshelfClient::addPodcastToLibrary(const std::string& libraryId, con
     req.headers["Content-Type"] = "application/json";
     req.headers["Authorization"] = "Bearer " + m_authToken;
 
-    // Build request body
+    // Helper to escape JSON strings
+    auto escapeJson = [](const std::string& s) -> std::string {
+        std::string result;
+        for (char c : s) {
+            switch (c) {
+                case '"': result += "\\\""; break;
+                case '\\': result += "\\\\"; break;
+                case '\n': result += "\\n"; break;
+                case '\r': result += "\\r"; break;
+                case '\t': result += "\\t"; break;
+                default: result += c;
+            }
+        }
+        return result;
+    };
+
+    // Build request body with proper media.metadata structure
     std::string body = "{";
     body += "\"libraryId\":\"" + libraryId + "\",";
-    body += "\"feedUrl\":\"" + feedUrl + "\"";
-    if (!folderId.empty()) {
-        body += ",\"folderId\":\"" + folderId + "\"";
+    body += "\"folderId\":\"" + folder + "\",";
+    body += "\"media\":{";
+    body += "\"metadata\":{";
+    body += "\"title\":\"" + escapeJson(podcast.title) + "\",";
+    body += "\"feedUrl\":\"" + escapeJson(podcast.feedUrl) + "\"";
+    if (!podcast.author.empty()) {
+        body += ",\"author\":\"" + escapeJson(podcast.author) + "\"";
     }
+    if (!podcast.description.empty()) {
+        body += ",\"description\":\"" + escapeJson(podcast.description) + "\"";
+    }
+    if (!podcast.artworkUrl.empty()) {
+        body += ",\"imageUrl\":\"" + escapeJson(podcast.artworkUrl) + "\"";
+    }
+    body += "}},";  // Close metadata and media
+    body += "\"autoDownloadEpisodes\":false";
     body += "}";
+
+    brls::Logger::debug("Add podcast request body: {}", body);
     req.body = body;
 
     HttpResponse resp = client.request(req);
 
     if (resp.statusCode == 200 || resp.statusCode == 201) {
-        brls::Logger::info("Successfully added podcast from feed: {}", feedUrl);
+        brls::Logger::info("Successfully added podcast '{}' to library", podcast.title);
         return true;
     }
 

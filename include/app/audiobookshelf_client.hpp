@@ -266,7 +266,7 @@ public:
 
     // Podcast Management (iTunes search and RSS)
     bool searchPodcasts(const std::string& query, std::vector<PodcastSearchResult>& results);
-    bool addPodcastToLibrary(const std::string& libraryId, const std::string& feedUrl,
+    bool addPodcastToLibrary(const std::string& libraryId, const PodcastSearchResult& podcast,
                              const std::string& folderId = "");
     bool checkNewEpisodes(const std::string& podcastId, std::vector<MediaItem>& newEpisodes);
     bool downloadEpisodesToServer(const std::string& podcastId, const std::vector<std::string>& episodeIds);

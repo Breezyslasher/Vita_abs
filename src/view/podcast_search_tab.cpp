@@ -220,11 +220,11 @@ void PodcastSearchTab::onPodcastSelected(const PodcastSearchResult& podcast) {
 }
 
 void PodcastSearchTab::addPodcast(const PodcastSearchResult& podcast) {
-    brls::Logger::info("PodcastSearchTab: Adding podcast from feed: {}", podcast.feedUrl);
+    brls::Logger::info("PodcastSearchTab: Adding podcast '{}' from feed: {}", podcast.title, podcast.feedUrl);
 
     asyncRun([this, podcast]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-        bool success = client.addPodcastToLibrary(m_libraryId, podcast.feedUrl);
+        bool success = client.addPodcastToLibrary(m_libraryId, podcast);
 
         brls::sync([this, success, podcast]() {
             if (success) {
