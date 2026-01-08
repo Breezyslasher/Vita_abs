@@ -1401,24 +1401,45 @@ bool AudiobookshelfClient::startPlaybackSession(const std::string& itemId, Playb
     session.audioTracks.clear();
     std::string tracksArray = extractJsonArray(resp.body, "audioTracks");
     brls::Logger::debug("audioTracks array length: {}", tracksArray.length());
+
+    // Debug: show preview of audioTracks array
+    if (!tracksArray.empty() && tracksArray.length() > 50) {
+        brls::Logger::debug("audioTracks preview: {}", tracksArray.substr(0, std::min((size_t)300, tracksArray.length())));
+    }
+
     if (!tracksArray.empty()) {
+        // Properly iterate through array - find each top-level object
         size_t pos = 0;
-        while ((pos = tracksArray.find("\"contentUrl\"", pos)) != std::string::npos) {
-            size_t objStart = tracksArray.rfind('{', pos);
-            if (objStart == std::string::npos) {
+        int trackCount = 0;
+
+        // Skip opening bracket of array
+        while (pos < tracksArray.length() && tracksArray[pos] != '{') {
+            pos++;
+        }
+
+        while (pos < tracksArray.length()) {
+            // Find start of object
+            if (tracksArray[pos] != '{') {
                 pos++;
                 continue;
             }
 
+            size_t objStart = pos;
             int braceCount = 1;
-            size_t objEnd = objStart + 1;
-            while (braceCount > 0 && objEnd < tracksArray.length()) {
-                if (tracksArray[objEnd] == '{') braceCount++;
-                else if (tracksArray[objEnd] == '}') braceCount--;
-                objEnd++;
+            pos++; // Move past opening brace
+
+            // Find matching closing brace
+            while (braceCount > 0 && pos < tracksArray.length()) {
+                if (tracksArray[pos] == '{') braceCount++;
+                else if (tracksArray[pos] == '}') braceCount--;
+                pos++;
             }
 
-            std::string trackObj = tracksArray.substr(objStart, objEnd - objStart);
+            std::string trackObj = tracksArray.substr(objStart, pos - objStart);
+            trackCount++;
+            brls::Logger::debug("Track #{} object ({} chars): {}", trackCount, trackObj.length(),
+                               trackObj.substr(0, std::min((size_t)200, trackObj.length())));
+
             AudioTrack track;
             track.index = extractJsonInt(trackObj, "index");
             track.title = extractJsonValue(trackObj, "title");
@@ -1427,13 +1448,24 @@ bool AudiobookshelfClient::startPlaybackSession(const std::string& itemId, Playb
             track.duration = extractJsonFloat(trackObj, "duration");
             track.mimeType = extractJsonValue(trackObj, "mimeType");
 
+            brls::Logger::debug("Parsed track: index={}, title={}, duration={}, contentUrl={}",
+                               track.index, track.title, track.duration, track.contentUrl);
+
             if (!track.contentUrl.empty()) {
                 session.audioTracks.push_back(track);
-                brls::Logger::debug("Found audio track: {} url={}", track.index, track.contentUrl);
+                brls::Logger::debug("Added audio track {} url={}", track.index, track.contentUrl);
+            } else {
+                brls::Logger::warning("Track #{} has empty contentUrl", trackCount);
             }
 
-            pos = objEnd;
+            // Skip to next object (skip commas, whitespace)
+            while (pos < tracksArray.length() && tracksArray[pos] != '{') {
+                pos++;
+            }
         }
+        brls::Logger::debug("Finished parsing audioTracks, found {} track objects", trackCount);
+    } else {
+        brls::Logger::warning("audioTracks array is empty");
     }
 
     brls::Logger::info("Started playback session: {} with {} audio tracks", session.id, session.audioTracks.size());

@@ -265,20 +265,29 @@ void PlayerActivity::loadMedia() {
 
         // Start a playback session with Audiobookshelf
         PlaybackSession session;
+        brls::Logger::info("PlayerActivity: Starting playback session for item: {}, episode: {}",
+                          m_itemId, m_episodeId.empty() ? "(none)" : m_episodeId);
+
         if (!client.startPlaybackSession(m_itemId, session, m_episodeId)) {
             brls::Logger::error("Failed to start playback session for: {}", m_itemId);
             m_loadingMedia = false;
             return;
         }
 
+        brls::Logger::info("PlayerActivity: Session created - id: {}, audioTracks: {}, playMethod: {}",
+                          session.id, session.audioTracks.size(), session.playMethod);
+
         // Get stream URL from the session's audio tracks
         std::string streamUrl;
         if (!session.audioTracks.empty() && !session.audioTracks[0].contentUrl.empty()) {
             // Use the contentUrl from the first audio track
+            brls::Logger::info("PlayerActivity: Using audio track[0] contentUrl: {}",
+                              session.audioTracks[0].contentUrl);
             streamUrl = client.getStreamUrl(session.audioTracks[0].contentUrl, "");
             brls::Logger::debug("Using audio track contentUrl: {}", session.audioTracks[0].contentUrl);
         } else {
             // Fallback to direct file URL
+            brls::Logger::warning("PlayerActivity: No audio tracks in session, using fallback direct stream URL");
             streamUrl = client.getDirectStreamUrl(m_itemId, 0);
             brls::Logger::debug("Fallback to direct stream URL");
         }
@@ -289,26 +298,33 @@ void PlayerActivity::loadMedia() {
             return;
         }
 
-        brls::Logger::info("Got stream URL: {}", streamUrl);
+        brls::Logger::info("PlayerActivity: Final stream URL: {}", streamUrl);
         float startTime = session.currentTime;
+        brls::Logger::debug("PlayerActivity: Will resume from position: {}s", startTime);
 
         MpvPlayer& player = MpvPlayer::getInstance();
 
         // Initialize player if needed
         if (!player.isInitialized()) {
+            brls::Logger::info("PlayerActivity: Initializing MPV player...");
             if (!player.init()) {
                 brls::Logger::error("Failed to initialize MPV player");
                 m_loadingMedia = false;
                 return;
             }
+            brls::Logger::info("PlayerActivity: MPV player initialized successfully");
+        } else {
+            brls::Logger::debug("PlayerActivity: MPV player already initialized");
         }
 
         // Load the stream URL
+        brls::Logger::info("PlayerActivity: Loading URL into MPV: {}", streamUrl);
         if (!player.loadUrl(streamUrl, item.title)) {
             brls::Logger::error("Failed to load URL: {}", streamUrl);
             m_loadingMedia = false;
             return;
         }
+        brls::Logger::info("PlayerActivity: MPV loadUrl succeeded, waiting for playback to start...");
 
         // Show video view for audio playback (shows progress/controls)
         if (videoView) {
