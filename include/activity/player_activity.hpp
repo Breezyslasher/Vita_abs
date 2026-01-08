@@ -44,6 +44,7 @@ private:
     std::string m_itemId;
     std::string m_episodeId;       // For podcast episodes
     std::string m_directFilePath;  // For direct file playback (debug)
+    std::string m_tempFilePath;    // Temp file for streaming (downloaded before playback)
     bool m_isPlaying = false;
     bool m_isPhoto = false;
     bool m_isLocalFile = false;   // Playing from local download

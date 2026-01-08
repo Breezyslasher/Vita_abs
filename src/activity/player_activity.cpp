@@ -6,10 +6,41 @@
 #include "app/audiobookshelf_client.hpp"
 #include "app/downloads_manager.hpp"
 #include "player/mpv_player.hpp"
+#include "utils/http_client.hpp"
 #include "utils/image_loader.hpp"
 #include "view/video_view.hpp"
 
+#include <cstdio>
+
+#ifdef __vita__
+#include <psp2/io/fcntl.h>
+#include <psp2/io/stat.h>
+#endif
+
 namespace vitaabs {
+
+// Temp directory for streaming playback
+static const char* TEMP_DIR = "ux0:data/VitaABS/temp";
+
+// Helper to ensure temp directory exists
+static void ensureTempDir() {
+#ifdef __vita__
+    sceIoMkdir("ux0:data/VitaABS", 0777);
+    sceIoMkdir(TEMP_DIR, 0777);
+#endif
+}
+
+// Helper to delete temp file
+static void deleteTempFile(const std::string& path) {
+    if (!path.empty()) {
+#ifdef __vita__
+        sceIoRemove(path.c_str());
+#else
+        std::remove(path.c_str());
+#endif
+        brls::Logger::debug("Deleted temp file: {}", path);
+    }
+}
 
 PlayerActivity::PlayerActivity(const std::string& itemId)
     : m_itemId(itemId), m_isLocalFile(false) {
@@ -137,6 +168,12 @@ void PlayerActivity::willDisappear(bool resetState) {
     }
 
     m_isPlaying = false;
+
+    // Clean up temp file if we were streaming
+    if (!m_tempFilePath.empty()) {
+        deleteTempFile(m_tempFilePath);
+        m_tempFilePath.clear();
+    }
 }
 
 void PlayerActivity::loadMedia() {
@@ -251,6 +288,7 @@ void PlayerActivity::loadMedia() {
     }
 
     // Remote playback from Audiobookshelf server
+    // Download to temp file first, then play locally (streaming doesn't work well on Vita)
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
     MediaItem item;
 
@@ -279,17 +317,17 @@ void PlayerActivity::loadMedia() {
 
         // Get stream URL from the session's audio tracks
         std::string streamUrl;
+        std::string mimeType = "audio/mpeg";
         if (!session.audioTracks.empty() && !session.audioTracks[0].contentUrl.empty()) {
-            // Use the contentUrl from the first audio track
             brls::Logger::info("PlayerActivity: Using audio track[0] contentUrl: {}",
                               session.audioTracks[0].contentUrl);
             streamUrl = client.getStreamUrl(session.audioTracks[0].contentUrl, "");
-            brls::Logger::debug("Using audio track contentUrl: {}", session.audioTracks[0].contentUrl);
+            if (!session.audioTracks[0].mimeType.empty()) {
+                mimeType = session.audioTracks[0].mimeType;
+            }
         } else {
-            // Fallback to direct file URL
             brls::Logger::warning("PlayerActivity: No audio tracks in session, using fallback direct stream URL");
             streamUrl = client.getDirectStreamUrl(m_itemId, 0);
-            brls::Logger::debug("Fallback to direct stream URL");
         }
 
         if (streamUrl.empty()) {
@@ -298,29 +336,96 @@ void PlayerActivity::loadMedia() {
             return;
         }
 
-        brls::Logger::info("PlayerActivity: Final stream URL: {}", streamUrl);
         float startTime = session.currentTime;
         brls::Logger::debug("PlayerActivity: Will resume from position: {}s", startTime);
 
+        // Determine file extension from mime type
+        std::string ext = ".mp3";
+        if (mimeType.find("mp4") != std::string::npos || mimeType.find("m4a") != std::string::npos) {
+            ext = ".m4a";
+        } else if (mimeType.find("flac") != std::string::npos) {
+            ext = ".flac";
+        } else if (mimeType.find("ogg") != std::string::npos) {
+            ext = ".ogg";
+        }
+
+        // Create temp file path
+        ensureTempDir();
+        m_tempFilePath = std::string(TEMP_DIR) + "/playback_temp" + ext;
+        brls::Logger::info("PlayerActivity: Downloading to temp file: {}", m_tempFilePath);
+
+        // Download the audio file to temp
+        HttpClient httpClient;
+        httpClient.setTimeout(120); // 2 minute timeout for large files
+
+#ifdef __vita__
+        SceUID fd = sceIoOpen(m_tempFilePath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+        if (fd < 0) {
+            brls::Logger::error("Failed to create temp file: {}", m_tempFilePath);
+            m_tempFilePath.clear();
+            m_loadingMedia = false;
+            return;
+        }
+
+        int64_t totalSize = 0;
+        int64_t downloadedSize = 0;
+
+        bool downloadSuccess = httpClient.downloadFile(streamUrl,
+            [&](const char* data, size_t size) -> bool {
+                int written = sceIoWrite(fd, data, size);
+                if (written < 0) {
+                    brls::Logger::error("Failed to write to temp file");
+                    return false;
+                }
+                downloadedSize += size;
+                if (totalSize > 0 && downloadedSize % (1024 * 1024) < size) {
+                    // Log progress every ~1MB
+                    brls::Logger::debug("Download progress: {}%", (int)((downloadedSize * 100) / totalSize));
+                }
+                return true;
+            },
+            [&](int64_t size) {
+                totalSize = size;
+                brls::Logger::info("PlayerActivity: Downloading {} bytes", size);
+            }
+        );
+
+        sceIoClose(fd);
+
+        if (!downloadSuccess) {
+            brls::Logger::error("Failed to download audio file");
+            deleteTempFile(m_tempFilePath);
+            m_tempFilePath.clear();
+            m_loadingMedia = false;
+            return;
+        }
+
+        brls::Logger::info("PlayerActivity: Download complete ({} bytes)", downloadedSize);
+#else
+        // Non-Vita: just use the stream URL directly
+        m_tempFilePath = streamUrl;
+#endif
+
+        // Now play the local temp file
         MpvPlayer& player = MpvPlayer::getInstance();
 
-        // Initialize player if needed
         if (!player.isInitialized()) {
             brls::Logger::info("PlayerActivity: Initializing MPV player...");
             if (!player.init()) {
                 brls::Logger::error("Failed to initialize MPV player");
+                deleteTempFile(m_tempFilePath);
+                m_tempFilePath.clear();
                 m_loadingMedia = false;
                 return;
             }
             brls::Logger::info("PlayerActivity: MPV player initialized successfully");
-        } else {
-            brls::Logger::debug("PlayerActivity: MPV player already initialized");
         }
 
-        // Load the stream URL
-        brls::Logger::info("PlayerActivity: Loading URL into MPV: {}", streamUrl);
-        if (!player.loadUrl(streamUrl, item.title)) {
-            brls::Logger::error("Failed to load URL: {}", streamUrl);
+        brls::Logger::info("PlayerActivity: Loading temp file: {}", m_tempFilePath);
+        if (!player.loadUrl(m_tempFilePath, item.title)) {
+            brls::Logger::error("Failed to load temp file: {}", m_tempFilePath);
+            deleteTempFile(m_tempFilePath);
+            m_tempFilePath.clear();
             m_loadingMedia = false;
             return;
         }
@@ -330,7 +435,6 @@ void PlayerActivity::loadMedia() {
         if (videoView) {
             videoView->setVisibility(brls::Visibility::VISIBLE);
             videoView->setVideoVisible(true);
-            brls::Logger::debug("Video view enabled");
         }
 
         // Resume from saved position if available
