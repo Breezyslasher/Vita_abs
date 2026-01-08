@@ -1700,4 +1700,242 @@ bool AudiobookshelfClient::fetchPodcastEpisodes(const std::string& podcastId, st
     return true;
 }
 
+bool AudiobookshelfClient::searchPodcasts(const std::string& query, std::vector<PodcastSearchResult>& results) {
+    brls::Logger::debug("Searching iTunes for podcasts: {}", query);
+
+    results.clear();
+
+    // URL encode the query
+    std::string encodedQuery = HttpClient::urlEncode(query);
+
+    // Search iTunes API
+    HttpClient client;
+    HttpRequest req;
+    req.url = "https://itunes.apple.com/search?term=" + encodedQuery + "&media=podcast&limit=20";
+    req.method = "GET";
+    req.headers["Accept"] = "application/json";
+
+    HttpResponse resp = client.request(req);
+
+    if (resp.statusCode != 200) {
+        brls::Logger::error("iTunes search failed: {}", resp.statusCode);
+        return false;
+    }
+
+    // Parse results array
+    std::string resultsArray = extractJsonArray(resp.body, "results");
+    if (resultsArray.empty()) {
+        brls::Logger::debug("No podcast results found");
+        return true;
+    }
+
+    size_t pos = 0;
+    while ((pos = resultsArray.find("\"feedUrl\"", pos)) != std::string::npos) {
+        size_t objStart = resultsArray.rfind('{', pos);
+        if (objStart == std::string::npos) {
+            pos++;
+            continue;
+        }
+
+        int braceCount = 1;
+        size_t objEnd = objStart + 1;
+        while (braceCount > 0 && objEnd < resultsArray.length()) {
+            if (resultsArray[objEnd] == '{') braceCount++;
+            else if (resultsArray[objEnd] == '}') braceCount--;
+            objEnd++;
+        }
+
+        std::string obj = resultsArray.substr(objStart, objEnd - objStart);
+
+        PodcastSearchResult result;
+        result.title = extractJsonValue(obj, "collectionName");
+        result.author = extractJsonValue(obj, "artistName");
+        result.feedUrl = extractJsonValue(obj, "feedUrl");
+        result.artworkUrl = extractJsonValue(obj, "artworkUrl600");
+        if (result.artworkUrl.empty()) {
+            result.artworkUrl = extractJsonValue(obj, "artworkUrl100");
+        }
+        result.genre = extractJsonValue(obj, "primaryGenreName");
+        result.trackCount = extractJsonInt(obj, "trackCount");
+
+        if (!result.feedUrl.empty() && !result.title.empty()) {
+            results.push_back(result);
+        }
+
+        pos = objEnd;
+    }
+
+    brls::Logger::info("Found {} podcasts from iTunes", results.size());
+    return true;
+}
+
+bool AudiobookshelfClient::addPodcastToLibrary(const std::string& libraryId, const std::string& feedUrl,
+                                                const std::string& folderId) {
+    brls::Logger::debug("Adding podcast to library {} from feed: {}", libraryId, feedUrl);
+
+    HttpClient client;
+    HttpRequest req;
+    req.url = buildApiUrl("/api/podcasts");
+    req.method = "POST";
+    req.headers["Accept"] = "application/json";
+    req.headers["Content-Type"] = "application/json";
+    req.headers["Authorization"] = "Bearer " + m_authToken;
+
+    // Build request body
+    std::string body = "{";
+    body += "\"libraryId\":\"" + libraryId + "\",";
+    body += "\"feedUrl\":\"" + feedUrl + "\"";
+    if (!folderId.empty()) {
+        body += ",\"folderId\":\"" + folderId + "\"";
+    }
+    body += "}";
+    req.body = body;
+
+    HttpResponse resp = client.request(req);
+
+    if (resp.statusCode == 200 || resp.statusCode == 201) {
+        brls::Logger::info("Successfully added podcast from feed: {}", feedUrl);
+        return true;
+    }
+
+    brls::Logger::error("Failed to add podcast: {} - {}", resp.statusCode, resp.body);
+    return false;
+}
+
+bool AudiobookshelfClient::checkNewEpisodes(const std::string& podcastId, std::vector<MediaItem>& newEpisodes) {
+    brls::Logger::debug("Checking for new episodes for podcast: {}", podcastId);
+
+    newEpisodes.clear();
+
+    HttpClient client;
+    HttpRequest req;
+    req.url = buildApiUrl("/api/podcasts/" + podcastId + "/checknew");
+    req.method = "GET";
+    req.headers["Accept"] = "application/json";
+    req.headers["Authorization"] = "Bearer " + m_authToken;
+
+    HttpResponse resp = client.request(req);
+
+    if (resp.statusCode != 200) {
+        brls::Logger::error("Failed to check new episodes: {}", resp.statusCode);
+        return false;
+    }
+
+    // Parse episodes array from response
+    std::string episodesArray = extractJsonArray(resp.body, "episodes");
+    if (episodesArray.empty()) {
+        brls::Logger::debug("No new episodes found");
+        return true;
+    }
+
+    size_t pos = 0;
+    while ((pos = episodesArray.find("\"title\"", pos)) != std::string::npos) {
+        size_t objStart = episodesArray.rfind('{', pos);
+        if (objStart == std::string::npos) {
+            pos++;
+            continue;
+        }
+
+        int braceCount = 1;
+        size_t objEnd = objStart + 1;
+        while (braceCount > 0 && objEnd < episodesArray.length()) {
+            if (episodesArray[objEnd] == '{') braceCount++;
+            else if (episodesArray[objEnd] == '}') braceCount--;
+            objEnd++;
+        }
+
+        std::string obj = episodesArray.substr(objStart, objEnd - objStart);
+
+        MediaItem ep;
+        ep.episodeId = extractJsonValue(obj, "id");
+        if (ep.episodeId.empty()) {
+            ep.episodeId = extractJsonValue(obj, "guid");
+        }
+        ep.podcastId = podcastId;
+        ep.id = podcastId;
+        ep.title = extractJsonValue(obj, "title");
+        ep.description = extractJsonValue(obj, "description");
+        ep.pubDate = extractJsonValue(obj, "pubDate");
+        ep.mediaType = MediaType::PODCAST_EPISODE;
+        ep.type = "podcastEpisode";
+
+        // Get enclosure URL for download
+        std::string enclosureObj = extractJsonObject(obj, "enclosure");
+        if (!enclosureObj.empty()) {
+            ep.coverPath = extractJsonValue(enclosureObj, "url");  // Reusing coverPath for enclosure URL
+        }
+
+        if (!ep.title.empty()) {
+            newEpisodes.push_back(ep);
+        }
+
+        pos = objEnd;
+    }
+
+    brls::Logger::info("Found {} new episodes", newEpisodes.size());
+    return true;
+}
+
+bool AudiobookshelfClient::downloadEpisodesToServer(const std::string& podcastId,
+                                                     const std::vector<std::string>& episodeIds) {
+    if (episodeIds.empty()) {
+        brls::Logger::debug("No episodes to download");
+        return true;
+    }
+
+    brls::Logger::debug("Downloading {} episodes to server for podcast: {}", episodeIds.size(), podcastId);
+
+    HttpClient client;
+    HttpRequest req;
+    req.url = buildApiUrl("/api/podcasts/" + podcastId + "/download-episodes");
+    req.method = "POST";
+    req.headers["Accept"] = "application/json";
+    req.headers["Content-Type"] = "application/json";
+    req.headers["Authorization"] = "Bearer " + m_authToken;
+
+    // Build episodes array
+    std::string body = "[";
+    for (size_t i = 0; i < episodeIds.size(); ++i) {
+        body += "\"" + episodeIds[i] + "\"";
+        if (i < episodeIds.size() - 1) body += ",";
+    }
+    body += "]";
+    req.body = body;
+
+    HttpResponse resp = client.request(req);
+
+    if (resp.statusCode == 200) {
+        brls::Logger::info("Successfully queued {} episodes for download on server", episodeIds.size());
+        return true;
+    }
+
+    brls::Logger::error("Failed to download episodes: {}", resp.statusCode);
+    return false;
+}
+
+bool AudiobookshelfClient::downloadAllNewEpisodes(const std::string& podcastId) {
+    brls::Logger::debug("Downloading all new episodes for podcast: {}", podcastId);
+
+    // First check for new episodes
+    std::vector<MediaItem> newEpisodes;
+    if (!checkNewEpisodes(podcastId, newEpisodes)) {
+        return false;
+    }
+
+    if (newEpisodes.empty()) {
+        brls::Logger::info("No new episodes to download");
+        return true;
+    }
+
+    // Extract episode IDs
+    std::vector<std::string> episodeIds;
+    for (const auto& ep : newEpisodes) {
+        if (!ep.episodeId.empty()) {
+            episodeIds.push_back(ep.episodeId);
+        }
+    }
+
+    return downloadEpisodesToServer(podcastId, episodeIds);
+}
+
 } // namespace vitaabs

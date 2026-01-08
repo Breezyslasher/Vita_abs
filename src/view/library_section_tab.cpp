@@ -3,6 +3,7 @@
  */
 
 #include "view/library_section_tab.hpp"
+#include "view/podcast_search_tab.hpp"
 #include "app/audiobookshelf_client.hpp"
 #include "view/media_item_cell.hpp"
 #include "view/media_detail_view.hpp"
@@ -72,6 +73,28 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
         return true;
     });
     m_viewModeBox->addView(m_backBtn);
+
+    // Find Podcasts button (only for podcast libraries)
+    if (sectionType == "podcast") {
+        m_findPodcastsBtn = new brls::Button();
+        m_findPodcastsBtn->setText("+ Find Podcasts");
+        m_findPodcastsBtn->setMarginLeft(20);
+        m_findPodcastsBtn->registerClickAction([this](brls::View* view) {
+            openPodcastSearch();
+            return true;
+        });
+        m_viewModeBox->addView(m_findPodcastsBtn);
+
+        // Check New Episodes button
+        m_checkEpisodesBtn = new brls::Button();
+        m_checkEpisodesBtn->setText("Check Episodes");
+        m_checkEpisodesBtn->setMarginLeft(10);
+        m_checkEpisodesBtn->registerClickAction([this](brls::View* view) {
+            checkAllNewEpisodes();
+            return true;
+        });
+        m_viewModeBox->addView(m_checkEpisodesBtn);
+    }
 
     this->addView(m_viewModeBox);
 
@@ -382,6 +405,51 @@ void LibrarySectionTab::onGenreSelected(const GenreItem& genre) {
                 brls::Application::notify("Failed to load category");
             });
         }
+    });
+}
+
+void LibrarySectionTab::openPodcastSearch() {
+    brls::Logger::debug("LibrarySectionTab: Opening podcast search for library {}", m_sectionKey);
+
+    auto* searchTab = new PodcastSearchTab(m_sectionKey);
+    brls::Application::pushActivity(new brls::Activity(searchTab));
+}
+
+void LibrarySectionTab::checkAllNewEpisodes() {
+    brls::Logger::debug("LibrarySectionTab: Checking for new episodes in all podcasts");
+
+    brls::Application::notify("Checking for new episodes...");
+
+    std::weak_ptr<bool> aliveWeak = m_alive;
+    std::string libraryKey = m_sectionKey;
+
+    asyncRun([this, libraryKey, aliveWeak]() {
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+
+        int totalNew = 0;
+        for (const auto& item : m_items) {
+            if (item.type == "podcast" || item.mediaType == MediaType::PODCAST) {
+                std::vector<MediaItem> newEps;
+                if (client.checkNewEpisodes(item.id, newEps)) {
+                    if (!newEps.empty()) {
+                        totalNew += newEps.size();
+                        // Auto-download new episodes
+                        client.downloadAllNewEpisodes(item.id);
+                    }
+                }
+            }
+        }
+
+        brls::sync([totalNew, aliveWeak]() {
+            auto alive = aliveWeak.lock();
+            if (!alive || !*alive) return;
+
+            if (totalNew > 0) {
+                brls::Application::notify("Found " + std::to_string(totalNew) + " new episode(s)");
+            } else {
+                brls::Application::notify("No new episodes found");
+            }
+        });
     });
 }
 

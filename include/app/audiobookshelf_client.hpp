@@ -175,6 +175,17 @@ struct PersonalizedShelf {
     std::vector<MediaItem> entities;
 };
 
+// iTunes podcast search result
+struct PodcastSearchResult {
+    std::string title;
+    std::string author;
+    std::string feedUrl;           // RSS feed URL
+    std::string artworkUrl;        // Cover image URL
+    std::string description;
+    std::string genre;
+    int trackCount = 0;            // Number of episodes
+};
+
 /**
  * Audiobookshelf API Client singleton
  */
@@ -252,6 +263,14 @@ public:
 
     // Podcasts
     bool fetchPodcastEpisodes(const std::string& podcastId, std::vector<MediaItem>& episodes);
+
+    // Podcast Management (iTunes search and RSS)
+    bool searchPodcasts(const std::string& query, std::vector<PodcastSearchResult>& results);
+    bool addPodcastToLibrary(const std::string& libraryId, const std::string& feedUrl,
+                             const std::string& folderId = "");
+    bool checkNewEpisodes(const std::string& podcastId, std::vector<MediaItem>& newEpisodes);
+    bool downloadEpisodesToServer(const std::string& podcastId, const std::vector<std::string>& episodeIds);
+    bool downloadAllNewEpisodes(const std::string& podcastId);
 
     // Stub methods for unsupported features (Audiobookshelf doesn't have these)
     bool fetchPlaylists(std::vector<MediaItem>& playlists) { playlists.clear(); return false; }
