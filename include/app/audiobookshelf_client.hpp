@@ -270,6 +270,7 @@ public:
                              const std::string& folderId = "");
     bool checkNewEpisodes(const std::string& podcastId, std::vector<MediaItem>& newEpisodes);
     bool downloadEpisodesToServer(const std::string& podcastId, const std::vector<std::string>& episodeIds);
+    bool downloadNewEpisodesToServer(const std::string& podcastId, const std::vector<MediaItem>& episodes);
     bool downloadAllNewEpisodes(const std::string& podcastId);
 
     // Stub methods for unsupported features (Audiobookshelf doesn't have these)

@@ -93,6 +93,12 @@ PodcastSearchTab::PodcastSearchTab(const std::string& libraryId)
     this->setGrow(1.0f);
     this->setPadding(20, 20, 20, 20);
 
+    // Register back button action to pop activity
+    this->registerAction("Back", brls::ControllerButton::BUTTON_B, [](brls::View*) {
+        brls::Application::popActivity();
+        return true;
+    }, true);  // hidden action
+
     // Title
     m_titleLabel = new brls::Label();
     m_titleLabel->setText("Search Podcasts");

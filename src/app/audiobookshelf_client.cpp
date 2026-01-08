@@ -1956,7 +1956,7 @@ bool AudiobookshelfClient::downloadEpisodesToServer(const std::string& podcastId
     req.headers["Content-Type"] = "application/json";
     req.headers["Authorization"] = "Bearer " + m_authToken;
 
-    // Build episodes array
+    // Build episodes array (for episodes that already exist in library)
     std::string body = "[";
     for (size_t i = 0; i < episodeIds.size(); ++i) {
         body += "\"" + episodeIds[i] + "\"";
@@ -1965,6 +1965,7 @@ bool AudiobookshelfClient::downloadEpisodesToServer(const std::string& podcastId
     body += "]";
     req.body = body;
 
+    brls::Logger::debug("Download episodes request: {}", body);
     HttpResponse resp = client.request(req);
 
     if (resp.statusCode == 200) {
@@ -1972,7 +1973,78 @@ bool AudiobookshelfClient::downloadEpisodesToServer(const std::string& podcastId
         return true;
     }
 
-    brls::Logger::error("Failed to download episodes: {}", resp.statusCode);
+    brls::Logger::error("Failed to download episodes: {} - {}", resp.statusCode, resp.body);
+    return false;
+}
+
+bool AudiobookshelfClient::downloadNewEpisodesToServer(const std::string& podcastId,
+                                                        const std::vector<MediaItem>& episodes) {
+    if (episodes.empty()) {
+        brls::Logger::debug("No new episodes to download");
+        return true;
+    }
+
+    brls::Logger::debug("Downloading {} new episodes to server for podcast: {}", episodes.size(), podcastId);
+
+    HttpClient client;
+    HttpRequest req;
+    req.url = buildApiUrl("/api/podcasts/" + podcastId + "/download-episodes");
+    req.method = "POST";
+    req.timeout = 60;  // Longer timeout for downloading
+    req.headers["Accept"] = "application/json";
+    req.headers["Content-Type"] = "application/json";
+    req.headers["Authorization"] = "Bearer " + m_authToken;
+
+    // Helper to escape JSON strings
+    auto escapeJson = [](const std::string& s) -> std::string {
+        std::string result;
+        for (char c : s) {
+            switch (c) {
+                case '"': result += "\\\""; break;
+                case '\\': result += "\\\\"; break;
+                case '\n': result += "\\n"; break;
+                case '\r': result += "\\r"; break;
+                case '\t': result += "\\t"; break;
+                default: result += c;
+            }
+        }
+        return result;
+    };
+
+    // Build array of episode objects with full data (for new RSS episodes)
+    std::string body = "[";
+    for (size_t i = 0; i < episodes.size(); ++i) {
+        const auto& ep = episodes[i];
+        body += "{";
+        body += "\"episodeType\":\"full\",";
+        body += "\"title\":\"" + escapeJson(ep.title) + "\"";
+        if (!ep.description.empty()) {
+            body += ",\"description\":\"" + escapeJson(ep.description) + "\"";
+        }
+        if (!ep.pubDate.empty()) {
+            body += ",\"pubDate\":\"" + escapeJson(ep.pubDate) + "\"";
+        }
+        // coverPath is being used to store enclosure URL from checkNewEpisodes
+        if (!ep.coverPath.empty()) {
+            body += ",\"enclosureUrl\":\"" + escapeJson(ep.coverPath) + "\"";
+        }
+        body += "}";
+        if (i < episodes.size() - 1) body += ",";
+    }
+    body += "]";
+
+    brls::Logger::debug("Download new episodes request: {}", body);
+    req.body = body;
+
+    HttpResponse resp = client.request(req);
+
+    // Success can be 200 or empty response for some versions
+    if (resp.statusCode == 200 || resp.statusCode == 204) {
+        brls::Logger::info("Successfully queued {} new episodes for download on server", episodes.size());
+        return true;
+    }
+
+    brls::Logger::error("Failed to download new episodes: {} - {}", resp.statusCode, resp.body);
     return false;
 }
 
@@ -1990,15 +2062,8 @@ bool AudiobookshelfClient::downloadAllNewEpisodes(const std::string& podcastId) 
         return true;
     }
 
-    // Extract episode IDs
-    std::vector<std::string> episodeIds;
-    for (const auto& ep : newEpisodes) {
-        if (!ep.episodeId.empty()) {
-            episodeIds.push_back(ep.episodeId);
-        }
-    }
-
-    return downloadEpisodesToServer(podcastId, episodeIds);
+    // Use full episode data for new RSS episodes
+    return downloadNewEpisodesToServer(podcastId, newEpisodes);
 }
 
 } // namespace vitaabs

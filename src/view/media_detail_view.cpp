@@ -779,14 +779,14 @@ void MediaDetailView::showNewEpisodesDialog(const std::vector<MediaItem>& episod
         statusLabel->setWidth(80);
         episodeRow->addView(statusLabel);
 
-        // Click on row to add episode
-        std::string episodeId = ep.episodeId;
+        // Click on row to add episode - pass full episode data for new RSS episodes
+        MediaItem epCopy = ep;
         std::string pId = podcastId;
-        episodeRow->registerClickAction([this, episodeId, pId, statusLabel](brls::View*) {
-            // Download this single episode to server
-            std::vector<std::string> ids = {episodeId};
+        episodeRow->registerClickAction([this, epCopy, pId, statusLabel](brls::View*) {
+            // Download this single episode to server with full data
+            std::vector<MediaItem> eps = {epCopy};
             AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-            if (client.downloadEpisodesToServer(pId, ids)) {
+            if (client.downloadNewEpisodesToServer(pId, eps)) {
                 statusLabel->setText("Added!");
                 brls::Application::notify("Episode queued for download on server");
             } else {
@@ -819,20 +819,14 @@ void MediaDetailView::downloadNewEpisodesToServer(const std::string& podcastId,
                                                    const std::vector<MediaItem>& episodes) {
     brls::Application::notify("Adding " + std::to_string(episodes.size()) + " episodes to server...");
 
-    std::vector<std::string> episodeIds;
-    for (const auto& ep : episodes) {
-        if (!ep.episodeId.empty()) {
-            episodeIds.push_back(ep.episodeId);
-        }
-    }
-
-    asyncRun([podcastId, episodeIds]() {
+    asyncRun([podcastId, episodes]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-        bool success = client.downloadEpisodesToServer(podcastId, episodeIds);
+        // Use full episode data for new RSS episodes
+        bool success = client.downloadNewEpisodesToServer(podcastId, episodes);
 
-        brls::sync([success, episodeIds]() {
+        brls::sync([success, episodes]() {
             if (success) {
-                brls::Application::notify("Queued " + std::to_string(episodeIds.size()) + " episodes for download");
+                brls::Application::notify("Queued " + std::to_string(episodes.size()) + " episodes for download");
             } else {
                 brls::Application::notify("Failed to queue episodes");
             }
