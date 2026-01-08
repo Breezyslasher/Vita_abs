@@ -542,16 +542,21 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
     tempMgr.init();
     downloadsMgr.init();
 
-    // Check if we have a cached version (in temp or downloads)
+    // Check if we have a cached version - ALWAYS check downloads first, then temp
     std::string cachedPath;
-    if (useDownloads) {
-        if (downloadsMgr.isDownloaded(itemId)) {
-            cachedPath = downloadsMgr.getPlaybackPath(itemId);
-        }
-    } else {
+
+    // First check downloads folder (regardless of saveToDownloads setting)
+    if (downloadsMgr.isDownloaded(itemId)) {
+        cachedPath = downloadsMgr.getPlaybackPath(itemId);
+        brls::Logger::info("Found in downloads: {}", cachedPath);
+    }
+
+    // If not in downloads, check temp cache
+    if (cachedPath.empty()) {
         cachedPath = tempMgr.getCachedFilePath(itemId, episodeId);
         if (!cachedPath.empty()) {
             tempMgr.touchTempFile(itemId, episodeId);
+            brls::Logger::info("Found in temp cache: {}", cachedPath);
         }
     }
 
