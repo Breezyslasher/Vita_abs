@@ -754,8 +754,8 @@ void MediaDetailView::showNewEpisodesDialog(const std::vector<MediaItem>& episod
 
         auto* titleLabel = new brls::Label();
         std::string title = ep.title;
-        if (title.length() > 50) {
-            title = title.substr(0, 47) + "...";
+        if (title.length() > 60) {
+            title = title.substr(0, 57) + "...";
         }
         titleLabel->setText(title);
         titleLabel->setFontSize(16);
@@ -771,31 +771,27 @@ void MediaDetailView::showNewEpisodesDialog(const std::vector<MediaItem>& episod
 
         episodeRow->addView(infoBox);
 
-        // Add button for this episode
-        auto* addBtn = new brls::Button();
-        addBtn->setText("Add");
-        addBtn->setWidth(80);
+        // Status label (shows "Added!" after adding)
+        auto* statusLabel = new brls::Label();
+        statusLabel->setText("");
+        statusLabel->setFontSize(14);
+        statusLabel->setTextColor(nvgRGB(100, 200, 100));
+        statusLabel->setWidth(80);
+        episodeRow->addView(statusLabel);
 
+        // Click on row to add episode
         std::string episodeId = ep.episodeId;
         std::string pId = podcastId;
-        addBtn->registerClickAction([this, episodeId, pId, addBtn](brls::View*) {
+        episodeRow->registerClickAction([this, episodeId, pId, statusLabel](brls::View*) {
             // Download this single episode to server
             std::vector<std::string> ids = {episodeId};
             AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
             if (client.downloadEpisodesToServer(pId, ids)) {
-                addBtn->setText("Added!");
+                statusLabel->setText("Added!");
                 brls::Application::notify("Episode queued for download on server");
             } else {
                 brls::Application::notify("Failed to add episode");
             }
-            return true;
-        });
-        episodeRow->addView(addBtn);
-
-        // Register click on entire row to add episode
-        episodeRow->registerAction("Add Episode", brls::ControllerButton::BUTTON_A, [addBtn](brls::View*) {
-            // Trigger the add button
-            addBtn->onFocusGained();
             return true;
         });
 

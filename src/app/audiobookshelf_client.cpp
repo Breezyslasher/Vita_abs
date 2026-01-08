@@ -1197,6 +1197,7 @@ bool AudiobookshelfClient::startPlaybackSession(const std::string& itemId, Playb
     // Parse audioTracks array to get streaming URLs
     session.audioTracks.clear();
     std::string tracksArray = extractJsonArray(resp.body, "audioTracks");
+    brls::Logger::debug("audioTracks array length: {}", tracksArray.length());
     if (!tracksArray.empty()) {
         size_t pos = 0;
         while ((pos = tracksArray.find("\"contentUrl\"", pos)) != std::string::npos) {
@@ -1412,6 +1413,7 @@ std::string AudiobookshelfClient::getCoverUrl(const std::string& itemId, int wid
     std::string url = m_serverUrl + "/api/items/" + itemId + "/cover";
     url += "?width=" + std::to_string(width);
     url += "&height=" + std::to_string(height);
+    url += "&format=jpeg";  // Request JPEG format for NanoVG compatibility
     url += "&token=" + m_authToken;
 
     return url;
