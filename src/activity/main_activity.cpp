@@ -91,7 +91,7 @@ void MainActivity::onContentAvailable() {
             brls::Logger::debug("MainActivity: Added audiobook library tab: {}", name);
         }
 
-        // Add Podcast libraries (no separator between audiobooks and podcasts)
+        // Add Podcast libraries
         for (const auto& lib : podcastLibs) {
             std::string id = lib.id;
             std::string name = lib.name;
@@ -101,16 +101,9 @@ void MainActivity::onContentAvailable() {
             brls::Logger::debug("MainActivity: Added podcast library tab: {}", name);
         }
 
-        // Separator before utility tabs
-        tabFrame->addSeparator();
-
-        // Search tab
+        // Utility tabs (no separators)
         tabFrame->addTab("Search", []() { return new SearchTab(); });
-
-        // Downloads tab
         tabFrame->addTab("Downloads", []() { return new DownloadsTab(); });
-
-        // Settings (no separator before settings)
         tabFrame->addTab("Settings", []() { return new SettingsTab(); });
 
         // Focus first tab
