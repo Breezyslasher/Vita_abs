@@ -1871,29 +1871,92 @@ bool AudiobookshelfClient::checkNewEpisodes(const std::string& podcastId, std::v
     newEpisodes.clear();
 
     HttpClient client;
-    HttpRequest req;
-    req.url = buildApiUrl("/api/podcasts/" + podcastId + "/checknew");
-    req.method = "GET";
-    req.headers["Accept"] = "application/json";
-    req.headers["Authorization"] = "Bearer " + m_authToken;
 
-    HttpResponse resp = client.request(req);
+    // Step 1: Get podcast item to get feedUrl and existing episodes
+    HttpRequest itemReq;
+    itemReq.url = buildApiUrl("/api/items/" + podcastId);
+    itemReq.method = "GET";
+    itemReq.headers["Accept"] = "application/json";
+    itemReq.headers["Authorization"] = "Bearer " + m_authToken;
 
-    if (resp.statusCode != 200) {
-        brls::Logger::error("Failed to check new episodes: {}", resp.statusCode);
+    HttpResponse itemResp = client.request(itemReq);
+    if (itemResp.statusCode != 200) {
+        brls::Logger::error("Failed to get podcast item: {}", itemResp.statusCode);
         return false;
     }
 
-    // Parse episodes array from response
-    std::string episodesArray = extractJsonArray(resp.body, "episodes");
-    if (episodesArray.empty()) {
-        brls::Logger::debug("No new episodes found");
+    // Extract feedUrl from metadata
+    std::string mediaObj = extractJsonObject(itemResp.body, "media");
+    std::string metadataObj = extractJsonObject(mediaObj, "metadata");
+    std::string feedUrl = extractJsonValue(metadataObj, "feedUrl");
+
+    if (feedUrl.empty()) {
+        brls::Logger::error("Podcast has no RSS feed URL");
+        return false;
+    }
+
+    brls::Logger::debug("Podcast feed URL: {}", feedUrl);
+
+    // Get existing episode GUIDs/titles for comparison
+    std::vector<std::string> existingGuids;
+    std::vector<std::string> existingTitles;
+    std::string existingEpisodes = extractJsonArray(mediaObj, "episodes");
+    if (!existingEpisodes.empty()) {
+        size_t pos = 0;
+        while ((pos = existingEpisodes.find("\"id\"", pos)) != std::string::npos) {
+            size_t objStart = existingEpisodes.rfind('{', pos);
+            if (objStart == std::string::npos) { pos++; continue; }
+
+            int braceCount = 1;
+            size_t objEnd = objStart + 1;
+            while (braceCount > 0 && objEnd < existingEpisodes.length()) {
+                if (existingEpisodes[objEnd] == '{') braceCount++;
+                else if (existingEpisodes[objEnd] == '}') braceCount--;
+                objEnd++;
+            }
+
+            std::string obj = existingEpisodes.substr(objStart, objEnd - objStart);
+            std::string guid = extractJsonValue(obj, "guid");
+            std::string title = extractJsonValue(obj, "title");
+            if (!guid.empty()) existingGuids.push_back(guid);
+            if (!title.empty()) existingTitles.push_back(title);
+            pos = objEnd;
+        }
+    }
+
+    brls::Logger::debug("Found {} existing episodes in library", existingGuids.size());
+
+    // Step 2: Fetch RSS feed via server's podcast/feed endpoint
+    HttpRequest feedReq;
+    feedReq.url = buildApiUrl("/api/podcasts/feed");
+    feedReq.method = "POST";
+    feedReq.timeout = 60;  // RSS fetch can be slow
+    feedReq.headers["Accept"] = "application/json";
+    feedReq.headers["Content-Type"] = "application/json";
+    feedReq.headers["Authorization"] = "Bearer " + m_authToken;
+    feedReq.body = "{\"rssFeed\":\"" + feedUrl + "\"}";
+
+    brls::Logger::debug("Fetching RSS feed from server...");
+    HttpResponse feedResp = client.request(feedReq);
+
+    if (feedResp.statusCode != 200) {
+        brls::Logger::error("Failed to fetch RSS feed: {} - {}", feedResp.statusCode, feedResp.body);
+        return false;
+    }
+
+    // Parse episodes from RSS feed response
+    std::string podcastObj = extractJsonObject(feedResp.body, "podcast");
+    std::string rssEpisodes = extractJsonArray(podcastObj, "episodes");
+
+    if (rssEpisodes.empty()) {
+        brls::Logger::debug("No episodes in RSS feed");
         return true;
     }
 
+    // Step 3: Find new episodes (not in existing library)
     size_t pos = 0;
-    while ((pos = episodesArray.find("\"title\"", pos)) != std::string::npos) {
-        size_t objStart = episodesArray.rfind('{', pos);
+    while ((pos = rssEpisodes.find("\"title\"", pos)) != std::string::npos) {
+        size_t objStart = rssEpisodes.rfind('{', pos);
         if (objStart == std::string::npos) {
             pos++;
             continue;
@@ -1901,41 +1964,59 @@ bool AudiobookshelfClient::checkNewEpisodes(const std::string& podcastId, std::v
 
         int braceCount = 1;
         size_t objEnd = objStart + 1;
-        while (braceCount > 0 && objEnd < episodesArray.length()) {
-            if (episodesArray[objEnd] == '{') braceCount++;
-            else if (episodesArray[objEnd] == '}') braceCount--;
+        while (braceCount > 0 && objEnd < rssEpisodes.length()) {
+            if (rssEpisodes[objEnd] == '{') braceCount++;
+            else if (rssEpisodes[objEnd] == '}') braceCount--;
             objEnd++;
         }
 
-        std::string obj = episodesArray.substr(objStart, objEnd - objStart);
+        std::string obj = rssEpisodes.substr(objStart, objEnd - objStart);
 
-        MediaItem ep;
-        ep.episodeId = extractJsonValue(obj, "id");
-        if (ep.episodeId.empty()) {
-            ep.episodeId = extractJsonValue(obj, "guid");
+        std::string title = extractJsonValue(obj, "title");
+        std::string guid = extractJsonValue(obj, "guid");
+
+        // Check if already exists (by guid or title)
+        bool exists = false;
+        if (!guid.empty()) {
+            for (const auto& g : existingGuids) {
+                if (g == guid) { exists = true; break; }
+            }
         }
-        ep.podcastId = podcastId;
-        ep.id = podcastId;
-        ep.title = extractJsonValue(obj, "title");
-        ep.description = extractJsonValue(obj, "description");
-        ep.pubDate = extractJsonValue(obj, "pubDate");
-        ep.mediaType = MediaType::PODCAST_EPISODE;
-        ep.type = "podcastEpisode";
-
-        // Get enclosure URL for download
-        std::string enclosureObj = extractJsonObject(obj, "enclosure");
-        if (!enclosureObj.empty()) {
-            ep.coverPath = extractJsonValue(enclosureObj, "url");  // Reusing coverPath for enclosure URL
+        if (!exists && !title.empty()) {
+            for (const auto& t : existingTitles) {
+                if (t == title) { exists = true; break; }
+            }
         }
 
-        if (!ep.title.empty()) {
+        if (!exists && !title.empty()) {
+            MediaItem ep;
+            ep.episodeId = guid;
+            ep.podcastId = podcastId;
+            ep.id = podcastId;
+            ep.title = title;
+            ep.description = extractJsonValue(obj, "description");
+            ep.pubDate = extractJsonValue(obj, "pubDate");
+            ep.mediaType = MediaType::PODCAST_EPISODE;
+            ep.type = "podcastEpisode";
+
+            // Store enclosure info for download - this is the audio URL
+            std::string enclosureObj = extractJsonObject(obj, "enclosure");
+            if (!enclosureObj.empty()) {
+                ep.coverPath = extractJsonValue(enclosureObj, "url");  // Reusing coverPath for enclosure URL
+                ep.enclosureType = extractJsonValue(enclosureObj, "type");
+                ep.enclosureLength = extractJsonValue(enclosureObj, "length");
+            }
+
+            // Store original JSON for download request
+            ep.originalJson = obj;
+
             newEpisodes.push_back(ep);
         }
 
         pos = objEnd;
     }
 
-    brls::Logger::info("Found {} new episodes", newEpisodes.size());
+    brls::Logger::info("Found {} new episodes not in library", newEpisodes.size());
     return true;
 }
 
@@ -2011,23 +2092,48 @@ bool AudiobookshelfClient::downloadNewEpisodesToServer(const std::string& podcas
         return result;
     };
 
-    // Build array of episode objects with full data (for new RSS episodes)
+    // Build array of episode objects matching Kodi addon format:
+    // {title, guid, enclosure: {url, type, length}, description, pubDate, season, episode}
     std::string body = "[";
     for (size_t i = 0; i < episodes.size(); ++i) {
         const auto& ep = episodes[i];
         body += "{";
-        body += "\"episodeType\":\"full\",";
         body += "\"title\":\"" + escapeJson(ep.title) + "\"";
+
+        // GUID (episode identifier)
+        if (!ep.episodeId.empty()) {
+            body += ",\"guid\":\"" + escapeJson(ep.episodeId) + "\"";
+        }
+
+        // Enclosure object with audio URL, type, and length
+        // coverPath is being used to store enclosure URL from checkNewEpisodes
+        if (!ep.coverPath.empty()) {
+            body += ",\"enclosure\":{";
+            body += "\"url\":\"" + escapeJson(ep.coverPath) + "\"";
+            if (!ep.enclosureType.empty()) {
+                body += ",\"type\":\"" + escapeJson(ep.enclosureType) + "\"";
+            }
+            if (!ep.enclosureLength.empty()) {
+                body += ",\"length\":\"" + escapeJson(ep.enclosureLength) + "\"";
+            }
+            body += "}";
+        }
+
         if (!ep.description.empty()) {
             body += ",\"description\":\"" + escapeJson(ep.description) + "\"";
         }
         if (!ep.pubDate.empty()) {
             body += ",\"pubDate\":\"" + escapeJson(ep.pubDate) + "\"";
         }
-        // coverPath is being used to store enclosure URL from checkNewEpisodes
-        if (!ep.coverPath.empty()) {
-            body += ",\"enclosureUrl\":\"" + escapeJson(ep.coverPath) + "\"";
+
+        // Optional season/episode numbers
+        if (ep.seasonNumber > 0) {
+            body += ",\"season\":" + std::to_string(ep.seasonNumber);
         }
+        if (ep.episodeNumber > 0) {
+            body += ",\"episode\":" + std::to_string(ep.episodeNumber);
+        }
+
         body += "}";
         if (i < episodes.size() - 1) body += ",";
     }

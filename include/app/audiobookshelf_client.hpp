@@ -110,6 +110,11 @@ struct MediaItem {
     int episodeNumber = 0;
     int seasonNumber = 0;
     std::string pubDate;
+
+    // For RSS episode downloads (enclosure info)
+    std::string enclosureType;     // Audio MIME type (e.g., "audio/mpeg")
+    std::string enclosureLength;   // File size from RSS
+    std::string originalJson;      // Original JSON for download request
 };
 
 // Library section info
