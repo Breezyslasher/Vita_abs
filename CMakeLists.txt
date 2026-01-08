@@ -112,10 +112,11 @@ target_link_libraries(${PROJECT_NAME}
     borealis
     ${APP_PLATFORM_LIB}
 
-    # External libraries (curl with SSL)
+    # External libraries (curl with TLS via mbedtls)
     curl
-    ssl
-    crypto
+    mbedtls
+    mbedx509
+    mbedcrypto
 
     # Use linker group for mpv/FFmpeg circular dependencies
     -Wl,--start-group
