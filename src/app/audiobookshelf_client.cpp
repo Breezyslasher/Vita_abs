@@ -986,16 +986,43 @@ bool AudiobookshelfClient::fetchItem(const std::string& itemId, MediaItem& item)
 
     // Extract media object for chapters and tracks
     std::string mediaObj = extractJsonObject(resp.body, "media");
-    brls::Logger::debug("Media object found: {}", !mediaObj.empty() ? "yes" : "no");
+    brls::Logger::debug("Media object found: {} ({} chars)", !mediaObj.empty() ? "yes" : "no", mediaObj.length());
 
-    // Parse chapters - try root level first, then media.chapters
-    std::string chaptersArray = extractJsonArray(resp.body, "chapters");
-    if (chaptersArray.empty() && !mediaObj.empty()) {
-        chaptersArray = extractJsonArray(mediaObj, "chapters");
+    // Debug: show part of media object to verify structure
+    if (!mediaObj.empty() && mediaObj.length() > 100) {
+        brls::Logger::debug("Media object preview: {}", mediaObj.substr(0, 200));
     }
-    brls::Logger::debug("Chapters array found: {} chars", chaptersArray.length());
+
+    // Parse chapters - Audiobookshelf stores chapters in media.chapters
+    // First try media.chapters (correct location for books)
+    std::string chaptersArray;
+    if (!mediaObj.empty()) {
+        chaptersArray = extractJsonArray(mediaObj, "chapters");
+        brls::Logger::debug("Chapters from media object: {} chars", chaptersArray.length());
+    }
+
+    // Fallback: try root level chapters (some API versions)
+    if (chaptersArray.empty()) {
+        chaptersArray = extractJsonArray(resp.body, "chapters");
+        brls::Logger::debug("Chapters from root level: {} chars", chaptersArray.length());
+    }
+
+    // Debug: check if chapters key exists at all
+    if (chaptersArray.empty()) {
+        size_t chaptersKeyPos = resp.body.find("\"chapters\"");
+        if (chaptersKeyPos != std::string::npos) {
+            brls::Logger::debug("'chapters' key found at position {} but array extraction failed", chaptersKeyPos);
+            // Show context around the key
+            size_t start = (chaptersKeyPos > 50) ? chaptersKeyPos - 50 : 0;
+            size_t len = std::min((size_t)200, resp.body.length() - start);
+            brls::Logger::debug("Context: {}", resp.body.substr(start, len));
+        } else {
+            brls::Logger::debug("'chapters' key not found in response");
+        }
+    }
 
     if (!chaptersArray.empty()) {
+        brls::Logger::debug("Parsing chapters array...");
         size_t pos = 0;
         // Look for "start" field which all chapters have (some don't have "id")
         while ((pos = chaptersArray.find("\"start\"", pos)) != std::string::npos) {
@@ -1015,10 +1042,13 @@ bool AudiobookshelfClient::fetchItem(const std::string& itemId, MediaItem& item)
 
             std::string chObj = chaptersArray.substr(objStart, objEnd - objStart);
             Chapter ch = parseChapter(chObj);
-            item.chapters.push_back(ch);
+            if (ch.start >= 0) {  // Valid chapter
+                item.chapters.push_back(ch);
+            }
 
             pos = objEnd;
         }
+        brls::Logger::debug("Parsed {} chapters from array", item.chapters.size());
     }
 
     // Parse audio tracks

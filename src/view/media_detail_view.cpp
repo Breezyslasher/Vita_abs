@@ -481,6 +481,8 @@ void MediaDetailView::onPlay(bool resume) {
 }
 
 void MediaDetailView::onDownload() {
+    brls::Logger::info("onDownload called for item: {} ({})", m_item.title, m_item.id);
+
     // Check if already downloaded
     if (DownloadsManager::getInstance().isDownloaded(m_item.id)) {
         brls::Application::notify("Already downloaded");
@@ -488,15 +490,32 @@ void MediaDetailView::onDownload() {
     }
 
     // Check if we have audio track info
+    brls::Logger::debug("Current audioTracks count: {}", m_item.audioTracks.size());
+
     if (m_item.audioTracks.empty()) {
         brls::Application::notify("Loading media info...");
 
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         MediaItem fullItem;
-        if (client.fetchItem(m_item.id, fullItem) && !fullItem.audioTracks.empty()) {
-            m_item = fullItem;
+        brls::Logger::debug("Fetching full item details for download...");
+        if (client.fetchItem(m_item.id, fullItem)) {
+            brls::Logger::debug("Fetched item: {} tracks, {} chapters",
+                               fullItem.audioTracks.size(), fullItem.chapters.size());
+            if (!fullItem.audioTracks.empty()) {
+                m_item = fullItem;
+            } else {
+                brls::Logger::warning("Fetched item has no audio tracks");
+            }
         } else {
+            brls::Logger::error("Failed to fetch item details");
             brls::Application::notify("Unable to download - media info not available");
+            return;
+        }
+
+        // Still no tracks after fetching
+        if (m_item.audioTracks.empty()) {
+            brls::Logger::error("No audio tracks available for download");
+            brls::Application::notify("Unable to download - no audio tracks found");
             return;
         }
     }
@@ -668,16 +687,20 @@ void MediaDetailView::downloadAll() {
             for (size_t i = 0; i < episodes.size(); i++) {
                 const auto& ep = episodes[i];
 
-                MediaItem fullItem;
-                if (client.fetchItem(ep.id, fullItem) && !fullItem.audioTracks.empty()) {
+                // For podcast episodes, ep.id is the podcast ID and ep.episodeId is the episode ID
+                // We use the episode's own data rather than fetching the parent podcast
+                brls::Logger::debug("Queueing episode: {} (podcastId: {}, episodeId: {})",
+                                   ep.title, ep.podcastId, ep.episodeId);
+
+                if (!ep.episodeId.empty()) {
                     if (DownloadsManager::getInstance().queueDownload(
-                        fullItem.id,
-                        fullItem.title,
-                        fullItem.authorName,
-                        fullItem.duration,
-                        "episode",
-                        podcastTitle,
-                        fullItem.episodeId
+                        ep.podcastId,      // Use podcast ID as item ID
+                        ep.title,          // Episode title
+                        "",                // Author (not applicable for episodes)
+                        ep.duration,
+                        "episode",         // Media type
+                        podcastTitle,      // Parent title
+                        ep.episodeId       // Episode ID for the specific episode
                     )) {
                         queued++;
                     }
@@ -747,16 +770,19 @@ void MediaDetailView::downloadUnwatched(int maxCount) {
         for (size_t i = 0; i < unheardEpisodes.size(); i++) {
             const auto& ep = unheardEpisodes[i];
 
-            MediaItem fullItem;
-            if (client.fetchItem(ep.id, fullItem) && !fullItem.audioTracks.empty()) {
+            // For podcast episodes, ep.id is the podcast ID and ep.episodeId is the episode ID
+            brls::Logger::debug("Queueing unheard episode: {} (podcastId: {}, episodeId: {})",
+                               ep.title, ep.podcastId, ep.episodeId);
+
+            if (!ep.episodeId.empty()) {
                 if (DownloadsManager::getInstance().queueDownload(
-                    fullItem.id,
-                    fullItem.title,
-                    fullItem.authorName,
-                    fullItem.duration,
-                    "episode",
-                    podcastTitle,
-                    fullItem.episodeId
+                    ep.podcastId,      // Use podcast ID as item ID
+                    ep.title,          // Episode title
+                    "",                // Author (not applicable for episodes)
+                    ep.duration,
+                    "episode",         // Media type
+                    podcastTitle,      // Parent title
+                    ep.episodeId       // Episode ID for the specific episode
                 )) {
                     queued++;
                 }

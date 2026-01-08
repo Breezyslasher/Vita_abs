@@ -64,6 +64,12 @@ bool DownloadsManager::queueDownload(const std::string& itemId, const std::strin
                                       const std::string& mediaType,
                                       const std::string& seriesName,
                                       const std::string& episodeId) {
+    brls::Logger::info("DownloadsManager::queueDownload called:");
+    brls::Logger::info("  - itemId: {}", itemId);
+    brls::Logger::info("  - title: {}", title);
+    brls::Logger::info("  - mediaType: {}", mediaType);
+    brls::Logger::info("  - episodeId: {}", episodeId.empty() ? "(none)" : episodeId);
+
     std::lock_guard<std::mutex> lock(m_mutex);
 
     // Check if already in queue
@@ -100,10 +106,13 @@ bool DownloadsManager::queueDownload(const std::string& itemId, const std::strin
     std::string filename = itemId + extension;
     item.localPath = m_downloadsPath + "/" + filename;
 
+    brls::Logger::info("DownloadsManager: Local path: {}", item.localPath);
+
     m_downloads.push_back(item);
     saveState();
 
-    brls::Logger::info("DownloadsManager: Queued {} for download", title);
+    brls::Logger::info("DownloadsManager: Successfully queued {} for download (total in queue: {})",
+                       title, m_downloads.size());
     return true;
 }
 
@@ -288,10 +297,15 @@ void DownloadsManager::syncProgressToServer() {
 
 void DownloadsManager::downloadItem(DownloadItem& item) {
     brls::Logger::info("DownloadsManager: Starting download of {}", item.title);
+    brls::Logger::info("DownloadsManager: Item ID: {}, Episode ID: {}, Type: {}",
+                       item.itemId, item.episodeId.empty() ? "(none)" : item.episodeId, item.mediaType);
 
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
     std::string serverUrl = client.getServerUrl();
     std::string token = client.getAuthToken();
+
+    brls::Logger::debug("DownloadsManager: Server URL: {}", serverUrl);
+    brls::Logger::debug("DownloadsManager: Auth token present: {}", !token.empty() ? "yes" : "no");
 
     if (serverUrl.empty() || token.empty()) {
         brls::Logger::error("DownloadsManager: Not connected to server");
@@ -303,7 +317,9 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
     // Check if this is a multi-file audiobook
     std::vector<AudioFileInfo> audioFiles;
     if (item.episodeId.empty() && item.mediaType == "book") {
+        brls::Logger::info("DownloadsManager: Checking for multi-file audiobook...");
         client.getAudioFiles(item.itemId, audioFiles);
+        brls::Logger::info("DownloadsManager: Found {} audio files", audioFiles.size());
     }
 
     if (audioFiles.size() > 1) {
@@ -408,16 +424,22 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
     }
 
     // Single file download (original logic)
+    brls::Logger::info("DownloadsManager: Single file download mode");
+    brls::Logger::info("DownloadsManager: Getting download URL for item: {}, episode: {}",
+                       item.itemId, item.episodeId.empty() ? "(none)" : item.episodeId);
+
     std::string url = client.getFileDownloadUrl(item.itemId, item.episodeId);
 
     if (url.empty()) {
         brls::Logger::error("DownloadsManager: Failed to get download URL for {}", item.itemId);
+        brls::Logger::error("DownloadsManager: This usually means the file ino could not be found");
         item.state = DownloadState::FAILED;
         saveState();
         return;
     }
 
-    brls::Logger::info("DownloadsManager: Downloading from {}", url);
+    brls::Logger::info("DownloadsManager: Download URL: {}", url);
+    brls::Logger::info("DownloadsManager: Local path: {}", item.localPath);
 
     // Open local file for writing
 #ifdef __vita__
