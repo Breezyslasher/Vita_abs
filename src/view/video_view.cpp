@@ -23,6 +23,11 @@ void VideoView::draw(NVGcontext* vg, float x, float y, float width, float height
 
     MpvPlayer& player = MpvPlayer::getInstance();
 
+    // Only render when actually playing or paused (not loading/idle)
+    if (!player.isPlaying() && !player.isPaused()) {
+        return;
+    }
+
     // Render new frame if available
     player.render();
 
@@ -35,6 +40,12 @@ void VideoView::draw(NVGcontext* vg, float x, float y, float width, float height
     // Calculate video dimensions while maintaining aspect ratio
     float videoWidth = (float)player.getVideoWidth();
     float videoHeight = (float)player.getVideoHeight();
+
+    // Safety check to avoid division by zero
+    if (videoHeight <= 0 || videoWidth <= 0) {
+        return;
+    }
+
     float aspectRatio = videoWidth / videoHeight;
 
     float drawWidth = width;

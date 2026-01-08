@@ -248,6 +248,8 @@ bool MpvPlayer::loadUrl(const std::string& url, const std::string& title) {
 
     brls::Logger::info("MpvPlayer: Loading URL: {}", normalizedUrl);
 
+    // Store in member variable BEFORE passing to async command
+    // This ensures the string stays valid until playback completes
     m_currentUrl = normalizedUrl;
     m_playbackInfo = MpvPlaybackInfo();
     m_playbackInfo.mediaTitle = title;
@@ -255,8 +257,8 @@ bool MpvPlayer::loadUrl(const std::string& url, const std::string& title) {
     // Mark command as pending
     m_commandPending = true;
 
-    // Use simple loadfile command
-    const char* cmd[] = {"loadfile", normalizedUrl.c_str(), "replace", nullptr};
+    // Use simple loadfile command - use m_currentUrl.c_str() to ensure string lifetime
+    const char* cmd[] = {"loadfile", m_currentUrl.c_str(), "replace", nullptr};
     int result = mpv_command_async(m_mpv, CMD_LOADFILE, cmd);
     if (result < 0) {
         m_errorMessage = std::string("Failed to queue load command: ") + mpv_error_string(result);
@@ -948,6 +950,11 @@ void MpvPlayer::cleanupRenderContext() {
 void MpvPlayer::render() {
 #ifdef __vita__
     if (!m_mpvRenderCtx || !m_renderReady || !m_gxmFramebuffer) {
+        return;
+    }
+
+    // Don't try to render while loading or idle - MPV may not be ready
+    if (m_state == MpvPlayerState::IDLE || m_state == MpvPlayerState::LOADING) {
         return;
     }
 
