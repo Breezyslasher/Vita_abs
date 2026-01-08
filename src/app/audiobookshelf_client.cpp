@@ -1021,7 +1021,9 @@ bool AudiobookshelfClient::fetchItem(const std::string& itemId, MediaItem& item)
 
     HttpClient client;
     HttpRequest req;
-    req.url = buildApiUrl("/api/items/" + itemId + "?expanded=1");
+    // Note: Don't use ?expanded=1 as it may change response format
+    // Kodi addon uses plain /api/items/{id} endpoint
+    req.url = buildApiUrl("/api/items/" + itemId);
     req.method = "GET";
     req.headers["Accept"] = "application/json";
     req.headers["Authorization"] = "Bearer " + m_authToken;
@@ -1033,56 +1035,73 @@ bool AudiobookshelfClient::fetchItem(const std::string& itemId, MediaItem& item)
         return false;
     }
 
+    brls::Logger::debug("Response body length: {} chars", resp.body.length());
+
     item = parseMediaItem(resp.body);
 
     // Extract media object for chapters and tracks
+    // Kodi addon: item.get('media', {}).get('chapters', [])
     std::string mediaObj = extractJsonObject(resp.body, "media");
-    brls::Logger::debug("Media object found: {} ({} chars)", !mediaObj.empty() ? "yes" : "no", mediaObj.length());
+    brls::Logger::info("Media object found: {} ({} chars)", !mediaObj.empty() ? "yes" : "no", mediaObj.length());
 
     // Debug: show part of media object to verify structure
     if (!mediaObj.empty() && mediaObj.length() > 100) {
-        brls::Logger::debug("Media object preview: {}", mediaObj.substr(0, 200));
+        brls::Logger::debug("Media object preview: {}", mediaObj.substr(0, 300));
     }
 
-    // Parse chapters - Audiobookshelf stores chapters in media.chapters
-    // First try media.chapters (correct location for books)
+    // Parse chapters from media.chapters (like Kodi addon does)
     std::string chaptersArray;
     if (!mediaObj.empty()) {
-        chaptersArray = extractJsonArray(mediaObj, "chapters");
-        brls::Logger::debug("Chapters from media object: {} chars", chaptersArray.length());
-    }
+        // Search for "chapters" in the media object
+        size_t chaptersPos = mediaObj.find("\"chapters\"");
+        if (chaptersPos != std::string::npos) {
+            brls::Logger::debug("Found 'chapters' key in media object at position {}", chaptersPos);
 
-    // Fallback: try root level chapters (some API versions)
-    if (chaptersArray.empty()) {
-        chaptersArray = extractJsonArray(resp.body, "chapters");
-        brls::Logger::debug("Chapters from root level: {} chars", chaptersArray.length());
-    }
+            // Find the colon after chapters
+            size_t colonPos = mediaObj.find(':', chaptersPos);
+            if (colonPos != std::string::npos) {
+                // Find the opening bracket
+                size_t arrStart = mediaObj.find('[', colonPos);
+                if (arrStart != std::string::npos) {
+                    // Find matching closing bracket
+                    int bracketCount = 1;
+                    size_t arrEnd = arrStart + 1;
+                    while (bracketCount > 0 && arrEnd < mediaObj.length()) {
+                        char c = mediaObj[arrEnd];
+                        if (c == '[') bracketCount++;
+                        else if (c == ']') bracketCount--;
+                        arrEnd++;
+                    }
+                    chaptersArray = mediaObj.substr(arrStart, arrEnd - arrStart);
+                    brls::Logger::info("Chapters array extracted: {} chars", chaptersArray.length());
 
-    // Debug: check if chapters key exists at all
-    if (chaptersArray.empty()) {
-        size_t chaptersKeyPos = resp.body.find("\"chapters\"");
-        if (chaptersKeyPos != std::string::npos) {
-            brls::Logger::debug("'chapters' key found at position {} but array extraction failed", chaptersKeyPos);
-            // Show context around the key
-            size_t start = (chaptersKeyPos > 50) ? chaptersKeyPos - 50 : 0;
-            size_t len = std::min((size_t)200, resp.body.length() - start);
-            brls::Logger::debug("Context: {}", resp.body.substr(start, len));
+                    // Show preview of chapters
+                    if (chaptersArray.length() > 10) {
+                        brls::Logger::debug("Chapters preview: {}",
+                            chaptersArray.substr(0, std::min((size_t)200, chaptersArray.length())));
+                    }
+                }
+            }
         } else {
-            brls::Logger::debug("'chapters' key not found in response");
+            brls::Logger::warning("'chapters' key NOT found in media object");
         }
     }
 
-    if (!chaptersArray.empty()) {
+    // Parse individual chapters
+    if (!chaptersArray.empty() && chaptersArray != "[]") {
         brls::Logger::debug("Parsing chapters array...");
         size_t pos = 0;
-        // Look for "start" field which all chapters have (some don't have "id")
+
+        // Look for chapter objects - they have "start" field
         while ((pos = chaptersArray.find("\"start\"", pos)) != std::string::npos) {
+            // Find the start of this chapter object
             size_t objStart = chaptersArray.rfind('{', pos);
             if (objStart == std::string::npos) {
                 pos++;
                 continue;
             }
 
+            // Find the end of this chapter object
             int braceCount = 1;
             size_t objEnd = objStart + 1;
             while (braceCount > 0 && objEnd < chaptersArray.length()) {
@@ -1093,13 +1112,19 @@ bool AudiobookshelfClient::fetchItem(const std::string& itemId, MediaItem& item)
 
             std::string chObj = chaptersArray.substr(objStart, objEnd - objStart);
             Chapter ch = parseChapter(chObj);
-            if (ch.start >= 0) {  // Valid chapter
+
+            // Add chapter if it looks valid
+            if (ch.end > ch.start) {
                 item.chapters.push_back(ch);
+                brls::Logger::debug("Added chapter: '{}' ({:.1f}s - {:.1f}s)",
+                    ch.title, ch.start, ch.end);
             }
 
             pos = objEnd;
         }
-        brls::Logger::debug("Parsed {} chapters from array", item.chapters.size());
+        brls::Logger::info("Parsed {} chapters from array", item.chapters.size());
+    } else {
+        brls::Logger::warning("No chapters array found or array is empty");
     }
 
     // Parse audio tracks
@@ -1399,11 +1424,14 @@ std::string AudiobookshelfClient::getDirectStreamUrl(const std::string& itemId, 
 
 std::string AudiobookshelfClient::getFileDownloadUrl(const std::string& itemId, const std::string& episodeId) {
     // Fetch item to get file info (like Kodi addon does)
-    brls::Logger::debug("Getting file download URL for item: {}, episode: {}", itemId, episodeId);
+    // Kodi: item = self.get_library_item_by_id(iid, expanded=1, episode=episode_id)
+    brls::Logger::info("Getting file download URL for item: {}, episode: {}",
+                       itemId, episodeId.empty() ? "(none)" : episodeId);
 
     HttpClient client;
     HttpRequest req;
-    req.url = buildApiUrl("/api/items/" + itemId);
+    // Use expanded=1 for file URL like Kodi does in get_file_url()
+    req.url = buildApiUrl("/api/items/" + itemId + "?expanded=1");
     req.method = "GET";
     req.headers["Accept"] = "application/json";
     req.headers["Authorization"] = "Bearer " + m_authToken;
@@ -1415,12 +1443,26 @@ std::string AudiobookshelfClient::getFileDownloadUrl(const std::string& itemId, 
         return "";
     }
 
+    brls::Logger::debug("Response length: {} chars", resp.body.length());
+
     std::string fileIno;
     std::string mediaObj = extractJsonObject(resp.body, "media");
 
+    if (mediaObj.empty()) {
+        brls::Logger::error("Media object not found in response");
+        return "";
+    }
+
+    brls::Logger::debug("Media object: {} chars", mediaObj.length());
+
     if (!episodeId.empty()) {
-        // Podcast episode - find the episode and get its audioFile
+        // Podcast episode - find the episode and get its audioFile.ino
+        // Kodi: episodes = item.get('media', {}).get('episodes', [])
+        brls::Logger::info("Looking for podcast episode: {}", episodeId);
+
         std::string episodesArray = extractJsonArray(mediaObj, "episodes");
+        brls::Logger::debug("Episodes array: {} chars", episodesArray.length());
+
         if (!episodesArray.empty()) {
             size_t pos = 0;
             while ((pos = episodesArray.find("\"id\"", pos)) != std::string::npos) {
@@ -1439,21 +1481,39 @@ std::string AudiobookshelfClient::getFileDownloadUrl(const std::string& itemId, 
                 std::string epId = extractJsonValue(epObj, "id");
 
                 if (epId == episodeId) {
-                    // Found the episode - get audioFile.ino
+                    brls::Logger::info("Found episode: {}", episodeId);
+                    // Kodi: audio_file = episode_data['audioFile']
+                    //       ino = audio_file.get('ino')
                     std::string audioFileObj = extractJsonObject(epObj, "audioFile");
                     if (!audioFileObj.empty()) {
                         fileIno = extractJsonValue(audioFileObj, "ino");
+                        brls::Logger::info("Episode audio file ino: {}", fileIno);
+                    } else {
+                        brls::Logger::warning("Episode has no audioFile - not downloaded on server?");
                     }
                     break;
                 }
                 pos = objEnd;
             }
+
+            if (fileIno.empty()) {
+                brls::Logger::error("Episode {} not found in episodes list", episodeId);
+            }
+        } else {
+            brls::Logger::error("No episodes array found in media object");
         }
     } else {
-        // Audiobook - get first audio file from audioFiles array or libraryFiles
+        // Audiobook - get audio file ino from media.audioFiles
+        // Kodi: audio_files = media.get('audioFiles', [])
+        //       sorted_files = sorted(audio_files, key=lambda x: x.get('index', 0))
+        //       ino = sorted_files[0].get('ino')
+        brls::Logger::info("Looking for audiobook audio files");
+
         std::string audioFilesArray = extractJsonArray(mediaObj, "audioFiles");
+        brls::Logger::debug("audioFiles array: {} chars", audioFilesArray.length());
+
         if (!audioFilesArray.empty()) {
-            // Get first audio file's ino
+            // Find first audio file (lowest index)
             size_t objStart = audioFilesArray.find('{');
             if (objStart != std::string::npos) {
                 int braceCount = 1;
@@ -1465,11 +1525,41 @@ std::string AudiobookshelfClient::getFileDownloadUrl(const std::string& itemId, 
                 }
                 std::string firstFile = audioFilesArray.substr(objStart, objEnd - objStart);
                 fileIno = extractJsonValue(firstFile, "ino");
+                brls::Logger::info("First audio file ino: {}", fileIno);
+            }
+        }
+
+        // Fallback: check media.tracks for contentUrl (single file like m4b)
+        // Kodi: tracks = media.get('tracks', [])
+        //       content_url = tracks[0].get('contentUrl')
+        if (fileIno.empty()) {
+            brls::Logger::debug("No ino found, checking tracks for contentUrl");
+            std::string tracksArray = extractJsonArray(mediaObj, "tracks");
+            if (!tracksArray.empty()) {
+                size_t objStart = tracksArray.find('{');
+                if (objStart != std::string::npos) {
+                    int braceCount = 1;
+                    size_t objEnd = objStart + 1;
+                    while (braceCount > 0 && objEnd < tracksArray.length()) {
+                        if (tracksArray[objEnd] == '{') braceCount++;
+                        else if (tracksArray[objEnd] == '}') braceCount--;
+                        objEnd++;
+                    }
+                    std::string firstTrack = tracksArray.substr(objStart, objEnd - objStart);
+                    std::string contentUrl = extractJsonValue(firstTrack, "contentUrl");
+                    if (!contentUrl.empty()) {
+                        // Use contentUrl directly
+                        std::string url = m_serverUrl + contentUrl + "?token=" + m_authToken;
+                        brls::Logger::info("Using track contentUrl: {}", url);
+                        return url;
+                    }
+                }
             }
         }
 
         // Fallback to libraryFiles if audioFiles doesn't have ino
         if (fileIno.empty()) {
+            brls::Logger::debug("Trying libraryFiles fallback");
             std::string libFilesArray = extractJsonArray(resp.body, "libraryFiles");
             if (!libFilesArray.empty()) {
                 // Find first audio file
