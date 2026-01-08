@@ -92,6 +92,7 @@ set(APP_SOURCES
     src/utils/http_client.cpp
     src/utils/image_loader.cpp
     src/utils/jwt_auth.cpp
+    src/utils/audio_utils.cpp
     src/utils/vita_stubs.c
 )
 
