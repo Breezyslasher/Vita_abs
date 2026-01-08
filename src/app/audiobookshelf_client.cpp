@@ -1775,8 +1775,9 @@ bool AudiobookshelfClient::addPodcastToLibrary(const std::string& libraryId, con
                                                 const std::string& folderId) {
     brls::Logger::debug("Adding podcast '{}' to library {} from feed: {}", podcast.title, libraryId, podcast.feedUrl);
 
-    // Get folder ID if not provided - fetch from library
+    // Get folder ID and path if not provided - fetch from library
     std::string folder = folderId;
+    std::string folderPath;
     if (folder.empty()) {
         // Fetch library to get first folder
         HttpClient libClient;
@@ -1788,14 +1789,15 @@ bool AudiobookshelfClient::addPodcastToLibrary(const std::string& libraryId, con
 
         HttpResponse libResp = libClient.request(libReq);
         if (libResp.statusCode == 200) {
-            // Extract first folder ID
+            // Extract first folder ID and path
             std::string foldersArray = extractJsonArray(libResp.body, "folders");
             if (!foldersArray.empty()) {
-                size_t idPos = foldersArray.find("\"id\"");
-                if (idPos != std::string::npos) {
-                    folder = extractJsonValue(foldersArray, "id");
-                    brls::Logger::debug("Using folder ID: {}", folder);
+                folder = extractJsonValue(foldersArray, "id");
+                folderPath = extractJsonValue(foldersArray, "fullPath");
+                if (folderPath.empty()) {
+                    folderPath = extractJsonValue(foldersArray, "path");
                 }
+                brls::Logger::debug("Using folder ID: {} path: {}", folder, folderPath);
             }
         }
     }
@@ -1809,6 +1811,7 @@ bool AudiobookshelfClient::addPodcastToLibrary(const std::string& libraryId, con
     HttpRequest req;
     req.url = buildApiUrl("/api/podcasts");
     req.method = "POST";
+    req.timeout = 60;  // Longer timeout for podcast creation (server fetches RSS)
     req.headers["Accept"] = "application/json";
     req.headers["Content-Type"] = "application/json";
     req.headers["Authorization"] = "Bearer " + m_authToken;
@@ -1830,18 +1833,16 @@ bool AudiobookshelfClient::addPodcastToLibrary(const std::string& libraryId, con
     };
 
     // Build request body with proper media.metadata structure
+    // Match the Kodi addon's structure exactly
     std::string body = "{";
-    body += "\"libraryId\":\"" + libraryId + "\",";
+    body += "\"path\":\"" + escapeJson(folderPath) + "\",";
     body += "\"folderId\":\"" + folder + "\",";
-    body += "\"media\":{";
-    body += "\"metadata\":{";
+    body += "\"libraryId\":\"" + libraryId + "\",";
+    body += "\"media\":{\"metadata\":{";
     body += "\"title\":\"" + escapeJson(podcast.title) + "\",";
     body += "\"feedUrl\":\"" + escapeJson(podcast.feedUrl) + "\"";
     if (!podcast.author.empty()) {
         body += ",\"author\":\"" + escapeJson(podcast.author) + "\"";
-    }
-    if (!podcast.description.empty()) {
-        body += ",\"description\":\"" + escapeJson(podcast.description) + "\"";
     }
     if (!podcast.artworkUrl.empty()) {
         body += ",\"imageUrl\":\"" + escapeJson(podcast.artworkUrl) + "\"";
