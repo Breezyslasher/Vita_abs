@@ -62,7 +62,7 @@ ProgressDialog::ProgressDialog(const std::string& title) {
     m_progressBar = new brls::Rectangle();
     m_progressBar->setWidth(0);
     m_progressBar->setHeight(20);
-    m_progressBar->setColor(nvgRGBA(229, 160, 13, 255));  // Plex orange
+    m_progressBar->setColor(nvgRGBA(52, 152, 219, 255));  // ABS blue
     m_progressBar->setCornerRadius(5);
     m_progressBar->setPositionType(brls::PositionType::ABSOLUTE);
     m_progressBar->setPositionLeft(0);

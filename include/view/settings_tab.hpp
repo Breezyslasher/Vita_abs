@@ -19,6 +19,7 @@ private:
     void createLayoutSection();
     void createContentDisplaySection();
     void createPlaybackSection();
+    void createAudioSection();
     void createTranscodeSection();
     void createDownloadsSection();
     void createAboutSection();
@@ -47,7 +48,6 @@ private:
     brls::BooleanCell* m_debugLogToggle = nullptr;
 
     // Layout section
-    brls::BooleanCell* m_sidebarLibrariesToggle = nullptr;
     brls::BooleanCell* m_collapseSidebarToggle = nullptr;
     brls::DetailCell* m_hiddenLibrariesCell = nullptr;
     brls::DetailCell* m_sidebarOrderCell = nullptr;

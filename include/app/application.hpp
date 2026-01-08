@@ -69,7 +69,6 @@ struct AppSettings {
     bool debugLogging = true;
 
     // Layout Settings
-    bool showLibrariesInSidebar = false;
     bool collapseSidebar = false;
     std::string hiddenLibraries;       // Comma-separated list of library IDs to hide
 
@@ -129,7 +128,8 @@ public:
     // Navigation
     void pushLoginActivity();
     void pushMainActivity();
-    void pushPlayerActivity(const std::string& itemId, const std::string& episodeId = "");
+    void pushPlayerActivity(const std::string& itemId, const std::string& episodeId = "",
+                            float startTime = -1.0f);
 
     // Authentication state
     bool isLoggedIn() const { return !m_authToken.empty(); }

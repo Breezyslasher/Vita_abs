@@ -113,8 +113,8 @@ void DownloadsTab::refresh() {
                 break;
             case DownloadState::COMPLETED:
                 statusText = "Ready to play";
-                if (item.viewOffset > 0) {
-                    int minutes = (int)(item.viewOffset / 60000);
+                if (item.currentTime > 0) {
+                    int minutes = (int)(item.currentTime / 60.0f);  // currentTime is in seconds
                     statusText += " (" + std::to_string(minutes) + " min watched)";
                 }
                 break;
@@ -133,7 +133,7 @@ void DownloadsTab::refresh() {
             playBtn->setText("Play");
             playBtn->setMargins(0, 0, 0, 10);
 
-            std::string ratingKey = item.ratingKey;
+            std::string ratingKey = item.itemId;
             std::string localPath = item.localPath;
             playBtn->registerClickAction([ratingKey, localPath](brls::View*) {
                 // Play local file
@@ -144,7 +144,7 @@ void DownloadsTab::refresh() {
 
             auto deleteBtn = new brls::Button();
             deleteBtn->setText("Delete");
-            std::string key = item.ratingKey;
+            std::string key = item.itemId;
             deleteBtn->registerClickAction([key](brls::View*) {
                 DownloadsManager::getInstance().deleteDownload(key);
                 brls::Application::notify("Download deleted");
@@ -154,7 +154,7 @@ void DownloadsTab::refresh() {
         } else if (item.state == DownloadState::DOWNLOADING || item.state == DownloadState::QUEUED) {
             auto cancelBtn = new brls::Button();
             cancelBtn->setText("Cancel");
-            std::string key = item.ratingKey;
+            std::string key = item.itemId;
             cancelBtn->registerClickAction([key](brls::View*) {
                 DownloadsManager::getInstance().cancelDownload(key);
                 brls::Application::notify("Download cancelled");

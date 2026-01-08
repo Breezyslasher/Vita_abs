@@ -30,6 +30,15 @@ struct AudioTrack {
     std::string mimeType;
 };
 
+// Audio file info for downloads
+struct AudioFileInfo {
+    std::string ino;           // File inode for download URL
+    std::string filename;      // Original filename
+    float duration = 0.0f;     // Duration in seconds
+    int64_t size = 0;          // File size in bytes
+    std::string mimeType;
+};
+
 // Chapter info
 struct Chapter {
     int id = 0;
@@ -51,6 +60,14 @@ struct Series {
     std::string id;
     std::string name;
     std::string sequence;  // Book number in series
+};
+
+// Genre/Category item (for browsing by genre)
+struct GenreItem {
+    std::string id;
+    std::string name;
+    std::string title;  // Display title (same as name)
+    int itemCount = 0;
 };
 
 // Media item info (audiobook or podcast)
@@ -103,16 +120,10 @@ struct MediaItem {
     int seasonNumber = 0;
     std::string pubDate;
 
-    // ============================================
-    // Plex compatibility aliases
-    // ============================================
-    std::string ratingKey;         // Alias for id
-    std::string thumb;             // Alias for coverPath
-    std::string key;               // Alias for id (used for section/item keys)
-    std::string partPath;          // File path (audioTracks[0].contentUrl)
-    std::string grandparentTitle;  // Alias for seriesName
-    int64_t viewOffset = 0;        // Progress in milliseconds (currentTime * 1000)
-    bool watched = false;          // Alias for isFinished
+    // For RSS episode downloads (enclosure info)
+    std::string enclosureType;     // Audio MIME type (e.g., "audio/mpeg")
+    std::string enclosureLength;   // File size from RSS
+    std::string originalJson;      // Original JSON for download request
 };
 
 // Library section info
@@ -123,10 +134,6 @@ struct Library {
     std::string mediaType;         // "book" or "podcast"
     int itemCount = 0;
     std::vector<std::string> folders;
-
-    // Plex compatibility
-    std::string key;               // Alias for id
-    std::string title;             // Alias for name
 };
 
 // Collection info
@@ -138,9 +145,6 @@ struct Collection {
     std::string coverPath;
     int bookCount = 0;
     std::vector<std::string> bookIds;
-
-    // Plex compatibility
-    std::string ratingKey;         // Alias for id
 };
 
 // Server info
@@ -173,6 +177,7 @@ struct PlaybackSession {
     std::string playMethod;        // "directplay" or "transcode"
     std::string deviceInfo;
     int64_t updatedAt = 0;
+    std::vector<AudioTrack> audioTracks;  // Audio tracks with streaming URLs
 };
 
 // Personalized shelf (for home screen)
@@ -182,6 +187,17 @@ struct PersonalizedShelf {
     std::string labelStringKey;    // i18n key
     std::string type;              // "book", "series", "authors", "podcast", "episode"
     std::vector<MediaItem> entities;
+};
+
+// iTunes podcast search result
+struct PodcastSearchResult {
+    std::string title;
+    std::string author;
+    std::string feedUrl;           // RSS feed URL
+    std::string artworkUrl;        // Cover image URL
+    std::string description;
+    std::string genre;
+    int trackCount = 0;            // Number of episodes
 };
 
 /**
@@ -233,6 +249,13 @@ public:
     std::string getStreamUrl(const std::string& itemId, const std::string& episodeId = "");
     std::string getDirectStreamUrl(const std::string& itemId, int fileIndex = 0);
 
+    // File download (for local downloads - uses /api/items/{id}/file/{ino})
+    std::string getFileDownloadUrl(const std::string& itemId, const std::string& episodeId = "");
+
+    // Get all audio files for multi-file audiobooks
+    bool getAudioFiles(const std::string& itemId, std::vector<AudioFileInfo>& files);
+    std::string getFileDownloadUrlByIno(const std::string& itemId, const std::string& ino);
+
     // Progress
     bool updateProgress(const std::string& itemId, float currentTime, float duration,
                         bool isFinished = false, const std::string& episodeId = "");
@@ -262,55 +285,27 @@ public:
     // Podcasts
     bool fetchPodcastEpisodes(const std::string& podcastId, std::vector<MediaItem>& episodes);
 
+    // Podcast Management (iTunes search and RSS)
+    bool searchPodcasts(const std::string& query, std::vector<PodcastSearchResult>& results);
+    bool addPodcastToLibrary(const std::string& libraryId, const PodcastSearchResult& podcast,
+                             const std::string& folderId = "");
+    bool checkNewEpisodes(const std::string& podcastId, std::vector<MediaItem>& newEpisodes);
+    bool downloadEpisodesToServer(const std::string& podcastId, const std::vector<std::string>& episodeIds);
+    bool downloadNewEpisodesToServer(const std::string& podcastId, const std::vector<MediaItem>& episodes);
+    bool downloadAllNewEpisodes(const std::string& podcastId);
+
+    // Stub methods for unsupported features (Audiobookshelf doesn't have these)
+    bool fetchPlaylists(std::vector<MediaItem>& playlists) { playlists.clear(); return false; }
+    bool fetchEPGGrid(std::vector<MediaItem>& channels, int hours) { channels.clear(); return false; }
+    bool fetchByGenre(const std::string& libraryId, const std::string& genre, std::vector<MediaItem>& items) { items.clear(); return false; }
+    bool fetchByGenreKey(const std::string& libraryId, const std::string& genreKey, std::vector<MediaItem>& items) { items.clear(); return false; }
+
     // Configuration
     void setAuthToken(const std::string& token) { m_authToken = token; }
     const std::string& getAuthToken() const { return m_authToken; }
     void setServerUrl(const std::string& url) { m_serverUrl = url; }
     const std::string& getServerUrl() const { return m_serverUrl; }
     const User& getCurrentUser() const { return m_currentUser; }
-
-    // ============================================
-    // Plex API compatibility aliases
-    // These map old Plex-style calls to Audiobookshelf equivalents
-    // ============================================
-
-    // Library methods (Plex compatibility)
-    bool fetchLibrarySections(std::vector<Library>& sections) { return fetchLibraries(sections); }
-    bool fetchLibraryContent(const std::string& libraryId, std::vector<MediaItem>& items) {
-        return fetchLibraryItems(libraryId, items);
-    }
-
-    // Item methods (Plex compatibility)
-    bool fetchMediaDetails(const std::string& itemId, MediaItem& item) { return fetchItem(itemId, item); }
-    bool fetchChildren(const std::string& parentId, std::vector<MediaItem>& children) {
-        // For podcasts, fetch episodes; for books, this returns empty
-        return fetchPodcastEpisodes(parentId, children);
-    }
-
-    // Progress methods (Plex compatibility)
-    bool fetchContinueWatching(std::vector<MediaItem>& items) { return fetchItemsInProgress(items); }
-    bool fetchSectionRecentlyAdded(const std::string& libraryId, std::vector<MediaItem>& items) {
-        return fetchRecentlyAdded(libraryId, items);
-    }
-
-    // Cover/thumbnail (Plex compatibility)
-    std::string getThumbnailUrl(const std::string& path, int width = 400, int height = 400) {
-        // For Audiobookshelf, path is the item ID
-        return getCoverUrl(path, width, height);
-    }
-
-    // Collections (Plex compatibility)
-    bool fetchCollections(const std::string& libraryId, std::vector<Collection>& collections) {
-        return fetchLibraryCollections(libraryId, collections);
-    }
-
-    // Stub methods for unsupported Plex features
-    bool fetchPlaylists(std::vector<MediaItem>& playlists) { playlists.clear(); return false; }
-    bool fetchEPGGrid(std::vector<MediaItem>& channels, int hours) { channels.clear(); return false; }
-    bool fetchGenreItems(const std::string& libraryId, std::vector<std::string>& genres) { genres.clear(); return false; }
-    bool fetchByGenre(const std::string& libraryId, const std::string& genre, std::vector<MediaItem>& items) { items.clear(); return false; }
-    bool fetchByGenreKey(const std::string& libraryId, const std::string& genreKey, std::vector<MediaItem>& items) { items.clear(); return false; }
-    bool hasLiveTV() { return false; }
 
 private:
     AudiobookshelfClient() = default;

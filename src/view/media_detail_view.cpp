@@ -1,9 +1,9 @@
 /**
-#include "app/audiobookshelf_client.hpp"
  * VitaABS - Media Detail View implementation
  */
 
 #include "view/media_detail_view.hpp"
+#include "app/audiobookshelf_client.hpp"
 #include "view/media_item_cell.hpp"
 #include "view/progress_dialog.hpp"
 #include "app/application.hpp"
@@ -40,11 +40,6 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
     m_mainContent->setAxis(brls::Axis::COLUMN);
     m_mainContent->setPadding(30);
 
-    // Check if this is music content
-    bool isMusic = (m_item.mediaType == MediaType::MUSIC_ARTIST ||
-                    m_item.mediaType == MediaType::MUSIC_ALBUM ||
-                    m_item.mediaType == MediaType::MUSIC_TRACK);
-
     // Top row - poster and info
     auto* topRow = new brls::Box();
     topRow->setAxis(brls::Axis::ROW);
@@ -52,27 +47,20 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
     topRow->setAlignItems(brls::AlignItems::FLEX_START);
     topRow->setMarginBottom(20);
 
-    // Left side - poster
+    // Left side - poster (square for book/podcast covers)
     auto* leftBox = new brls::Box();
     leftBox->setAxis(brls::Axis::COLUMN);
     leftBox->setWidth(200);
     leftBox->setMarginRight(30);
 
     m_posterImage = new brls::Image();
-    if (isMusic) {
-        // Square album art
-        m_posterImage->setWidth(200);
-        m_posterImage->setHeight(200);
-    } else {
-        // Portrait poster
-        m_posterImage->setWidth(200);
-        m_posterImage->setHeight(300);
-    }
+    m_posterImage->setWidth(200);
+    m_posterImage->setHeight(200);  // Square cover
     m_posterImage->setScalingType(brls::ImageScalingType::FIT);
     leftBox->addView(m_posterImage);
 
-    // Play buttons (not for artists)
-    if (m_item.mediaType != MediaType::MUSIC_ARTIST) {
+    // Play button - for books and podcast episodes
+    if (m_item.mediaType == MediaType::BOOK || m_item.mediaType == MediaType::PODCAST_EPISODE) {
         m_playButton = new brls::Button();
         m_playButton->setText("Play");
         m_playButton->setWidth(200);
@@ -83,7 +71,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         });
         leftBox->addView(m_playButton);
 
-        if (m_item.viewOffset > 0) {
+        if (m_item.currentTime > 0) {
             m_resumeButton = new brls::Button();
             m_resumeButton->setText("Resume");
             m_resumeButton->setWidth(200);
@@ -95,33 +83,44 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
             leftBox->addView(m_resumeButton);
         }
 
-        // Download button (for movies, episodes, and tracks)
-        if (m_item.mediaType == MediaType::MOVIE || m_item.mediaType == MediaType::EPISODE ||
-            m_item.mediaType == MediaType::MUSIC_TRACK) {
-            m_downloadButton = new brls::Button();
-
-            // Check if already downloaded
-            if (DownloadsManager::getInstance().isDownloaded(m_item.ratingKey)) {
-                m_downloadButton->setText("Downloaded");
-            } else {
-                m_downloadButton->setText("Download");
-            }
-
-            m_downloadButton->setWidth(200);
-            m_downloadButton->setMarginTop(10);
-            m_downloadButton->registerClickAction([this](brls::View* view) {
-                onDownload();
-                return true;
-            });
-            leftBox->addView(m_downloadButton);
+        // Download button for directly playable content
+        m_downloadButton = new brls::Button();
+        if (DownloadsManager::getInstance().isDownloaded(m_item.id)) {
+            m_downloadButton->setText("Downloaded");
+        } else {
+            m_downloadButton->setText("Download");
         }
+        m_downloadButton->setWidth(200);
+        m_downloadButton->setMarginTop(10);
+        m_downloadButton->registerClickAction([this](brls::View* view) {
+            onDownload();
+            return true;
+        });
+        leftBox->addView(m_downloadButton);
     }
 
-    // Download options for shows, seasons, albums
-    if (m_item.mediaType == MediaType::SHOW ||
-        m_item.mediaType == MediaType::SEASON ||
-        m_item.mediaType == MediaType::MUSIC_ALBUM ||
-        m_item.mediaType == MediaType::MUSIC_ARTIST) {
+    // For podcasts, show download options
+    if (m_item.mediaType == MediaType::PODCAST) {
+        m_playButton = new brls::Button();
+        m_playButton->setText("Play Latest");
+        m_playButton->setWidth(200);
+        m_playButton->setMarginTop(20);
+        m_playButton->registerClickAction([this](brls::View* view) {
+            onPlay(false);
+            return true;
+        });
+        leftBox->addView(m_playButton);
+
+        // Find New Episodes button - check RSS for new episodes
+        m_findEpisodesButton = new brls::Button();
+        m_findEpisodesButton->setText("Find New Episodes");
+        m_findEpisodesButton->setWidth(200);
+        m_findEpisodesButton->setMarginTop(10);
+        m_findEpisodesButton->registerClickAction([this](brls::View* view) {
+            findNewEpisodes();
+            return true;
+        });
+        leftBox->addView(m_findEpisodesButton);
 
         m_downloadButton = new brls::Button();
         m_downloadButton->setText("Download...");
@@ -148,41 +147,47 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
     m_titleLabel->setMarginBottom(10);
     rightBox->addView(m_titleLabel);
 
+    // Author/Series info
+    if (!m_item.authorName.empty()) {
+        auto* authorLabel = new brls::Label();
+        authorLabel->setText("By: " + m_item.authorName);
+        authorLabel->setFontSize(18);
+        authorLabel->setMarginBottom(10);
+        rightBox->addView(authorLabel);
+    }
+
     // Metadata row
     auto* metaBox = new brls::Box();
     metaBox->setAxis(brls::Axis::ROW);
     metaBox->setMarginBottom(15);
 
-    if (m_item.year > 0) {
+    if (!m_item.publishedYear.empty()) {
         m_yearLabel = new brls::Label();
-        m_yearLabel->setText(std::to_string(m_item.year));
+        m_yearLabel->setText(m_item.publishedYear);
         m_yearLabel->setFontSize(16);
         m_yearLabel->setMarginRight(15);
         metaBox->addView(m_yearLabel);
     }
 
-    if (!m_item.contentRating.empty()) {
-        m_ratingLabel = new brls::Label();
-        m_ratingLabel->setText(m_item.contentRating);
-        m_ratingLabel->setFontSize(16);
-        m_ratingLabel->setMarginRight(15);
-        metaBox->addView(m_ratingLabel);
-    }
-
     if (m_item.duration > 0) {
         m_durationLabel = new brls::Label();
-        int minutes = m_item.duration / 60000;
-        m_durationLabel->setText(std::to_string(minutes) + " min");
+        int hours = (int)(m_item.duration / 3600.0f);
+        int mins = (int)((m_item.duration - hours * 3600) / 60.0f);
+        if (hours > 0) {
+            m_durationLabel->setText(std::to_string(hours) + "h " + std::to_string(mins) + "m");
+        } else {
+            m_durationLabel->setText(std::to_string(mins) + " min");
+        }
         m_durationLabel->setFontSize(16);
         metaBox->addView(m_durationLabel);
     }
 
     rightBox->addView(metaBox);
 
-    // Summary
-    if (!m_item.summary.empty()) {
+    // Summary/Description
+    if (!m_item.description.empty()) {
         m_summaryLabel = new brls::Label();
-        m_summaryLabel->setText(m_item.summary);
+        m_summaryLabel->setText(m_item.description);
         m_summaryLabel->setFontSize(16);
         m_summaryLabel->setMarginBottom(20);
         rightBox->addView(m_summaryLabel);
@@ -191,40 +196,45 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
     topRow->addView(rightBox);
     m_mainContent->addView(topRow);
 
-    // Children container (for shows/seasons/albums - but NOT artists)
-    if (m_item.mediaType == MediaType::SHOW ||
-        m_item.mediaType == MediaType::SEASON ||
-        m_item.mediaType == MediaType::MUSIC_ALBUM) {
+    // Episodes container for podcasts
+    if (m_item.mediaType == MediaType::PODCAST) {
+        auto* episodesLabel = new brls::Label();
+        episodesLabel->setText("Episodes");
+        episodesLabel->setFontSize(20);
+        episodesLabel->setMarginBottom(10);
+        m_mainContent->addView(episodesLabel);
 
-        auto* childrenLabel = new brls::Label();
-        if (m_item.mediaType == MediaType::SHOW) {
-            childrenLabel->setText("Seasons");
-        } else if (m_item.mediaType == MediaType::SEASON) {
-            childrenLabel->setText("Episodes");
-        } else {
-            childrenLabel->setText("Tracks");
-        }
-        childrenLabel->setFontSize(20);
-        childrenLabel->setMarginBottom(10);
-        m_mainContent->addView(childrenLabel);
-
-        auto* childrenScroll = new brls::HScrollingFrame();
-        childrenScroll->setHeight(180);
-        childrenScroll->setMarginBottom(20);
+        auto* episodesScroll = new brls::HScrollingFrame();
+        episodesScroll->setHeight(180);
+        episodesScroll->setMarginBottom(20);
 
         m_childrenBox = new brls::Box();
         m_childrenBox->setAxis(brls::Axis::ROW);
         m_childrenBox->setJustifyContent(brls::JustifyContent::FLEX_START);
 
-        childrenScroll->setContentView(m_childrenBox);
-        m_mainContent->addView(childrenScroll);
+        episodesScroll->setContentView(m_childrenBox);
+        m_mainContent->addView(episodesScroll);
     }
 
-    // Music categories container for artists
-    if (m_item.mediaType == MediaType::MUSIC_ARTIST) {
-        m_musicCategoriesBox = new brls::Box();
-        m_musicCategoriesBox->setAxis(brls::Axis::COLUMN);
-        m_mainContent->addView(m_musicCategoriesBox);
+    // Chapters container for books
+    if (m_item.mediaType == MediaType::BOOK) {
+        auto* chaptersLabel = new brls::Label();
+        chaptersLabel->setText("Chapters");
+        chaptersLabel->setFontSize(20);
+        chaptersLabel->setMarginBottom(10);
+        chaptersLabel->setMarginTop(10);
+        m_mainContent->addView(chaptersLabel);
+
+        // Scrollable chapters list
+        m_chaptersScroll = new brls::ScrollingFrame();
+        m_chaptersScroll->setHeight(250);
+        m_chaptersScroll->setMarginBottom(20);
+
+        m_chaptersBox = new brls::Box();
+        m_chaptersBox->setAxis(brls::Axis::COLUMN);
+
+        m_chaptersScroll->setContentView(m_chaptersBox);
+        m_mainContent->addView(m_chaptersScroll);
     }
 
     m_scrollView->setContentView(m_mainContent);
@@ -240,7 +250,9 @@ brls::HScrollingFrame* MediaDetailView::createMediaRow(const std::string& title,
     label->setFontSize(20);
     label->setMarginBottom(10);
     label->setMarginTop(15);
-    m_musicCategoriesBox->addView(label);
+    if (m_musicCategoriesBox) {
+        m_musicCategoriesBox->addView(label);
+    }
 
     auto* scrollFrame = new brls::HScrollingFrame();
     scrollFrame->setHeight(150);
@@ -251,7 +263,9 @@ brls::HScrollingFrame* MediaDetailView::createMediaRow(const std::string& title,
     content->setJustifyContent(brls::JustifyContent::FLEX_START);
 
     scrollFrame->setContentView(content);
-    m_musicCategoriesBox->addView(scrollFrame);
+    if (m_musicCategoriesBox) {
+        m_musicCategoriesBox->addView(scrollFrame);
+    }
 
     if (contentOut) {
         *contentOut = content;
@@ -269,7 +283,7 @@ void MediaDetailView::loadDetails() {
 
     // Load full details
     MediaItem fullItem;
-    if (client.fetchMediaDetails(m_item.ratingKey, fullItem)) {
+    if (client.fetchItem(m_item.id, fullItem)) {
         m_item = fullItem;
 
         // Update UI with full details
@@ -277,41 +291,36 @@ void MediaDetailView::loadDetails() {
             m_titleLabel->setText(m_item.title);
         }
 
-        if (m_summaryLabel && !m_item.summary.empty()) {
-            m_summaryLabel->setText(m_item.summary);
+        if (m_summaryLabel && !m_item.description.empty()) {
+            m_summaryLabel->setText(m_item.description);
         }
 
-        // Update download button state now that we have the part path
-        if (m_downloadButton && !m_item.partPath.empty()) {
-            if (DownloadsManager::getInstance().isDownloaded(m_item.ratingKey)) {
+        // Update download button state
+        if (m_downloadButton && !m_item.audioTracks.empty()) {
+            if (DownloadsManager::getInstance().isDownloaded(m_item.id)) {
                 m_downloadButton->setText("Downloaded");
             } else {
                 m_downloadButton->setText("Download");
             }
-            brls::Logger::debug("loadDetails: partPath available, download enabled");
         }
     }
 
-    // Load thumbnail with appropriate aspect ratio
-    if (m_posterImage && !m_item.thumb.empty()) {
-        bool isMusic = (m_item.mediaType == MediaType::MUSIC_ARTIST ||
-                        m_item.mediaType == MediaType::MUSIC_ALBUM ||
-                        m_item.mediaType == MediaType::MUSIC_TRACK);
-
-        int width = isMusic ? 400 : 400;
-        int height = isMusic ? 400 : 600;
-
-        std::string url = client.getThumbnailUrl(m_item.thumb, width, height);
+    // Load thumbnail - use item ID for cover URL
+    if (m_posterImage && !m_item.id.empty()) {
+        std::string url = client.getCoverUrl(m_item.id, 400, 400);
         ImageLoader::loadAsync(url, [this](brls::Image* image) {
             // Image loaded
         }, m_posterImage);
     }
 
-    // Load children if applicable
-    if (m_item.mediaType == MediaType::MUSIC_ARTIST) {
-        loadMusicCategories();
-    } else {
+    // Load children (podcast episodes)
+    if (m_item.mediaType == MediaType::PODCAST) {
         loadChildren();
+    }
+
+    // Populate chapters for audiobooks
+    if (m_item.mediaType == MediaType::BOOK) {
+        populateChapters();
     }
 }
 
@@ -320,7 +329,7 @@ void MediaDetailView::loadChildren() {
 
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
-    if (client.fetchChildren(m_item.ratingKey, m_children)) {
+    if (client.fetchPodcastEpisodes(m_item.id, m_children)) {
         m_childrenBox->clearViews();
 
         for (const auto& child : m_children) {
@@ -331,9 +340,13 @@ void MediaDetailView::loadChildren() {
             cell->setMarginRight(10);
 
             cell->registerClickAction([this, child](brls::View* view) {
-                // Navigate to child detail
-                auto* detailView = new MediaDetailView(child);
-                brls::Application::pushActivity(new brls::Activity(detailView));
+                // Navigate to episode detail or play directly
+                if (child.mediaType == MediaType::PODCAST_EPISODE) {
+                    Application::getInstance().pushPlayerActivity(child.podcastId, child.episodeId);
+                } else {
+                    auto* detailView = new MediaDetailView(child);
+                    brls::Application::pushActivity(new brls::Activity(detailView));
+                }
                 return true;
             });
 
@@ -343,188 +356,185 @@ void MediaDetailView::loadChildren() {
 }
 
 void MediaDetailView::loadMusicCategories() {
-    if (!m_musicCategoriesBox) return;
+    // Not used for Audiobookshelf
+}
 
-    asyncRun([this]() {
-        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+void MediaDetailView::populateChapters() {
+    if (!m_chaptersBox) return;
 
-        std::vector<MediaItem> allAlbums;
-        if (!client.fetchChildren(m_item.ratingKey, allAlbums)) {
-            brls::Logger::error("Failed to fetch albums for artist");
-            return;
+    m_chaptersBox->clearViews();
+
+    // Check if we have chapters
+    if (m_item.chapters.empty()) {
+        // Show message if no chapters
+        auto* noChaptersLabel = new brls::Label();
+        noChaptersLabel->setText("No chapter information available");
+        noChaptersLabel->setFontSize(14);
+        noChaptersLabel->setTextColor(nvgRGB(150, 150, 150));
+        noChaptersLabel->setMarginTop(10);
+        m_chaptersBox->addView(noChaptersLabel);
+        return;
+    }
+
+    // Helper to format time
+    auto formatTime = [](float seconds) -> std::string {
+        int totalSec = static_cast<int>(seconds);
+        int hours = totalSec / 3600;
+        int mins = (totalSec % 3600) / 60;
+        int secs = totalSec % 60;
+
+        char buf[32];
+        if (hours > 0) {
+            snprintf(buf, sizeof(buf), "%d:%02d:%02d", hours, mins, secs);
+        } else {
+            snprintf(buf, sizeof(buf), "%d:%02d", mins, secs);
+        }
+        return std::string(buf);
+    };
+
+    // Current playback position for highlighting
+    float currentTime = m_item.currentTime;
+
+    for (size_t i = 0; i < m_item.chapters.size(); ++i) {
+        const auto& chapter = m_item.chapters[i];
+
+        auto* chapterRow = new brls::Box();
+        chapterRow->setAxis(brls::Axis::ROW);
+        chapterRow->setAlignItems(brls::AlignItems::CENTER);
+        chapterRow->setHeight(50);
+        chapterRow->setMarginBottom(8);
+        chapterRow->setPadding(12);
+        chapterRow->setCornerRadius(6);
+        chapterRow->setFocusable(true);
+
+        // Highlight current chapter
+        bool isCurrentChapter = (currentTime >= chapter.start && currentTime < chapter.end);
+        if (isCurrentChapter) {
+            chapterRow->setBackgroundColor(nvgRGBA(80, 120, 80, 255));
+        } else {
+            chapterRow->setBackgroundColor(nvgRGBA(50, 50, 50, 255));
         }
 
-        // Categorize albums by subtype
-        std::vector<MediaItem> albums;
-        std::vector<MediaItem> singles;
-        std::vector<MediaItem> eps;
-        std::vector<MediaItem> compilations;
-        std::vector<MediaItem> soundtracks;
-        std::vector<MediaItem> other;
+        // Chapter number
+        auto* numLabel = new brls::Label();
+        numLabel->setText(std::to_string(i + 1));
+        numLabel->setFontSize(14);
+        numLabel->setWidth(35);
+        numLabel->setTextColor(nvgRGB(150, 150, 150));
+        chapterRow->addView(numLabel);
 
-        for (const auto& album : allAlbums) {
-            std::string subtype = album.subtype;
-            // Convert to lowercase for comparison
-            for (char& c : subtype) c = tolower(c);
-
-            if (subtype == "single") {
-                singles.push_back(album);
-            } else if (subtype == "ep") {
-                eps.push_back(album);
-            } else if (subtype == "compilation") {
-                compilations.push_back(album);
-            } else if (subtype == "soundtrack") {
-                soundtracks.push_back(album);
-            } else if (subtype == "album" || subtype.empty()) {
-                albums.push_back(album);
-            } else {
-                other.push_back(album);
-            }
+        // Chapter title
+        auto* titleLabel = new brls::Label();
+        std::string title = chapter.title;
+        if (title.empty()) {
+            title = "Chapter " + std::to_string(i + 1);
         }
+        // Truncate if too long
+        if (title.length() > 45) {
+            title = title.substr(0, 42) + "...";
+        }
+        titleLabel->setText(title);
+        titleLabel->setFontSize(15);
+        titleLabel->setGrow(1.0f);
+        chapterRow->addView(titleLabel);
 
-        brls::Logger::info("Music categories: {} albums, {} singles, {} EPs, {} compilations, {} soundtracks, {} other",
-                           albums.size(), singles.size(), eps.size(),
-                           compilations.size(), soundtracks.size(), other.size());
+        // Duration/time
+        auto* timeLabel = new brls::Label();
+        float duration = chapter.end - chapter.start;
+        timeLabel->setText(formatTime(chapter.start) + " (" + formatTime(duration) + ")");
+        timeLabel->setFontSize(13);
+        timeLabel->setTextColor(nvgRGB(150, 150, 150));
+        chapterRow->addView(timeLabel);
 
-        // Update UI on main thread
-        brls::sync([this, albums, singles, eps, compilations, soundtracks, other]() {
-            m_musicCategoriesBox->clearViews();
-
-            auto addCategory = [this](const std::string& title, const std::vector<MediaItem>& items) {
-                if (items.empty()) return;
-
-                brls::Box* content = nullptr;
-                createMediaRow(title, &content);
-
-                for (const auto& item : items) {
-                    auto* cell = new MediaItemCell();
-                    cell->setItem(item);
-                    cell->setWidth(120);
-                    cell->setHeight(150);
-                    cell->setMarginRight(10);
-
-                    MediaItem capturedItem = item;
-                    cell->registerClickAction([this, capturedItem](brls::View* view) {
-                        auto* detailView = new MediaDetailView(capturedItem);
-                        brls::Application::pushActivity(new brls::Activity(detailView));
-                        return true;
-                    });
-
-                    content->addView(cell);
-                }
-            };
-
-            addCategory("Albums", albums);
-            addCategory("Singles", singles);
-            addCategory("EPs", eps);
-            addCategory("Compilations", compilations);
-            addCategory("Soundtracks", soundtracks);
-            addCategory("Other", other);
+        // Click to play from chapter
+        std::string itemId = m_item.id;
+        float chapterStart = chapter.start;
+        chapterRow->registerClickAction([itemId, chapterStart](brls::View*) {
+            // Start playback from this chapter's start time
+            Application::getInstance().pushPlayerActivity(itemId, "", chapterStart);
+            return true;
         });
-    });
+
+        m_chaptersBox->addView(chapterRow);
+    }
 }
 
 void MediaDetailView::onPlay(bool resume) {
-    // Start playback
-    if (m_item.mediaType == MediaType::MOVIE ||
-        m_item.mediaType == MediaType::EPISODE ||
-        m_item.mediaType == MediaType::MUSIC_TRACK) {
-
-        Application::getInstance().pushPlayerActivity(m_item.ratingKey);
-    }
-    // For shows/seasons/albums, play the first child item
-    else if (m_item.mediaType == MediaType::SHOW ||
-             m_item.mediaType == MediaType::SEASON ||
-             m_item.mediaType == MediaType::MUSIC_ALBUM) {
-
-        // If we already have children loaded, play the first one
+    if (m_item.mediaType == MediaType::BOOK) {
+        Application::getInstance().pushPlayerActivity(m_item.id);
+    } else if (m_item.mediaType == MediaType::PODCAST_EPISODE) {
+        Application::getInstance().pushPlayerActivity(m_item.podcastId, m_item.episodeId);
+    } else if (m_item.mediaType == MediaType::PODCAST) {
+        // Play latest/first episode
         if (!m_children.empty()) {
-            // For shows, the first child is a season - need to get its first episode
-            if (m_item.mediaType == MediaType::SHOW) {
-                AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-                std::vector<MediaItem> episodes;
-                if (client.fetchChildren(m_children[0].ratingKey, episodes) && !episodes.empty()) {
-                    Application::getInstance().pushPlayerActivity(episodes[0].ratingKey);
-                }
-            } else {
-                // For seasons/albums, first child is directly playable
-                Application::getInstance().pushPlayerActivity(m_children[0].ratingKey);
-            }
+            const auto& episode = m_children[0];
+            Application::getInstance().pushPlayerActivity(episode.podcastId, episode.episodeId);
         } else {
-            // Fetch children and play first one
+            // Fetch episodes first
             AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-            std::vector<MediaItem> children;
-            if (client.fetchChildren(m_item.ratingKey, children) && !children.empty()) {
-                if (m_item.mediaType == MediaType::SHOW) {
-                    // First child is a season, get its episodes
-                    std::vector<MediaItem> episodes;
-                    if (client.fetchChildren(children[0].ratingKey, episodes) && !episodes.empty()) {
-                        Application::getInstance().pushPlayerActivity(episodes[0].ratingKey);
-                    }
-                } else {
-                    Application::getInstance().pushPlayerActivity(children[0].ratingKey);
-                }
+            std::vector<MediaItem> episodes;
+            if (client.fetchPodcastEpisodes(m_item.id, episodes) && !episodes.empty()) {
+                Application::getInstance().pushPlayerActivity(episodes[0].podcastId, episodes[0].episodeId);
             }
         }
     }
 }
 
 void MediaDetailView::onDownload() {
+    brls::Logger::info("onDownload called for item: {} ({})", m_item.title, m_item.id);
+
     // Check if already downloaded
-    if (DownloadsManager::getInstance().isDownloaded(m_item.ratingKey)) {
+    if (DownloadsManager::getInstance().isDownloaded(m_item.id)) {
         brls::Application::notify("Already downloaded");
         return;
     }
 
-    // Check if we have the part path (need to fetch full details first)
-    if (m_item.partPath.empty()) {
+    // Check if we have audio track info
+    brls::Logger::debug("Current audioTracks count: {}", m_item.audioTracks.size());
+
+    if (m_item.audioTracks.empty()) {
         brls::Application::notify("Loading media info...");
 
-        // Try to load details now
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         MediaItem fullItem;
-        if (client.fetchMediaDetails(m_item.ratingKey, fullItem) && !fullItem.partPath.empty()) {
-            m_item = fullItem;
-            brls::Logger::debug("onDownload: Loaded partPath={}", m_item.partPath);
+        brls::Logger::debug("Fetching full item details for download...");
+        if (client.fetchItem(m_item.id, fullItem)) {
+            brls::Logger::debug("Fetched item: {} tracks, {} chapters",
+                               fullItem.audioTracks.size(), fullItem.chapters.size());
+            if (!fullItem.audioTracks.empty()) {
+                m_item = fullItem;
+            } else {
+                brls::Logger::warning("Fetched item has no audio tracks");
+            }
         } else {
-            brls::Logger::debug("onDownload: partPath is still empty, cannot download");
+            brls::Logger::error("Failed to fetch item details");
             brls::Application::notify("Unable to download - media info not available");
+            return;
+        }
+
+        // Still no tracks after fetching
+        if (m_item.audioTracks.empty()) {
+            brls::Logger::error("No audio tracks available for download");
+            brls::Application::notify("Unable to download - no audio tracks found");
             return;
         }
     }
 
-    // Determine media type and parent info
-    std::string mediaType;
-    if (m_item.mediaType == MediaType::MOVIE) {
-        mediaType = "movie";
-    } else if (m_item.mediaType == MediaType::MUSIC_TRACK) {
-        mediaType = "track";
-    } else {
+    // Determine media type
+    std::string mediaType = "book";
+    if (m_item.mediaType == MediaType::PODCAST_EPISODE) {
         mediaType = "episode";
-    }
-
-    std::string parentTitle = "";
-    int seasonNum = 0;
-    int episodeNum = 0;
-
-    if (m_item.mediaType == MediaType::EPISODE) {
-        parentTitle = m_item.grandparentTitle;  // Show name
-        seasonNum = m_item.parentIndex;  // Season number
-        episodeNum = m_item.index;       // Episode number
-    } else if (m_item.mediaType == MediaType::MUSIC_TRACK) {
-        parentTitle = m_item.grandparentTitle;  // Artist name
     }
 
     // Queue the download
     bool queued = DownloadsManager::getInstance().queueDownload(
-        m_item.ratingKey,
+        m_item.id,
         m_item.title,
-        m_item.partPath,
+        m_item.authorName,
         m_item.duration,
         mediaType,
-        parentTitle,
-        seasonNum,
-        episodeNum
+        m_item.seriesName,
+        m_item.episodeId
     );
 
     if (queued) {
@@ -538,33 +548,30 @@ void MediaDetailView::onDownload() {
         progressDialog->setProgress(0);
         progressDialog->show();
 
-        // Track the rating key to update button when done
-        std::string ratingKey = m_item.ratingKey;
+        std::string itemId = m_item.id;
         brls::Button* downloadBtn = m_downloadButton;
 
-        // Set progress callback with speed display
+        // Set progress callback
         DownloadsManager::getInstance().setProgressCallback(
-            [progressDialog](int64_t downloaded, int64_t total) {
+            [progressDialog](float downloaded, float total) {
                 brls::sync([progressDialog, downloaded, total]() {
-                    progressDialog->updateDownloadProgress(downloaded, total);
+                    progressDialog->updateDownloadProgress(static_cast<int64_t>(downloaded),
+                                                           static_cast<int64_t>(total));
                 });
             }
         );
 
-        // Allow dismissing dialog - download continues in background
         progressDialog->setCancelCallback([progressDialog, downloadBtn]() {
             brls::Application::notify("Download continues in background");
-            // Clear callback to avoid updating dismissed dialog
             DownloadsManager::getInstance().setProgressCallback(nullptr);
         });
 
-        // Start downloading
         DownloadsManager::getInstance().startDownloads();
 
         // Monitor for completion
-        asyncRun([progressDialog, downloadBtn, ratingKey]() {
+        asyncRun([progressDialog, downloadBtn, itemId]() {
             while (true) {
-                auto* item = DownloadsManager::getInstance().getDownload(ratingKey);
+                auto* item = DownloadsManager::getInstance().getDownload(itemId);
                 if (!item) break;
 
                 if (item->state == DownloadState::COMPLETED) {
@@ -592,15 +599,13 @@ void MediaDetailView::onDownload() {
                     break;
                 }
 
-                // Sleep briefly before checking again
 #ifdef __vita__
-                sceKernelDelayThread(500 * 1000);  // 500ms
+                sceKernelDelayThread(500 * 1000);
 #else
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
 #endif
             }
 
-            // Clear progress callback
             DownloadsManager::getInstance().setProgressCallback(nullptr);
         });
     } else {
@@ -609,16 +614,13 @@ void MediaDetailView::onDownload() {
 }
 
 void MediaDetailView::showDownloadOptions() {
-    // Create dialog with download options
     auto* dialog = new brls::Dialog("Download Options");
 
     auto* optionsBox = new brls::Box();
     optionsBox->setAxis(brls::Axis::COLUMN);
     optionsBox->setPadding(20);
 
-    // Different options based on media type
-    if (m_item.mediaType == MediaType::SHOW) {
-        // Show options: Download all seasons, download unwatched
+    if (m_item.mediaType == MediaType::PODCAST) {
         auto* downloadAllBtn = new brls::Button();
         downloadAllBtn->setText("Download All Episodes");
         downloadAllBtn->setMarginBottom(10);
@@ -629,18 +631,18 @@ void MediaDetailView::showDownloadOptions() {
         });
         optionsBox->addView(downloadAllBtn);
 
-        auto* downloadUnwatchedBtn = new brls::Button();
-        downloadUnwatchedBtn->setText("Download Unwatched");
-        downloadUnwatchedBtn->setMarginBottom(10);
-        downloadUnwatchedBtn->registerClickAction([this, dialog](brls::View*) {
+        auto* downloadUnheardBtn = new brls::Button();
+        downloadUnheardBtn->setText("Download Unheard");
+        downloadUnheardBtn->setMarginBottom(10);
+        downloadUnheardBtn->registerClickAction([this, dialog](brls::View*) {
             dialog->dismiss();
             downloadUnwatched();
             return true;
         });
-        optionsBox->addView(downloadUnwatchedBtn);
+        optionsBox->addView(downloadUnheardBtn);
 
         auto* downloadNext5Btn = new brls::Button();
-        downloadNext5Btn->setText("Download Next 5 Unwatched");
+        downloadNext5Btn->setText("Download Next 5 Unheard");
         downloadNext5Btn->setMarginBottom(10);
         downloadNext5Btn->registerClickAction([this, dialog](brls::View*) {
             dialog->dismiss();
@@ -648,65 +650,8 @@ void MediaDetailView::showDownloadOptions() {
             return true;
         });
         optionsBox->addView(downloadNext5Btn);
-
-    } else if (m_item.mediaType == MediaType::SEASON) {
-        // Season options: Download all episodes, download unwatched
-        auto* downloadAllBtn = new brls::Button();
-        downloadAllBtn->setText("Download All Episodes");
-        downloadAllBtn->setMarginBottom(10);
-        downloadAllBtn->registerClickAction([this, dialog](brls::View*) {
-            dialog->dismiss();
-            downloadAll();
-            return true;
-        });
-        optionsBox->addView(downloadAllBtn);
-
-        auto* downloadUnwatchedBtn = new brls::Button();
-        downloadUnwatchedBtn->setText("Download Unwatched");
-        downloadUnwatchedBtn->setMarginBottom(10);
-        downloadUnwatchedBtn->registerClickAction([this, dialog](brls::View*) {
-            dialog->dismiss();
-            downloadUnwatched();
-            return true;
-        });
-        optionsBox->addView(downloadUnwatchedBtn);
-
-        auto* downloadNext3Btn = new brls::Button();
-        downloadNext3Btn->setText("Download Next 3 Unwatched");
-        downloadNext3Btn->setMarginBottom(10);
-        downloadNext3Btn->registerClickAction([this, dialog](brls::View*) {
-            dialog->dismiss();
-            downloadUnwatched(3);
-            return true;
-        });
-        optionsBox->addView(downloadNext3Btn);
-
-    } else if (m_item.mediaType == MediaType::MUSIC_ALBUM) {
-        // Album options: Download all tracks
-        auto* downloadAlbumBtn = new brls::Button();
-        downloadAlbumBtn->setText("Download Album");
-        downloadAlbumBtn->setMarginBottom(10);
-        downloadAlbumBtn->registerClickAction([this, dialog](brls::View*) {
-            dialog->dismiss();
-            downloadAll();
-            return true;
-        });
-        optionsBox->addView(downloadAlbumBtn);
-
-    } else if (m_item.mediaType == MediaType::MUSIC_ARTIST) {
-        // Artist options: Download all albums
-        auto* downloadAllBtn = new brls::Button();
-        downloadAllBtn->setText("Download All Albums");
-        downloadAllBtn->setMarginBottom(10);
-        downloadAllBtn->registerClickAction([this, dialog](brls::View*) {
-            dialog->dismiss();
-            downloadAll();
-            return true;
-        });
-        optionsBox->addView(downloadAllBtn);
     }
 
-    // Cancel button
     auto* cancelBtn = new brls::Button();
     cancelBtn->setText("Cancel");
     cancelBtn->registerClickAction([dialog](brls::View*) {
@@ -720,102 +665,56 @@ void MediaDetailView::showDownloadOptions() {
 }
 
 void MediaDetailView::downloadAll() {
-    // Show progress dialog
     auto* progressDialog = new ProgressDialog("Preparing Downloads");
-    progressDialog->setStatus("Fetching content list...");
+    progressDialog->setStatus("Fetching episode list...");
     progressDialog->show();
 
-    std::string ratingKey = m_item.ratingKey;
-    MediaType mediaType = m_item.mediaType;
-    std::string parentTitle = m_item.title;
+    std::string podcastId = m_item.id;
+    std::string podcastTitle = m_item.title;
 
-    asyncRun([this, progressDialog, ratingKey, mediaType, parentTitle]() {
+    asyncRun([this, progressDialog, podcastId, podcastTitle]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-        std::vector<MediaItem> items;
+        std::vector<MediaItem> episodes;
         int queued = 0;
 
-        if (mediaType == MediaType::SHOW) {
-            // Get all seasons first, then all episodes
-            std::vector<MediaItem> seasons;
-            if (client.fetchChildren(ratingKey, seasons)) {
-                for (const auto& season : seasons) {
-                    std::vector<MediaItem> episodes;
-                    if (client.fetchChildren(season.ratingKey, episodes)) {
-                        for (auto& ep : episodes) {
-                            items.push_back(ep);
-                        }
+        if (client.fetchPodcastEpisodes(podcastId, episodes)) {
+            size_t itemCount = episodes.size();
+            brls::sync([progressDialog, itemCount]() {
+                progressDialog->setStatus("Found " + std::to_string(itemCount) + " episodes");
+                progressDialog->setProgress(0.1f);
+            });
+
+            for (size_t i = 0; i < episodes.size(); i++) {
+                const auto& ep = episodes[i];
+
+                // For podcast episodes, ep.id is the podcast ID and ep.episodeId is the episode ID
+                // We use the episode's own data rather than fetching the parent podcast
+                brls::Logger::debug("Queueing episode: {} (podcastId: {}, episodeId: {})",
+                                   ep.title, ep.podcastId, ep.episodeId);
+
+                if (!ep.episodeId.empty()) {
+                    if (DownloadsManager::getInstance().queueDownload(
+                        ep.podcastId,      // Use podcast ID as item ID
+                        ep.title,          // Episode title
+                        "",                // Author (not applicable for episodes)
+                        ep.duration,
+                        "episode",         // Media type
+                        podcastTitle,      // Parent title
+                        ep.episodeId       // Episode ID for the specific episode
+                    )) {
+                        queued++;
                     }
                 }
-            }
-        } else if (mediaType == MediaType::SEASON || mediaType == MediaType::MUSIC_ALBUM) {
-            // Get direct children (episodes or tracks)
-            client.fetchChildren(ratingKey, items);
-        } else if (mediaType == MediaType::MUSIC_ARTIST) {
-            // Get all albums, then all tracks
-            std::vector<MediaItem> albums;
-            if (client.fetchChildren(ratingKey, albums)) {
-                for (const auto& album : albums) {
-                    std::vector<MediaItem> tracks;
-                    if (client.fetchChildren(album.ratingKey, tracks)) {
-                        for (auto& track : tracks) {
-                            items.push_back(track);
-                        }
-                    }
-                }
-            }
-        }
 
-        size_t itemCount = items.size();
-        brls::sync([progressDialog, itemCount]() {
-            progressDialog->setStatus("Found " + std::to_string(itemCount) + " items");
-            progressDialog->setProgress(0.1f);
-        });
-
-        // If no items found, dismiss dialog
-        if (items.empty()) {
-            brls::sync([progressDialog]() {
-                progressDialog->setStatus("No items found to download");
-                brls::delay(1500, [progressDialog]() {
-                    progressDialog->dismiss();
+                size_t currentIndex = i;
+                brls::sync([progressDialog, currentIndex, itemCount, queued]() {
+                    progressDialog->setStatus("Queued " + std::to_string(queued) + " of " +
+                                             std::to_string(itemCount));
+                    progressDialog->setProgress(0.1f + 0.9f * static_cast<float>(currentIndex + 1) / itemCount);
                 });
-            });
-            return;
-        }
-
-        // Queue each item for download
-        for (size_t i = 0; i < items.size(); i++) {
-            const auto& item = items[i];
-
-            // Get full details to get the part path
-            MediaItem fullItem;
-            if (client.fetchMediaDetails(item.ratingKey, fullItem) && !fullItem.partPath.empty()) {
-                std::string itemMediaType = "episode";
-                if (fullItem.mediaType == MediaType::MOVIE) itemMediaType = "movie";
-                else if (fullItem.mediaType == MediaType::MUSIC_TRACK) itemMediaType = "track";
-
-                if (DownloadsManager::getInstance().queueDownload(
-                    fullItem.ratingKey,
-                    fullItem.title,
-                    fullItem.partPath,
-                    fullItem.duration,
-                    itemMediaType,
-                    parentTitle,
-                    fullItem.parentIndex,
-                    fullItem.index
-                )) {
-                    queued++;
-                }
             }
-
-            size_t currentIndex = i;
-            brls::sync([progressDialog, currentIndex, itemCount, queued]() {
-                progressDialog->setStatus("Queued " + std::to_string(queued) + " of " +
-                                         std::to_string(itemCount));
-                progressDialog->setProgress(0.1f + 0.9f * static_cast<float>(currentIndex + 1) / itemCount);
-            });
         }
 
-        // Start downloads
         DownloadsManager::getInstance().startDownloads();
 
         brls::sync([progressDialog, queued]() {
@@ -828,66 +727,39 @@ void MediaDetailView::downloadAll() {
 }
 
 void MediaDetailView::downloadUnwatched(int maxCount) {
-    // Show progress dialog
     auto* progressDialog = new ProgressDialog("Preparing Downloads");
-    progressDialog->setStatus("Fetching unwatched content...");
+    progressDialog->setStatus("Fetching unheard episodes...");
     progressDialog->show();
 
-    std::string ratingKey = m_item.ratingKey;
-    MediaType mediaType = m_item.mediaType;
-    std::string parentTitle = m_item.title;
+    std::string podcastId = m_item.id;
+    std::string podcastTitle = m_item.title;
 
-    asyncRun([this, progressDialog, ratingKey, mediaType, parentTitle, maxCount]() {
+    asyncRun([this, progressDialog, podcastId, podcastTitle, maxCount]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-        std::vector<MediaItem> unwatchedItems;
+        std::vector<MediaItem> unheardEpisodes;
         int queued = 0;
 
-        if (mediaType == MediaType::SHOW) {
-            // Get all seasons first, then unwatched episodes
-            std::vector<MediaItem> seasons;
-            if (client.fetchChildren(ratingKey, seasons)) {
-                for (const auto& season : seasons) {
-                    std::vector<MediaItem> episodes;
-                    if (client.fetchChildren(season.ratingKey, episodes)) {
-                        for (auto& ep : episodes) {
-                            if (!ep.watched && ep.viewOffset == 0) {
-                                unwatchedItems.push_back(ep);
-                                if (maxCount > 0 && (int)unwatchedItems.size() >= maxCount) {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (maxCount > 0 && (int)unwatchedItems.size() >= maxCount) {
+        std::vector<MediaItem> allEpisodes;
+        if (client.fetchPodcastEpisodes(podcastId, allEpisodes)) {
+            for (auto& ep : allEpisodes) {
+                if (!ep.isFinished && ep.currentTime == 0) {
+                    unheardEpisodes.push_back(ep);
+                    if (maxCount > 0 && (int)unheardEpisodes.size() >= maxCount) {
                         break;
-                    }
-                }
-            }
-        } else if (mediaType == MediaType::SEASON) {
-            // Get unwatched episodes in this season
-            std::vector<MediaItem> episodes;
-            if (client.fetchChildren(ratingKey, episodes)) {
-                for (auto& ep : episodes) {
-                    if (!ep.watched && ep.viewOffset == 0) {
-                        unwatchedItems.push_back(ep);
-                        if (maxCount > 0 && (int)unwatchedItems.size() >= maxCount) {
-                            break;
-                        }
                     }
                 }
             }
         }
 
-        size_t itemCount = unwatchedItems.size();
+        size_t itemCount = unheardEpisodes.size();
         brls::sync([progressDialog, itemCount]() {
-            progressDialog->setStatus("Found " + std::to_string(itemCount) + " unwatched");
+            progressDialog->setStatus("Found " + std::to_string(itemCount) + " unheard");
             progressDialog->setProgress(0.1f);
         });
 
-        // If no items found, dismiss dialog
-        if (unwatchedItems.empty()) {
+        if (unheardEpisodes.empty()) {
             brls::sync([progressDialog]() {
-                progressDialog->setStatus("No unwatched items found");
+                progressDialog->setStatus("No unheard episodes found");
                 brls::delay(1500, [progressDialog]() {
                     progressDialog->dismiss();
                 });
@@ -895,24 +767,22 @@ void MediaDetailView::downloadUnwatched(int maxCount) {
             return;
         }
 
-        // Queue each unwatched item for download
-        for (size_t i = 0; i < unwatchedItems.size(); i++) {
-            const auto& item = unwatchedItems[i];
+        for (size_t i = 0; i < unheardEpisodes.size(); i++) {
+            const auto& ep = unheardEpisodes[i];
 
-            // Get full details to get the part path
-            MediaItem fullItem;
-            if (client.fetchMediaDetails(item.ratingKey, fullItem) && !fullItem.partPath.empty()) {
-                std::string itemMediaType = "episode";
+            // For podcast episodes, ep.id is the podcast ID and ep.episodeId is the episode ID
+            brls::Logger::debug("Queueing unheard episode: {} (podcastId: {}, episodeId: {})",
+                               ep.title, ep.podcastId, ep.episodeId);
 
+            if (!ep.episodeId.empty()) {
                 if (DownloadsManager::getInstance().queueDownload(
-                    fullItem.ratingKey,
-                    fullItem.title,
-                    fullItem.partPath,
-                    fullItem.duration,
-                    itemMediaType,
-                    parentTitle,
-                    fullItem.parentIndex,
-                    fullItem.index
+                    ep.podcastId,      // Use podcast ID as item ID
+                    ep.title,          // Episode title
+                    "",                // Author (not applicable for episodes)
+                    ep.duration,
+                    "episode",         // Media type
+                    podcastTitle,      // Parent title
+                    ep.episodeId       // Episode ID for the specific episode
                 )) {
                     queued++;
                 }
@@ -926,7 +796,6 @@ void MediaDetailView::downloadUnwatched(int maxCount) {
             });
         }
 
-        // Start downloads
         DownloadsManager::getInstance().startDownloads();
 
         brls::sync([progressDialog, queued]() {
@@ -934,6 +803,209 @@ void MediaDetailView::downloadUnwatched(int maxCount) {
             brls::delay(1500, [progressDialog]() {
                 progressDialog->dismiss();
             });
+        });
+    });
+}
+
+void MediaDetailView::findNewEpisodes() {
+    brls::Application::notify("Checking RSS feed for new episodes...");
+
+    std::string podcastId = m_item.id;
+    std::string podcastTitle = m_item.title;
+
+    asyncRun([this, podcastId, podcastTitle]() {
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+        std::vector<MediaItem> newEpisodes;
+
+        if (client.checkNewEpisodes(podcastId, newEpisodes)) {
+            brls::sync([this, newEpisodes, podcastId, podcastTitle]() {
+                if (newEpisodes.empty()) {
+                    brls::Application::notify("No new episodes found");
+                } else {
+                    showNewEpisodesDialog(newEpisodes, podcastId, podcastTitle);
+                }
+            });
+        } else {
+            brls::sync([]() {
+                brls::Application::notify("Failed to check for new episodes");
+            });
+        }
+    });
+}
+
+void MediaDetailView::showNewEpisodesDialog(const std::vector<MediaItem>& episodes,
+                                             const std::string& podcastId,
+                                             const std::string& podcastTitle) {
+    // Create a dialog to show new episodes
+    auto* dialog = new brls::Dialog("New Episodes (" + std::to_string(episodes.size()) + ")");
+
+    // Register circle button to close dialog
+    dialog->registerAction("Back", brls::ControllerButton::BUTTON_B, [dialog](brls::View*) {
+        dialog->dismiss();
+        return true;
+    }, true);
+
+    auto* contentBox = new brls::Box();
+    contentBox->setAxis(brls::Axis::COLUMN);
+    contentBox->setPadding(15);
+    contentBox->setWidth(700);
+
+    // Add "Download All" button at the top
+    auto* downloadAllBtn = new brls::Button();
+    downloadAllBtn->setText("Download All to Server");
+    downloadAllBtn->setMarginBottom(15);
+    downloadAllBtn->registerClickAction([this, episodes, podcastId, dialog](brls::View*) {
+        dialog->dismiss();
+        downloadNewEpisodesToServer(podcastId, episodes);
+        return true;
+    });
+    contentBox->addView(downloadAllBtn);
+
+    // Separator
+    auto* separator = new brls::Rectangle();
+    separator->setHeight(1);
+    separator->setColor(nvgRGB(80, 80, 80));
+    separator->setMarginBottom(15);
+    contentBox->addView(separator);
+
+    // Instructions
+    auto* instructionsLabel = new brls::Label();
+    instructionsLabel->setText("Select episodes to add to server:");
+    instructionsLabel->setFontSize(14);
+    instructionsLabel->setTextColor(nvgRGB(180, 180, 180));
+    instructionsLabel->setMarginBottom(10);
+    contentBox->addView(instructionsLabel);
+
+    // Create scrollable list of episodes
+    auto* scrollFrame = new brls::ScrollingFrame();
+    scrollFrame->setHeight(350);
+
+    auto* episodesList = new brls::Box();
+    episodesList->setAxis(brls::Axis::COLUMN);
+
+    // Store selected episodes
+    auto selectedEpisodes = std::make_shared<std::vector<std::string>>();
+
+    for (const auto& ep : episodes) {
+        auto* episodeRow = new brls::Box();
+        episodeRow->setAxis(brls::Axis::ROW);
+        episodeRow->setAlignItems(brls::AlignItems::CENTER);
+        episodeRow->setMarginBottom(15);  // More space between episodes
+        episodeRow->setPadding(15);
+        episodeRow->setBackgroundColor(nvgRGBA(60, 60, 60, 255));
+        episodeRow->setCornerRadius(8);
+        episodeRow->setFocusable(true);
+
+        // Episode info
+        auto* infoBox = new brls::Box();
+        infoBox->setAxis(brls::Axis::COLUMN);
+        infoBox->setGrow(1.0f);
+        infoBox->setJustifyContent(brls::JustifyContent::CENTER);
+
+        // Title - show first line
+        auto* titleLabel = new brls::Label();
+        std::string title = ep.title;
+        std::string title2;
+
+        // Split long titles into two lines
+        if (title.length() > 50) {
+            size_t splitPos = title.rfind(' ', 50);
+            if (splitPos != std::string::npos && splitPos > 20) {
+                title2 = title.substr(splitPos + 1);
+                title = title.substr(0, splitPos);
+                // Truncate second line if still too long
+                if (title2.length() > 50) {
+                    title2 = title2.substr(0, 47) + "...";
+                }
+            } else {
+                // No good split point, just truncate
+                title = title.substr(0, 47) + "...";
+            }
+        }
+        titleLabel->setText(title);
+        titleLabel->setFontSize(15);
+        infoBox->addView(titleLabel);
+
+        // Second line of title if needed
+        if (!title2.empty()) {
+            auto* title2Label = new brls::Label();
+            title2Label->setText(title2);
+            title2Label->setFontSize(14);
+            title2Label->setTextColor(nvgRGB(200, 200, 200));
+            title2Label->setMarginTop(2);
+            infoBox->addView(title2Label);
+        }
+
+        if (!ep.pubDate.empty()) {
+            auto* dateLabel = new brls::Label();
+            dateLabel->setText(ep.pubDate);
+            dateLabel->setFontSize(12);
+            dateLabel->setTextColor(nvgRGB(150, 150, 150));
+            dateLabel->setMarginTop(6);
+            infoBox->addView(dateLabel);
+        }
+
+        episodeRow->addView(infoBox);
+
+        // Status label (shows "Added!" after adding)
+        auto* statusLabel = new brls::Label();
+        statusLabel->setText("");
+        statusLabel->setFontSize(14);
+        statusLabel->setTextColor(nvgRGB(100, 200, 100));
+        statusLabel->setWidth(80);
+        episodeRow->addView(statusLabel);
+
+        // Click on row to add episode - pass full episode data for new RSS episodes
+        MediaItem epCopy = ep;
+        std::string pId = podcastId;
+        episodeRow->registerClickAction([this, epCopy, pId, statusLabel](brls::View*) {
+            // Download this single episode to server with full data
+            std::vector<MediaItem> eps = {epCopy};
+            AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+            if (client.downloadNewEpisodesToServer(pId, eps)) {
+                statusLabel->setText("Added!");
+                brls::Application::notify("Episode queued for download on server");
+            } else {
+                brls::Application::notify("Failed to add episode");
+            }
+            return true;
+        });
+
+        episodesList->addView(episodeRow);
+    }
+
+    scrollFrame->setContentView(episodesList);
+    contentBox->addView(scrollFrame);
+
+    // Close button
+    auto* closeBtn = new brls::Button();
+    closeBtn->setText("Close");
+    closeBtn->setMarginTop(15);
+    closeBtn->registerClickAction([dialog](brls::View*) {
+        dialog->dismiss();
+        return true;
+    });
+    contentBox->addView(closeBtn);
+
+    dialog->addView(contentBox);
+    brls::Application::pushActivity(new brls::Activity(dialog));
+}
+
+void MediaDetailView::downloadNewEpisodesToServer(const std::string& podcastId,
+                                                   const std::vector<MediaItem>& episodes) {
+    brls::Application::notify("Adding " + std::to_string(episodes.size()) + " episodes to server...");
+
+    asyncRun([podcastId, episodes]() {
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+        // Use full episode data for new RSS episodes
+        bool success = client.downloadNewEpisodesToServer(podcastId, episodes);
+
+        brls::sync([success, episodes]() {
+            if (success) {
+                brls::Application::notify("Queued " + std::to_string(episodes.size()) + " episodes for download");
+            } else {
+                brls::Application::notify("Failed to queue episodes");
+            }
         });
     });
 }

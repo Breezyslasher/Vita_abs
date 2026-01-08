@@ -16,9 +16,15 @@ PlayerActivity::PlayerActivity(const std::string& itemId)
     brls::Logger::debug("PlayerActivity created for item: {}", itemId);
 }
 
-PlayerActivity::PlayerActivity(const std::string& itemId, const std::string& episodeId)
+PlayerActivity::PlayerActivity(const std::string& itemId, const std::string& episodeId,
+                               float startTime)
     : m_itemId(itemId), m_episodeId(episodeId), m_isLocalFile(false) {
     brls::Logger::debug("PlayerActivity created for item: {}, episode: {}", itemId, episodeId);
+    // If startTime is specified (>= 0), use it as pending seek position
+    if (startTime >= 0) {
+        m_pendingSeek = static_cast<double>(startTime);
+        brls::Logger::debug("Starting at position: {}s", startTime);
+    }
 }
 
 PlayerActivity::PlayerActivity(const std::string& itemId, bool isLocalFile)
@@ -110,17 +116,15 @@ void PlayerActivity::willDisappear(bool resetState) {
     if (player.isInitialized() && (player.isPlaying() || player.isPaused())) {
         double position = player.getPosition();
         if (position > 0) {
-            int timeMs = (int)(position * 1000);
+            float currentTime = (float)position;
 
             if (m_isLocalFile) {
-                // Save progress for downloaded media
-                DownloadsManager::getInstance().updateProgress(m_itemId, timeMs);
+                // Save progress for downloaded media (in seconds)
+                DownloadsManager::getInstance().updateProgress(m_itemId, currentTime);
                 DownloadsManager::getInstance().saveState();
-                brls::Logger::info("PlayerActivity: Saved local progress {}ms for {}", timeMs, m_itemId);
+                brls::Logger::info("PlayerActivity: Saved local progress {}s for {}", currentTime, m_itemId);
             } else {
                 // Save progress to Audiobookshelf server
-                MpvPlayer& player = MpvPlayer::getInstance();
-                float currentTime = (float)position;
                 float totalDuration = (float)player.getDuration();
                 AudiobookshelfClient::getInstance().updateProgress(m_itemId, currentTime, totalDuration, false, m_episodeId);
             }
@@ -267,8 +271,18 @@ void PlayerActivity::loadMedia() {
             return;
         }
 
-        // Get stream URL for the item
-        std::string streamUrl = client.getStreamUrl(m_itemId, m_episodeId);
+        // Get stream URL from the session's audio tracks
+        std::string streamUrl;
+        if (!session.audioTracks.empty() && !session.audioTracks[0].contentUrl.empty()) {
+            // Use the contentUrl from the first audio track
+            streamUrl = client.getStreamUrl(session.audioTracks[0].contentUrl, "");
+            brls::Logger::debug("Using audio track contentUrl: {}", session.audioTracks[0].contentUrl);
+        } else {
+            // Fallback to direct file URL
+            streamUrl = client.getDirectStreamUrl(m_itemId, 0);
+            brls::Logger::debug("Fallback to direct stream URL");
+        }
+
         if (streamUrl.empty()) {
             brls::Logger::error("Failed to get stream URL for: {}", m_itemId);
             m_loadingMedia = false;

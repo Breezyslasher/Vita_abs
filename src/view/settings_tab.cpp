@@ -10,6 +10,11 @@
 #include "activity/player_activity.hpp"
 #include <set>
 
+// Version defined in CMakeLists.txt or here
+#ifndef VITA_ABS_VERSION
+#define VITA_ABS_VERSION "2.0.0"
+#endif
+
 namespace vitaabs {
 
 SettingsTab::SettingsTab() {
@@ -33,7 +38,7 @@ SettingsTab::SettingsTab() {
     createLayoutSection();
     createContentDisplaySection();
     createPlaybackSection();
-    createTranscodeSection();
+    createAudioSection();
     createDownloadsSection();
     createDebugSection();
     createAboutSection();
@@ -129,21 +134,11 @@ void SettingsTab::createLayoutSection() {
     header->setTitle("Layout");
     m_contentBox->addView(header);
 
-    // Show libraries in sidebar toggle
-    m_sidebarLibrariesToggle = new brls::BooleanCell();
-    m_sidebarLibrariesToggle->init("Libraries in Sidebar", settings.showLibrariesInSidebar, [&settings](bool value) {
-        settings.showLibrariesInSidebar = value;
-        Application::getInstance().saveSettings();
-        // Note: Requires app restart to take effect
-    });
-    m_contentBox->addView(m_sidebarLibrariesToggle);
-
     // Collapse sidebar toggle
     m_collapseSidebarToggle = new brls::BooleanCell();
     m_collapseSidebarToggle->init("Collapse Sidebar", settings.collapseSidebar, [&settings](bool value) {
         settings.collapseSidebar = value;
         Application::getInstance().saveSettings();
-        // Note: Requires app restart to take effect
     });
     m_contentBox->addView(m_collapseSidebarToggle);
 
@@ -152,7 +147,6 @@ void SettingsTab::createLayoutSection() {
     m_hiddenLibrariesCell->setText("Manage Hidden Libraries");
     int hiddenCount = 0;
     if (!settings.hiddenLibraries.empty()) {
-        // Count comma-separated items
         hiddenCount = 1;
         for (char c : settings.hiddenLibraries) {
             if (c == ',') hiddenCount++;
@@ -164,16 +158,6 @@ void SettingsTab::createLayoutSection() {
         return true;
     });
     m_contentBox->addView(m_hiddenLibrariesCell);
-
-    // Manage sidebar order
-    m_sidebarOrderCell = new brls::DetailCell();
-    m_sidebarOrderCell->setText("Sidebar Order");
-    m_sidebarOrderCell->setDetailText(settings.sidebarOrder.empty() ? "Default" : "Custom");
-    m_sidebarOrderCell->registerClickAction([this](brls::View* view) {
-        onManageSidebarOrder();
-        return true;
-    });
-    m_contentBox->addView(m_sidebarOrderCell);
 
     // Info label
     auto* infoLabel = new brls::Label();
@@ -201,29 +185,29 @@ void SettingsTab::createContentDisplaySection() {
     });
     m_contentBox->addView(m_collectionsToggle);
 
-    // Show playlists toggle
-    m_playlistsToggle = new brls::BooleanCell();
-    m_playlistsToggle->init("Show Playlists", settings.showPlaylists, [&settings](bool value) {
-        settings.showPlaylists = value;
+    // Show series toggle
+    auto* seriesToggle = new brls::BooleanCell();
+    seriesToggle->init("Show Series", settings.showSeries, [&settings](bool value) {
+        settings.showSeries = value;
         Application::getInstance().saveSettings();
     });
-    m_contentBox->addView(m_playlistsToggle);
+    m_contentBox->addView(seriesToggle);
 
-    // Show genres/categories toggle
-    m_genresToggle = new brls::BooleanCell();
-    m_genresToggle->init("Show Categories", settings.showGenres, [&settings](bool value) {
-        settings.showGenres = value;
+    // Show authors toggle
+    auto* authorsToggle = new brls::BooleanCell();
+    authorsToggle->init("Show Authors", settings.showAuthors, [&settings](bool value) {
+        settings.showAuthors = value;
         Application::getInstance().saveSettings();
     });
-    m_contentBox->addView(m_genresToggle);
+    m_contentBox->addView(authorsToggle);
 
-    // Info label
-    auto* contentInfoLabel = new brls::Label();
-    contentInfoLabel->setText("Hides empty sections automatically");
-    contentInfoLabel->setFontSize(14);
-    contentInfoLabel->setMarginLeft(16);
-    contentInfoLabel->setMarginTop(8);
-    m_contentBox->addView(contentInfoLabel);
+    // Show progress toggle
+    auto* progressToggle = new brls::BooleanCell();
+    progressToggle->init("Show Progress Bars", settings.showProgress, [&settings](bool value) {
+        settings.showProgress = value;
+        Application::getInstance().saveSettings();
+    });
+    m_contentBox->addView(progressToggle);
 }
 
 void SettingsTab::createPlaybackSection() {
@@ -237,7 +221,7 @@ void SettingsTab::createPlaybackSection() {
 
     // Auto-play next toggle
     m_autoPlayToggle = new brls::BooleanCell();
-    m_autoPlayToggle->init("Auto-Play Next Episode", settings.autoPlayNext, [&settings](bool value) {
+    m_autoPlayToggle->init("Auto-Play Next Chapter", settings.autoPlayNext, [&settings](bool value) {
         settings.autoPlayNext = value;
         Application::getInstance().saveSettings();
     });
@@ -251,23 +235,6 @@ void SettingsTab::createPlaybackSection() {
     });
     m_contentBox->addView(m_resumeToggle);
 
-    // Show subtitles toggle
-    m_subtitlesToggle = new brls::BooleanCell();
-    m_subtitlesToggle->init("Show Subtitles", settings.showSubtitles, [&settings](bool value) {
-        settings.showSubtitles = value;
-        Application::getInstance().saveSettings();
-    });
-    m_contentBox->addView(m_subtitlesToggle);
-
-    // Subtitle size selector
-    m_subtitleSizeSelector = new brls::SelectorCell();
-    m_subtitleSizeSelector->init("Subtitle Size", {"Small", "Medium", "Large"},
-        static_cast<int>(settings.subtitleSize),
-        [this](int index) {
-            onSubtitleSizeChanged(index);
-        });
-    m_contentBox->addView(m_subtitleSizeSelector);
-
     // Seek interval selector
     m_seekIntervalSelector = new brls::SelectorCell();
     m_seekIntervalSelector->init("Seek Interval",
@@ -280,50 +247,62 @@ void SettingsTab::createPlaybackSection() {
             onSeekIntervalChanged(index);
         });
     m_contentBox->addView(m_seekIntervalSelector);
+
+    // Playback speed selector
+    auto* speedSelector = new brls::SelectorCell();
+    speedSelector->init("Playback Speed",
+        {"0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "1.75x", "2.0x"},
+        static_cast<int>(settings.playbackSpeed),
+        [&settings](int index) {
+            settings.playbackSpeed = static_cast<PlaybackSpeed>(index);
+            Application::getInstance().saveSettings();
+        });
+    m_contentBox->addView(speedSelector);
+
+    // Prevent sleep toggle
+    auto* sleepToggle = new brls::BooleanCell();
+    sleepToggle->init("Prevent Screen Sleep", settings.preventSleep, [&settings](bool value) {
+        settings.preventSleep = value;
+        Application::getInstance().saveSettings();
+    });
+    m_contentBox->addView(sleepToggle);
 }
 
-void SettingsTab::createTranscodeSection() {
+void SettingsTab::createAudioSection() {
     Application& app = Application::getInstance();
     AppSettings& settings = app.getSettings();
 
     // Section header
     auto* header = new brls::Header();
-    header->setTitle("Transcoding");
+    header->setTitle("Audio");
     m_contentBox->addView(header);
 
-    // Video quality selector
-    m_qualitySelector = new brls::SelectorCell();
-    m_qualitySelector->init("Video Quality",
-        {"Original (Direct Play)", "1080p (20 Mbps)", "720p (4 Mbps)", "480p (2 Mbps)", "360p (1 Mbps)", "240p (500 Kbps)"},
-        static_cast<int>(settings.videoQuality),
-        [this](int index) {
-            onQualityChanged(index);
+    // Audio quality selector
+    auto* qualitySelector = new brls::SelectorCell();
+    qualitySelector->init("Audio Quality",
+        {"Original", "High (256 kbps)", "Medium (128 kbps)", "Low (64 kbps)"},
+        static_cast<int>(settings.audioQuality),
+        [&settings](int index) {
+            settings.audioQuality = static_cast<AudioQuality>(index);
+            Application::getInstance().saveSettings();
         });
-    m_contentBox->addView(m_qualitySelector);
+    m_contentBox->addView(qualitySelector);
 
-    // Force transcode toggle
-    m_forceTranscodeToggle = new brls::BooleanCell();
-    m_forceTranscodeToggle->init("Force Transcode", settings.forceTranscode, [&settings](bool value) {
-        settings.forceTranscode = value;
+    // Volume boost toggle
+    auto* boostToggle = new brls::BooleanCell();
+    boostToggle->init("Volume Boost", settings.boostVolume, [&settings](bool value) {
+        settings.boostVolume = value;
         Application::getInstance().saveSettings();
     });
-    m_contentBox->addView(m_forceTranscodeToggle);
+    m_contentBox->addView(boostToggle);
 
-    // Burn subtitles toggle
-    m_burnSubtitlesToggle = new brls::BooleanCell();
-    m_burnSubtitlesToggle->init("Burn Subtitles", settings.burnSubtitles, [&settings](bool value) {
-        settings.burnSubtitles = value;
+    // Show chapter list toggle
+    auto* chapterToggle = new brls::BooleanCell();
+    chapterToggle->init("Show Chapter List", settings.showChapterList, [&settings](bool value) {
+        settings.showChapterList = value;
         Application::getInstance().saveSettings();
     });
-    m_contentBox->addView(m_burnSubtitlesToggle);
-
-    // Direct play toggle
-    m_directPlayToggle = new brls::BooleanCell();
-    m_directPlayToggle->init("Try Direct Play First", settings.directPlay, [&settings](bool value) {
-        settings.directPlay = value;
-        Application::getInstance().saveSettings();
-    });
-    m_contentBox->addView(m_directPlayToggle);
+    m_contentBox->addView(chapterToggle);
 }
 
 void SettingsTab::createDownloadsSection() {
@@ -362,10 +341,10 @@ void SettingsTab::createDownloadsSection() {
         });
     m_contentBox->addView(m_concurrentDownloadsSelector);
 
-    // Delete after watch toggle
+    // Delete after finish toggle
     m_deleteAfterWatchToggle = new brls::BooleanCell();
-    m_deleteAfterWatchToggle->init("Delete After Watching", settings.deleteAfterWatch, [&settings](bool value) {
-        settings.deleteAfterWatch = value;
+    m_deleteAfterWatchToggle->init("Delete After Finishing", settings.deleteAfterFinish, [&settings](bool value) {
+        settings.deleteAfterFinish = value;
         Application::getInstance().saveSettings();
     });
     m_contentBox->addView(m_deleteAfterWatchToggle);
@@ -393,7 +372,7 @@ void SettingsTab::createDownloadsSection() {
         dialog->addButton("Delete All", [dialog, this]() {
             auto downloads = DownloadsManager::getInstance().getDownloads();
             for (const auto& item : downloads) {
-                DownloadsManager::getInstance().deleteDownload(item.ratingKey);
+                DownloadsManager::getInstance().deleteDownload(item.itemId);
             }
             if (m_clearDownloadsCell) {
                 m_clearDownloadsCell->setDetailText("0 items");
@@ -451,12 +430,12 @@ void SettingsTab::createAboutSection() {
     // Version info
     auto* versionCell = new brls::DetailCell();
     versionCell->setText("Version");
-    versionCell->setDetailText(VITA_PLEX_VERSION);
+    versionCell->setDetailText(VITA_ABS_VERSION);
     m_contentBox->addView(versionCell);
 
     // App description
     auto* descLabel = new brls::Label();
-    descLabel->setText("VitaABS - Plex Client for PlayStation Vita");
+    descLabel->setText("VitaABS - Audiobookshelf Client for PlayStation Vita");
     descLabel->setFontSize(16);
     descLabel->setMarginLeft(16);
     descLabel->setMarginTop(8);
@@ -505,45 +484,6 @@ void SettingsTab::onThemeChanged(int index) {
     app.saveSettings();
 }
 
-void SettingsTab::onQualityChanged(int index) {
-    Application& app = Application::getInstance();
-    AppSettings& settings = app.getSettings();
-
-    settings.videoQuality = static_cast<VideoQuality>(index);
-
-    // Update bitrate based on quality
-    switch (settings.videoQuality) {
-        case VideoQuality::ORIGINAL:
-            settings.maxBitrate = 0;  // No limit
-            break;
-        case VideoQuality::QUALITY_1080P:
-            settings.maxBitrate = 20000;
-            break;
-        case VideoQuality::QUALITY_720P:
-            settings.maxBitrate = 4000;
-            break;
-        case VideoQuality::QUALITY_480P:
-            settings.maxBitrate = 2000;
-            break;
-        case VideoQuality::QUALITY_360P:
-            settings.maxBitrate = 1000;
-            break;
-        case VideoQuality::QUALITY_240P:
-            settings.maxBitrate = 500;
-            break;
-    }
-
-    app.saveSettings();
-}
-
-void SettingsTab::onSubtitleSizeChanged(int index) {
-    Application& app = Application::getInstance();
-    AppSettings& settings = app.getSettings();
-
-    settings.subtitleSize = static_cast<SubtitleSize>(index);
-    app.saveSettings();
-}
-
 void SettingsTab::onSeekIntervalChanged(int index) {
     Application& app = Application::getInstance();
     AppSettings& settings = app.getSettings();
@@ -564,8 +504,8 @@ void SettingsTab::onManageHiddenLibraries() {
     AppSettings& settings = app.getSettings();
 
     // Fetch library sections
-    std::vector<LibrarySection> sections;
-    AudiobookshelfClient::getInstance().fetchLibrarySections(sections);
+    std::vector<Library> sections;
+    AudiobookshelfClient::getInstance().fetchLibraries(sections);
 
     if (sections.empty()) {
         brls::Dialog* dialog = new brls::Dialog("No libraries found");
@@ -585,11 +525,11 @@ void SettingsTab::onManageHiddenLibraries() {
     }
     if (!hidden.empty()) hiddenKeys.insert(hidden);
 
-    // Create scrollable dialog content for many libraries
+    // Create scrollable dialog content
     brls::Box* outerBox = new brls::Box();
     outerBox->setAxis(brls::Axis::COLUMN);
     outerBox->setWidth(400);
-    outerBox->setHeight(350);  // Fixed height for scrolling
+    outerBox->setHeight(350);
 
     auto* title = new brls::Label();
     title->setText("Select libraries to hide:");
@@ -612,10 +552,10 @@ void SettingsTab::onManageHiddenLibraries() {
 
     for (const auto& section : sections) {
         auto* checkbox = new brls::BooleanCell();
-        bool isHidden = (hiddenKeys.find(section.key) != hiddenKeys.end());
-        checkbox->init(section.title, isHidden, [](bool value) {});
+        bool isHidden = (hiddenKeys.find(section.id) != hiddenKeys.end());
+        checkbox->init(section.name, isHidden, [](bool value) {});
         content->addView(checkbox);
-        checkboxes.push_back({section.key, checkbox});
+        checkboxes.push_back({section.id, checkbox});
     }
 
     scrollFrame->setContentView(content);
@@ -660,200 +600,6 @@ void SettingsTab::onManageHiddenLibraries() {
     dialog->open();
 }
 
-void SettingsTab::onManageSidebarOrder() {
-    Application& app = Application::getInstance();
-    AppSettings& settings = app.getSettings();
-
-    // Default sidebar items (Settings is always last and not movable)
-    std::vector<std::pair<std::string, std::string>> defaultItems = {
-        {"home", "Home"},
-        {"library", "Library"},
-        {"music", "Music"},
-        {"search", "Search"},
-        {"livetv", "Live TV"}
-    };
-
-    // Parse current order or use default
-    std::vector<std::pair<std::string, std::string>> currentOrder;
-    if (!settings.sidebarOrder.empty()) {
-        std::string order = settings.sidebarOrder;
-        size_t pos = 0;
-        while ((pos = order.find(',')) != std::string::npos) {
-            std::string key = order.substr(0, pos);
-            for (const auto& item : defaultItems) {
-                if (item.first == key) {
-                    currentOrder.push_back(item);
-                    break;
-                }
-            }
-            order.erase(0, pos + 1);
-        }
-        if (!order.empty()) {
-            for (const auto& item : defaultItems) {
-                if (item.first == order) {
-                    currentOrder.push_back(item);
-                    break;
-                }
-            }
-        }
-        // Add any missing items at the end
-        for (const auto& item : defaultItems) {
-            bool found = false;
-            for (const auto& cur : currentOrder) {
-                if (cur.first == item.first) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) currentOrder.push_back(item);
-        }
-    } else {
-        currentOrder = defaultItems;
-    }
-
-    // Create dialog content
-    brls::Box* outerBox = new brls::Box();
-    outerBox->setAxis(brls::Axis::COLUMN);
-    outerBox->setWidth(450);
-    outerBox->setHeight(380);
-
-    auto* title = new brls::Label();
-    title->setText("Reorder sidebar items:");
-    title->setFontSize(20);
-    title->setMarginBottom(15);
-    title->setMarginLeft(20);
-    title->setMarginTop(20);
-    outerBox->addView(title);
-
-    // Use shared state
-    auto orderCopy = std::make_shared<std::vector<std::pair<std::string, std::string>>>(currentOrder);
-    auto labels = std::make_shared<std::vector<brls::Label*>>();
-
-    // Scrolling frame for items
-    brls::ScrollingFrame* scrollFrame = new brls::ScrollingFrame();
-    scrollFrame->setGrow(1.0f);
-
-    brls::Box* content = new brls::Box();
-    content->setAxis(brls::Axis::COLUMN);
-    content->setPaddingLeft(20);
-    content->setPaddingRight(20);
-
-    // Helper to update all labels
-    auto updateLabels = [orderCopy, labels]() {
-        for (size_t i = 0; i < labels->size() && i < orderCopy->size(); i++) {
-            (*labels)[i]->setText(std::to_string(i + 1) + ". " + (*orderCopy)[i].second);
-        }
-    };
-
-    // Create rows for each item
-    for (size_t i = 0; i < orderCopy->size(); i++) {
-        auto* row = new brls::Box();
-        row->setAxis(brls::Axis::ROW);
-        row->setJustifyContent(brls::JustifyContent::SPACE_BETWEEN);
-        row->setAlignItems(brls::AlignItems::CENTER);
-        row->setHeight(50);
-        row->setMarginBottom(8);
-
-        auto* label = new brls::Label();
-        label->setText(std::to_string(i + 1) + ". " + (*orderCopy)[i].second);
-        label->setFontSize(18);
-        label->setGrow(1.0f);
-        row->addView(label);
-        labels->push_back(label);
-
-        auto* btnBox = new brls::Box();
-        btnBox->setAxis(brls::Axis::ROW);
-
-        // Up button (move item up)
-        auto* upBtn = new brls::Button();
-        upBtn->setText(i > 0 ? "^" : " ");
-        upBtn->setWidth(45);
-        upBtn->setHeight(35);
-        upBtn->setMarginRight(8);
-        if (i > 0) {
-            size_t idx = i;
-            upBtn->registerClickAction([orderCopy, labels, idx, updateLabels](brls::View* view) {
-                if (idx > 0 && idx < orderCopy->size()) {
-                    std::swap((*orderCopy)[idx], (*orderCopy)[idx - 1]);
-                    updateLabels();
-                }
-                return true;
-            });
-        }
-        btnBox->addView(upBtn);
-
-        // Down button (move item down)
-        auto* downBtn = new brls::Button();
-        downBtn->setText(i < orderCopy->size() - 1 ? "v" : " ");
-        downBtn->setWidth(45);
-        downBtn->setHeight(35);
-        if (i < orderCopy->size() - 1) {
-            size_t idx = i;
-            downBtn->registerClickAction([orderCopy, labels, idx, updateLabels](brls::View* view) {
-                if (idx < orderCopy->size() - 1) {
-                    std::swap((*orderCopy)[idx], (*orderCopy)[idx + 1]);
-                    updateLabels();
-                }
-                return true;
-            });
-        }
-        btnBox->addView(downBtn);
-
-        row->addView(btnBox);
-        content->addView(row);
-    }
-
-    scrollFrame->setContentView(content);
-    outerBox->addView(scrollFrame);
-
-    // Note about Settings
-    auto* noteLabel = new brls::Label();
-    noteLabel->setText("Settings always appears last. Restart required.");
-    noteLabel->setFontSize(14);
-    noteLabel->setMarginLeft(20);
-    noteLabel->setMarginBottom(10);
-    outerBox->addView(noteLabel);
-
-    brls::Dialog* dialog = new brls::Dialog(outerBox);
-
-    dialog->addButton("Cancel", [dialog]() {
-        dialog->close();
-    });
-
-    dialog->addButton("Reset", [dialog, orderCopy, defaultItems, this]() {
-        Application& app = Application::getInstance();
-        AppSettings& settings = app.getSettings();
-        settings.sidebarOrder = "";
-        app.saveSettings();
-        if (m_sidebarOrderCell) {
-            m_sidebarOrderCell->setDetailText("Default");
-        }
-        dialog->close();
-    });
-
-    dialog->addButton("Save", [dialog, orderCopy, this]() {
-        Application& app = Application::getInstance();
-        AppSettings& settings = app.getSettings();
-
-        std::string newOrder;
-        for (const auto& item : *orderCopy) {
-            if (!newOrder.empty()) newOrder += ",";
-            newOrder += item.first;
-        }
-
-        settings.sidebarOrder = newOrder;
-        app.saveSettings();
-
-        if (m_sidebarOrderCell) {
-            m_sidebarOrderCell->setDetailText("Custom");
-        }
-
-        dialog->close();
-    });
-
-    dialog->open();
-}
-
 void SettingsTab::onTestLocalPlayback() {
     brls::Logger::info("SettingsTab: Testing local playback...");
 
@@ -861,7 +607,6 @@ void SettingsTab::onTestLocalPlayback() {
     const std::string basePath = "ux0:data/VitaABS/";
     std::string testFile;
 
-    // Try mp4 first (to test video), then audio files
     std::vector<std::string> testFiles = {
         basePath + "test.mp4",
         basePath + "test.mp3",
@@ -885,10 +630,26 @@ void SettingsTab::onTestLocalPlayback() {
         return;
     }
 
-    // Push player activity with the test file (this shows the video view properly)
     brls::Logger::info("SettingsTab: Pushing player activity for: {}", testFile);
     PlayerActivity* activity = PlayerActivity::createForDirectFile(testFile);
     brls::Application::pushActivity(activity);
+}
+
+// Stub methods for removed Plex-specific features
+void SettingsTab::createTranscodeSection() {
+    // Removed - Audiobookshelf doesn't use video transcoding
+}
+
+void SettingsTab::onQualityChanged(int index) {
+    // Removed - Audiobookshelf uses audio quality instead
+}
+
+void SettingsTab::onSubtitleSizeChanged(int index) {
+    // Removed - Audiobookshelf is audio-only
+}
+
+void SettingsTab::onManageSidebarOrder() {
+    // Removed - Simplified for Audiobookshelf
 }
 
 } // namespace vitaabs

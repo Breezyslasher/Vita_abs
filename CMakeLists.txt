@@ -73,19 +73,16 @@ set(APP_SOURCES
     src/activity/player_activity.cpp
 
     # Views
-    src/view/home_tab.cpp
-    src/view/library_tab.cpp
     src/view/library_section_tab.cpp
     src/view/search_tab.cpp
     src/view/settings_tab.cpp
-    src/view/livetv_tab.cpp
     src/view/media_detail_view.cpp
     src/view/media_item_cell.cpp
     src/view/recycling_grid.cpp
     src/view/video_view.cpp
     src/view/downloads_tab.cpp
-    src/view/music_tab.cpp
     src/view/progress_dialog.cpp
+    src/view/podcast_search_tab.cpp
 
     # Player
     src/player/mpv_player.cpp
@@ -110,14 +107,18 @@ add_executable(${PROJECT_NAME} ${APP_SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE ${APP_INCLUDES})
 
 # Link libraries - borealis + app platform libs from toolchain
-# Order matters: libraries that PROVIDE symbols must come AFTER libraries that NEED them
+# Use linker groups to handle circular dependencies between mpv/FFmpeg
 target_link_libraries(${PROJECT_NAME}
     borealis
     ${APP_PLATFORM_LIB}
 
-    # External libraries first (they depend on Vita stubs)
-    # FFmpeg has circular dependencies - list avcodec multiple times
+    # External libraries (curl with SSL)
     curl
+    ssl
+    crypto
+
+    # Use linker group for mpv/FFmpeg circular dependencies
+    -Wl,--start-group
     mpv
     avfilter
     avformat
@@ -125,16 +126,17 @@ target_link_libraries(${PROJECT_NAME}
     swresample
     swscale
     avutil
-    avcodec
+    -Wl,--end-group
+
+    # Audio/compression libraries
+    mp3lame
+    zstd
     ass
     freetype
     harfbuzz
     fribidi
     png
     bz2
-    mbedtls
-    mbedcrypto
-    mbedx509
 
     # Vita SDK stubs (provide symbols for above libraries)
     vita2d
@@ -153,7 +155,7 @@ target_link_libraries(${PROJECT_NAME}
     SceVshBridge_stub
     SceAppMgr_stub
 
-    # Standard libraries last (m is provided by libstdc++)
+    # Standard libraries last
     z
     c
 )

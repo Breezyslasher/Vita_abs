@@ -4,6 +4,7 @@
 
 #include "app/application.hpp"
 #include "app/audiobookshelf_client.hpp"
+#include "app/downloads_manager.hpp"
 #include "activity/login_activity.hpp"
 #include "activity/main_activity.hpp"
 #include "activity/player_activity.hpp"
@@ -54,6 +55,9 @@ void Application::run() {
     brls::Logger::info("Application::run - isLoggedIn={}, serverUrl={}",
                        isLoggedIn(), m_serverUrl.empty() ? "(empty)" : m_serverUrl);
 
+    // Initialize downloads manager to check for offline content
+    DownloadsManager::getInstance().init();
+
     // Check if we have saved login credentials
     if (isLoggedIn() && !m_serverUrl.empty()) {
         brls::Logger::info("Restoring saved session...");
@@ -66,13 +70,27 @@ void Application::run() {
             brls::Logger::info("Restored session, token valid");
             pushMainActivity();
         } else {
-            brls::Logger::error("Saved token invalid, showing login");
-            pushLoginActivity();
+            // Token validation failed - could be offline
+            // Check if we have downloads, if so go to main activity (offline mode)
+            auto downloads = DownloadsManager::getInstance().getDownloads();
+            if (!downloads.empty()) {
+                brls::Logger::info("Offline with {} downloads, going to main activity", downloads.size());
+                pushMainActivity();
+            } else {
+                brls::Logger::error("Saved token invalid and no downloads, showing login");
+                pushLoginActivity();
+            }
         }
     } else {
-        brls::Logger::info("No saved session, showing login screen");
-        // Show login screen
-        pushLoginActivity();
+        // No saved session - check if we have downloads for offline mode
+        auto downloads = DownloadsManager::getInstance().getDownloads();
+        if (!downloads.empty()) {
+            brls::Logger::info("No session but {} downloads exist, going to main activity", downloads.size());
+            pushMainActivity();
+        } else {
+            brls::Logger::info("No saved session, showing login screen");
+            pushLoginActivity();
+        }
     }
 
     // Main loop handled by Borealis
@@ -95,8 +113,9 @@ void Application::pushMainActivity() {
     brls::Application::pushActivity(new MainActivity());
 }
 
-void Application::pushPlayerActivity(const std::string& itemId, const std::string& episodeId) {
-    brls::Application::pushActivity(new PlayerActivity(itemId, episodeId));
+void Application::pushPlayerActivity(const std::string& itemId, const std::string& episodeId,
+                                      float startTime) {
+    brls::Application::pushActivity(new PlayerActivity(itemId, episodeId, startTime));
 }
 
 void Application::applyTheme() {
@@ -306,7 +325,6 @@ bool Application::loadSettings() {
     m_settings.debugLogging = extractBool("debugLogging", true);
 
     // Load layout settings
-    m_settings.showLibrariesInSidebar = extractBool("showLibrariesInSidebar", false);
     m_settings.collapseSidebar = extractBool("collapseSidebar", false);
     m_settings.hiddenLibraries = extractString("hiddenLibraries");
 
@@ -385,7 +403,6 @@ bool Application::saveSettings() {
     json += "  \"debugLogging\": " + std::string(m_settings.debugLogging ? "true" : "false") + ",\n";
 
     // Layout settings
-    json += "  \"showLibrariesInSidebar\": " + std::string(m_settings.showLibrariesInSidebar ? "true" : "false") + ",\n";
     json += "  \"collapseSidebar\": " + std::string(m_settings.collapseSidebar ? "true" : "false") + ",\n";
     json += "  \"hiddenLibraries\": \"" + m_settings.hiddenLibraries + "\",\n";
 
