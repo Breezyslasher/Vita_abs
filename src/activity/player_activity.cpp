@@ -82,7 +82,7 @@ void PlayerActivity::onContentAvailable() {
     // Load media details
     loadMedia();
 
-    // Set up controls
+    // Set up progress slider
     if (progressSlider) {
         progressSlider->setProgress(0.0f);
         progressSlider->getProgressEvent()->subscribe([this](float progress) {
@@ -90,6 +90,26 @@ void PlayerActivity::onContentAvailable() {
             MpvPlayer& player = MpvPlayer::getInstance();
             double duration = player.getDuration();
             player.seekTo(duration * progress);
+        });
+    }
+
+    // Set up button click handlers
+    if (btnPlayPause) {
+        btnPlayPause->getClickEvent()->subscribe([this](brls::View* view) {
+            togglePlayPause();
+        });
+        btnPlayPause->setFocusable(true);
+    }
+
+    if (btnRewind) {
+        btnRewind->getClickEvent()->subscribe([this](brls::View* view) {
+            seek(-30);
+        });
+    }
+
+    if (btnForward) {
+        btnForward->getClickEvent()->subscribe([this](brls::View* view) {
+            seek(30);
         });
     }
 
@@ -104,13 +124,13 @@ void PlayerActivity::onContentAvailable() {
         return true;
     });
 
-    this->registerAction("Rewind", brls::ControllerButton::BUTTON_LB, [this](brls::View* view) {
-        seek(-10);
+    this->registerAction("Rewind 30s", brls::ControllerButton::BUTTON_LB, [this](brls::View* view) {
+        seek(-30);
         return true;
     });
 
-    this->registerAction("Forward", brls::ControllerButton::BUTTON_RB, [this](brls::View* view) {
-        seek(10);
+    this->registerAction("Forward 30s", brls::ControllerButton::BUTTON_RB, [this](brls::View* view) {
+        seek(30);
         return true;
     });
 
@@ -188,13 +208,18 @@ void PlayerActivity::loadMedia() {
     if (m_isDirectFile) {
         brls::Logger::info("PlayerActivity: Playing direct file: {}", m_directFilePath);
 
+        // Extract filename from path for title
+        size_t lastSlash = m_directFilePath.find_last_of("/\\");
+        std::string filename = (lastSlash != std::string::npos)
+            ? m_directFilePath.substr(lastSlash + 1)
+            : m_directFilePath;
+
         if (titleLabel) {
-            // Extract filename from path
-            size_t lastSlash = m_directFilePath.find_last_of("/\\");
-            std::string filename = (lastSlash != std::string::npos)
-                ? m_directFilePath.substr(lastSlash + 1)
-                : m_directFilePath;
             titleLabel->setText(filename);
+        }
+
+        if (authorLabel) {
+            authorLabel->setText("Local File");
         }
 
         MpvPlayer& player = MpvPlayer::getInstance();
@@ -246,12 +271,23 @@ void PlayerActivity::loadMedia() {
 
         brls::Logger::info("PlayerActivity: Playing local file: {}", playbackPath);
 
+        // Set title
         if (titleLabel) {
-            std::string title = download->title;
-            if (!download->parentTitle.empty()) {
-                title = download->parentTitle + " - " + download->title;
+            titleLabel->setText(download->title);
+        }
+
+        // Set author/parent title
+        if (authorLabel) {
+            if (!download->authorName.empty()) {
+                authorLabel->setText(download->authorName);
+            } else if (!download->parentTitle.empty()) {
+                authorLabel->setText(download->parentTitle);
             }
-            titleLabel->setText(title);
+        }
+
+        // Load cover art if available
+        if (!download->coverUrl.empty()) {
+            loadCoverArt(download->coverUrl);
         }
 
         MpvPlayer& player = MpvPlayer::getInstance();
@@ -293,12 +329,20 @@ void PlayerActivity::loadMedia() {
     MediaItem item;
 
     if (client.fetchItem(m_itemId, item)) {
+        // Set title
         if (titleLabel) {
-            std::string title = item.title;
-            if (!item.authorName.empty()) {
-                title = item.title + " - " + item.authorName;
-            }
-            titleLabel->setText(title);
+            titleLabel->setText(item.title);
+        }
+
+        // Set author
+        if (authorLabel && !item.authorName.empty()) {
+            authorLabel->setText(item.authorName);
+        }
+
+        // Load cover art
+        if (!item.coverUrl.empty()) {
+            std::string fullCoverUrl = client.getCoverUrl(m_itemId);
+            loadCoverArt(fullCoverUrl);
         }
 
         // Start a playback session with Audiobookshelf
@@ -461,6 +505,9 @@ void PlayerActivity::updateProgress() {
     // Always process MPV events to handle state transitions
     player.update();
 
+    // Update play/pause button state
+    updatePlayPauseButton();
+
     // Skip UI updates while MPV is still loading - be gentle on Vita's limited hardware
     if (player.isLoading()) {
         return;
@@ -475,20 +522,33 @@ void PlayerActivity::updateProgress() {
     double position = player.getPosition();
     double duration = player.getDuration();
 
+    // Store duration for later use
     if (duration > 0) {
+        m_totalDuration = duration;
+    }
+
+    if (duration > 0) {
+        // Update progress slider
         if (progressSlider) {
             progressSlider->setProgress((float)(position / duration));
         }
 
-        if (timeLabel) {
-            int posMin = (int)position / 60;
-            int posSec = (int)position % 60;
-            int durMin = (int)duration / 60;
-            int durSec = (int)duration % 60;
+        // Update elapsed time label
+        if (timeElapsedLabel) {
+            timeElapsedLabel->setText(formatTime(position));
+        }
 
+        // Update remaining time label
+        if (timeRemainingLabel) {
+            double remaining = duration - position;
+            timeRemainingLabel->setText(formatTimeRemaining(remaining));
+        }
+
+        // Legacy time label (for compatibility)
+        if (timeLabel) {
             char timeStr[32];
-            snprintf(timeStr, sizeof(timeStr), "%02d:%02d / %02d:%02d",
-                     posMin, posSec, durMin, durSec);
+            snprintf(timeStr, sizeof(timeStr), "%s / %s",
+                     formatTime(position).c_str(), formatTime(duration).c_str());
             timeLabel->setText(timeStr);
         }
     }
@@ -513,11 +573,73 @@ void PlayerActivity::togglePlayPause() {
         player.play();
         m_isPlaying = true;
     }
+
+    // Update button immediately
+    updatePlayPauseButton();
+}
+
+void PlayerActivity::updatePlayPauseButton() {
+    if (!playPauseIcon) return;
+
+    MpvPlayer& player = MpvPlayer::getInstance();
+
+    if (player.isPlaying()) {
+        playPauseIcon->setText("||");  // Pause icon (show pause when playing)
+    } else {
+        playPauseIcon->setText(">");   // Play icon (show play when paused)
+    }
 }
 
 void PlayerActivity::seek(int seconds) {
     MpvPlayer& player = MpvPlayer::getInstance();
     player.seekRelative(seconds);
+}
+
+std::string PlayerActivity::formatTime(double seconds) {
+    if (seconds < 0) seconds = 0;
+
+    int totalSecs = (int)seconds;
+    int hours = totalSecs / 3600;
+    int mins = (totalSecs % 3600) / 60;
+    int secs = totalSecs % 60;
+
+    char buf[32];
+    if (hours > 0) {
+        snprintf(buf, sizeof(buf), "%d:%02d:%02d", hours, mins, secs);
+    } else {
+        snprintf(buf, sizeof(buf), "%d:%02d", mins, secs);
+    }
+    return std::string(buf);
+}
+
+std::string PlayerActivity::formatTimeRemaining(double remaining) {
+    if (remaining < 0) remaining = 0;
+
+    int totalSecs = (int)remaining;
+    int hours = totalSecs / 3600;
+    int mins = (totalSecs % 3600) / 60;
+    int secs = totalSecs % 60;
+
+    char buf[32];
+    if (hours > 0) {
+        snprintf(buf, sizeof(buf), "-%d:%02d:%02d", hours, mins, secs);
+    } else {
+        snprintf(buf, sizeof(buf), "-%d:%02d", mins, secs);
+    }
+    return std::string(buf);
+}
+
+void PlayerActivity::loadCoverArt(const std::string& coverUrl) {
+    if (coverUrl.empty() || !coverImage) return;
+
+    brls::Logger::debug("Loading cover art: {}", coverUrl);
+
+    // Use the image loader to load the cover asynchronously
+    ImageLoader::loadAsync(coverUrl, [this](const std::string& imagePath) {
+        if (!m_destroying && coverImage) {
+            coverImage->setImageFromFile(imagePath);
+        }
+    });
 }
 
 } // namespace vitaabs
