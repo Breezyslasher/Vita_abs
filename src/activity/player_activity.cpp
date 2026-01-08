@@ -81,16 +81,28 @@ void PlayerActivity::onContentAvailable() {
         btnPlayPause->setFocusable(true);
     }
 
+    // Get seek interval from settings
+    AppSettings& settings = Application::getInstance().getSettings();
+    int seekInterval = settings.seekInterval;
+
+    // Update skip button labels
+    if (rewindLabel) {
+        rewindLabel->setText("-" + std::to_string(seekInterval));
+    }
+    if (forwardLabel) {
+        forwardLabel->setText("+" + std::to_string(seekInterval));
+    }
+
     if (btnRewind) {
-        btnRewind->registerClickAction([this](brls::View* view) {
-            seek(-30);
+        btnRewind->registerClickAction([this, seekInterval](brls::View* view) {
+            seek(-seekInterval);
             return true;
         });
     }
 
     if (btnForward) {
-        btnForward->registerClickAction([this](brls::View* view) {
-            seek(30);
+        btnForward->registerClickAction([this, seekInterval](brls::View* view) {
+            seek(seekInterval);
             return true;
         });
     }
@@ -106,13 +118,15 @@ void PlayerActivity::onContentAvailable() {
         return true;
     });
 
-    this->registerAction("Rewind 30s", brls::ControllerButton::BUTTON_LB, [this](brls::View* view) {
-        seek(-30);
+    std::string rewindAction = "Rewind " + std::to_string(seekInterval) + "s";
+    this->registerAction(rewindAction, brls::ControllerButton::BUTTON_LB, [this, seekInterval](brls::View* view) {
+        seek(-seekInterval);
         return true;
     });
 
-    this->registerAction("Forward 30s", brls::ControllerButton::BUTTON_RB, [this](brls::View* view) {
-        seek(30);
+    std::string forwardAction = "Forward " + std::to_string(seekInterval) + "s";
+    this->registerAction(forwardAction, brls::ControllerButton::BUTTON_RB, [this, seekInterval](brls::View* view) {
+        seek(seekInterval);
         return true;
     });
 

@@ -84,19 +84,23 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         }
 
         // Download button for directly playable content
-        m_downloadButton = new brls::Button();
-        if (DownloadsManager::getInstance().isDownloaded(m_item.id)) {
-            m_downloadButton->setText("Downloaded");
-        } else {
-            m_downloadButton->setText("Download");
+        // Hide if saveToDownloads is enabled (files are auto-saved when played)
+        AppSettings& settings = Application::getInstance().getSettings();
+        if (!settings.saveToDownloads) {
+            m_downloadButton = new brls::Button();
+            if (DownloadsManager::getInstance().isDownloaded(m_item.id)) {
+                m_downloadButton->setText("Downloaded");
+            } else {
+                m_downloadButton->setText("Download");
+            }
+            m_downloadButton->setWidth(200);
+            m_downloadButton->setMarginTop(10);
+            m_downloadButton->registerClickAction([this](brls::View* view) {
+                onDownload();
+                return true;
+            });
+            leftBox->addView(m_downloadButton);
         }
-        m_downloadButton->setWidth(200);
-        m_downloadButton->setMarginTop(10);
-        m_downloadButton->registerClickAction([this](brls::View* view) {
-            onDownload();
-            return true;
-        });
-        leftBox->addView(m_downloadButton);
     }
 
     // For podcasts, show download options
@@ -122,15 +126,19 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         });
         leftBox->addView(m_findEpisodesButton);
 
-        m_downloadButton = new brls::Button();
-        m_downloadButton->setText("Download...");
-        m_downloadButton->setWidth(200);
-        m_downloadButton->setMarginTop(10);
-        m_downloadButton->registerClickAction([this](brls::View* view) {
-            showDownloadOptions();
-            return true;
-        });
-        leftBox->addView(m_downloadButton);
+        // Hide download button if saveToDownloads is enabled (files are auto-saved when played)
+        AppSettings& podcastSettings = Application::getInstance().getSettings();
+        if (!podcastSettings.saveToDownloads) {
+            m_downloadButton = new brls::Button();
+            m_downloadButton->setText("Download...");
+            m_downloadButton->setWidth(200);
+            m_downloadButton->setMarginTop(10);
+            m_downloadButton->registerClickAction([this](brls::View* view) {
+                showDownloadOptions();
+                return true;
+            });
+            leftBox->addView(m_downloadButton);
+        }
     }
 
     topRow->addView(leftBox);

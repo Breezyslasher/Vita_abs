@@ -71,6 +71,8 @@ private:
     BRLS_BIND(brls::Button, btnRewind, "player/btnRewind");
     BRLS_BIND(brls::Button, btnPlayPause, "player/btnPlayPause");
     BRLS_BIND(brls::Button, btnForward, "player/btnForward");
+    BRLS_BIND(brls::Label, rewindLabel, "player/rewindLabel");
+    BRLS_BIND(brls::Label, forwardLabel, "player/forwardLabel");
     BRLS_BIND(brls::Label, playPauseIcon, "player/playPauseIcon");
     BRLS_BIND(brls::Label, chapterInfoLabel, "player/chapterInfo");
 

@@ -89,16 +89,17 @@
         marginTop="10"
         marginBottom="15">
 
-        <!-- Rewind 30s button -->
+        <!-- Rewind button -->
         <brls:Button
             id="player/btnRewind"
             style="borderless"
-            width="70"
+            width="80"
             height="70"
-            marginRight="30">
+            marginRight="25">
             <brls:Label
-                text="-30s"
-                fontSize="16"
+                id="player/rewindLabel"
+                text="-30"
+                fontSize="18"
                 textColor="#ffffff"
                 horizontalAlign="center"/>
         </brls:Button>
@@ -119,16 +120,17 @@
                 horizontalAlign="center"/>
         </brls:Button>
 
-        <!-- Forward 30s button -->
+        <!-- Forward button -->
         <brls:Button
             id="player/btnForward"
             style="borderless"
-            width="70"
+            width="80"
             height="70"
-            marginLeft="30">
+            marginLeft="25">
             <brls:Label
-                text="+30s"
-                fontSize="16"
+                id="player/forwardLabel"
+                text="+30"
+                fontSize="18"
                 textColor="#ffffff"
                 horizontalAlign="center"/>
         </brls:Button>
