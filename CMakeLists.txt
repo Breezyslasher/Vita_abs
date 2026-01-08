@@ -108,8 +108,7 @@ add_executable(${PROJECT_NAME} ${APP_SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE ${APP_INCLUDES})
 
 # Link libraries - borealis + app platform libs from toolchain
-# Order matters: libraries that PROVIDE symbols must come AFTER libraries that NEED them
-# FFmpeg/mpv have complex circular dependencies, so list them multiple times
+# Use linker groups to handle circular dependencies between mpv/FFmpeg
 target_link_libraries(${PROJECT_NAME}
     borealis
     ${APP_PLATFORM_LIB}
@@ -119,8 +118,8 @@ target_link_libraries(${PROJECT_NAME}
     ssl
     crypto
 
-    # MPV and FFmpeg - circular deps require multiple listings
-    # mpv depends on FFmpeg, FFmpeg libs depend on each other
+    # Use linker group for mpv/FFmpeg circular dependencies
+    -Wl,--start-group
     mpv
     avfilter
     avformat
@@ -128,13 +127,7 @@ target_link_libraries(${PROJECT_NAME}
     swresample
     swscale
     avutil
-    # List again to resolve circular dependencies
-    avformat
-    avcodec
-    avutil
-    mpv
-    avcodec
-    avformat
+    -Wl,--end-group
 
     # Audio/compression libraries
     mp3lame
