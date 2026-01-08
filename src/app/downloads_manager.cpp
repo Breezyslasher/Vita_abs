@@ -699,6 +699,27 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
                 item.numFiles = 1;
                 item.state = DownloadState::COMPLETED;
                 brls::Logger::info("DownloadsManager: Completed combined download: {}", item.title);
+
+                // Download cover image for offline use
+                if (!item.coverUrl.empty()) {
+                    item.localCoverPath = downloadCoverImage(item.itemId, item.coverUrl);
+                }
+
+                // Fetch and store metadata (description, chapters) for offline use
+                MediaItem mediaInfo;
+                if (client.fetchItem(item.itemId, mediaInfo)) {
+                    item.description = mediaInfo.description;
+                    item.numChapters = static_cast<int>(mediaInfo.chapters.size());
+                    item.chapters.clear();
+                    for (const auto& ch : mediaInfo.chapters) {
+                        DownloadChapter dch;
+                        dch.title = ch.title;
+                        dch.start = ch.start;
+                        dch.end = ch.end;
+                        item.chapters.push_back(dch);
+                    }
+                    brls::Logger::info("DownloadsManager: Stored {} chapters for offline use", item.chapters.size());
+                }
             } else {
                 brls::Logger::error("DownloadsManager: FFmpeg concatenation failed, falling back to first file");
                 // Fallback: use first file if concatenation fails
@@ -790,6 +811,27 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
     if (success && m_downloading) {
         item.state = DownloadState::COMPLETED;
         brls::Logger::info("DownloadsManager: Completed download of {}", item.title);
+
+        // Download cover image for offline use
+        if (!item.coverUrl.empty()) {
+            item.localCoverPath = downloadCoverImage(item.itemId, item.coverUrl);
+        }
+
+        // Fetch and store metadata (description, chapters) for offline use
+        MediaItem mediaInfo;
+        if (client.fetchItem(item.itemId, mediaInfo)) {
+            item.description = mediaInfo.description;
+            item.numChapters = static_cast<int>(mediaInfo.chapters.size());
+            item.chapters.clear();
+            for (const auto& ch : mediaInfo.chapters) {
+                DownloadChapter dch;
+                dch.title = ch.title;
+                dch.start = ch.start;
+                dch.end = ch.end;
+                item.chapters.push_back(dch);
+            }
+            brls::Logger::info("DownloadsManager: Stored {} chapters for offline use", item.chapters.size());
+        }
     } else if (!m_downloading) {
         item.state = DownloadState::PAUSED;
         brls::Logger::info("DownloadsManager: Paused download of {}", item.title);
@@ -807,6 +849,23 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
     saveState();
 }
 
+// Helper to escape JSON strings
+static std::string escapeJsonString(const std::string& str) {
+    std::string result;
+    result.reserve(str.size() + 10);
+    for (char c : str) {
+        switch (c) {
+            case '"': result += "\\\""; break;
+            case '\\': result += "\\\\"; break;
+            case '\n': result += "\\n"; break;
+            case '\r': result += "\\r"; break;
+            case '\t': result += "\\t"; break;
+            default: result += c; break;
+        }
+    }
+    return result;
+}
+
 void DownloadsManager::saveState() {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -819,13 +878,15 @@ void DownloadsManager::saveState() {
         ss << "{\n"
            << "\"itemId\":\"" << item.itemId << "\",\n"
            << "\"episodeId\":\"" << item.episodeId << "\",\n"
-           << "\"title\":\"" << item.title << "\",\n"
-           << "\"authorName\":\"" << item.authorName << "\",\n"
-           << "\"parentTitle\":\"" << item.parentTitle << "\",\n"
+           << "\"title\":\"" << escapeJsonString(item.title) << "\",\n"
+           << "\"authorName\":\"" << escapeJsonString(item.authorName) << "\",\n"
+           << "\"parentTitle\":\"" << escapeJsonString(item.parentTitle) << "\",\n"
            << "\"localPath\":\"" << item.localPath << "\",\n"
            << "\"coverUrl\":\"" << item.coverUrl << "\",\n"
+           << "\"localCoverPath\":\"" << item.localCoverPath << "\",\n"
+           << "\"description\":\"" << escapeJsonString(item.description) << "\",\n"
            << "\"mediaType\":\"" << item.mediaType << "\",\n"
-           << "\"seriesName\":\"" << item.seriesName << "\",\n"
+           << "\"seriesName\":\"" << escapeJsonString(item.seriesName) << "\",\n"
            << "\"totalBytes\":" << item.totalBytes << ",\n"
            << "\"downloadedBytes\":" << item.downloadedBytes << ",\n"
            << "\"duration\":" << item.duration << ",\n"
@@ -835,6 +896,19 @@ void DownloadsManager::saveState() {
            << "\"numFiles\":" << item.numFiles << ",\n"
            << "\"state\":" << static_cast<int>(item.state) << ",\n"
            << "\"lastSynced\":" << item.lastSynced << ",\n";
+
+        // Save chapters for offline use
+        ss << "\"chapters\":[";
+        for (size_t j = 0; j < item.chapters.size(); ++j) {
+            const auto& ch = item.chapters[j];
+            ss << "{"
+               << "\"title\":\"" << escapeJsonString(ch.title) << "\","
+               << "\"start\":" << ch.start << ","
+               << "\"end\":" << ch.end
+               << "}";
+            if (j < item.chapters.size() - 1) ss << ",";
+        }
+        ss << "],\n";
 
         // Save multi-file info
         ss << "\"files\":[";
@@ -972,15 +1046,38 @@ void DownloadsManager::loadState() {
         std::string itemJson = content.substr(objStart, objEnd - objStart);
 
         DownloadItem item;
+        // Helper to unescape JSON strings
+        auto unescapeJsonString = [](const std::string& str) -> std::string {
+            std::string result;
+            result.reserve(str.size());
+            for (size_t i = 0; i < str.size(); ++i) {
+                if (str[i] == '\\' && i + 1 < str.size()) {
+                    switch (str[i + 1]) {
+                        case '"': result += '"'; ++i; break;
+                        case '\\': result += '\\'; ++i; break;
+                        case 'n': result += '\n'; ++i; break;
+                        case 'r': result += '\r'; ++i; break;
+                        case 't': result += '\t'; ++i; break;
+                        default: result += str[i]; break;
+                    }
+                } else {
+                    result += str[i];
+                }
+            }
+            return result;
+        };
+
         item.itemId = extractValue(itemJson, "itemId");
         item.episodeId = extractValue(itemJson, "episodeId");
-        item.title = extractValue(itemJson, "title");
-        item.authorName = extractValue(itemJson, "authorName");
-        item.parentTitle = extractValue(itemJson, "parentTitle");
+        item.title = unescapeJsonString(extractValue(itemJson, "title"));
+        item.authorName = unescapeJsonString(extractValue(itemJson, "authorName"));
+        item.parentTitle = unescapeJsonString(extractValue(itemJson, "parentTitle"));
         item.localPath = extractValue(itemJson, "localPath");
         item.coverUrl = extractValue(itemJson, "coverUrl");
+        item.localCoverPath = extractValue(itemJson, "localCoverPath");
+        item.description = unescapeJsonString(extractValue(itemJson, "description"));
         item.mediaType = extractValue(itemJson, "mediaType");
-        item.seriesName = extractValue(itemJson, "seriesName");
+        item.seriesName = unescapeJsonString(extractValue(itemJson, "seriesName"));
 
         std::string totalBytesStr = extractValue(itemJson, "totalBytes");
         item.totalBytes = totalBytesStr.empty() ? 0 : std::stoll(totalBytesStr);
@@ -1008,6 +1105,42 @@ void DownloadsManager::loadState() {
 
         std::string lastSyncedStr = extractValue(itemJson, "lastSynced");
         item.lastSynced = lastSyncedStr.empty() ? 0 : std::stoll(lastSyncedStr);
+
+        // Parse chapters array for offline playback
+        size_t chaptersStart = itemJson.find("\"chapters\":[");
+        if (chaptersStart != std::string::npos) {
+            size_t chaptersArrStart = itemJson.find('[', chaptersStart);
+            size_t chaptersArrEnd = itemJson.find(']', chaptersArrStart);
+            if (chaptersArrStart != std::string::npos && chaptersArrEnd != std::string::npos) {
+                std::string chaptersJson = itemJson.substr(chaptersArrStart, chaptersArrEnd - chaptersArrStart + 1);
+
+                size_t chapterPos = 0;
+                while (true) {
+                    size_t chObjStart = chaptersJson.find('{', chapterPos);
+                    if (chObjStart == std::string::npos) break;
+
+                    size_t chObjEnd = chaptersJson.find('}', chObjStart);
+                    if (chObjEnd == std::string::npos) break;
+
+                    std::string chJson = chaptersJson.substr(chObjStart, chObjEnd - chObjStart + 1);
+
+                    DownloadChapter ch;
+                    ch.title = unescapeJsonString(extractValue(chJson, "title"));
+
+                    std::string startStr = extractValue(chJson, "start");
+                    ch.start = startStr.empty() ? 0.0f : std::stof(startStr);
+
+                    std::string endStr = extractValue(chJson, "end");
+                    ch.end = endStr.empty() ? 0.0f : std::stof(endStr);
+
+                    if (!ch.title.empty()) {
+                        item.chapters.push_back(ch);
+                    }
+
+                    chapterPos = chObjEnd + 1;
+                }
+            }
+        }
 
         // Parse files array for multi-file downloads
         size_t filesStart = itemJson.find("\"files\":[");
@@ -1066,10 +1199,87 @@ std::string DownloadsManager::getDownloadsPath() const {
     return m_downloadsPath;
 }
 
+std::string DownloadsManager::downloadCoverImage(const std::string& itemId, const std::string& coverUrl) {
+    if (coverUrl.empty()) {
+        brls::Logger::debug("DownloadsManager: No cover URL provided for {}", itemId);
+        return "";
+    }
+
+    std::string coverPath = m_downloadsPath + "/" + itemId + "_cover.jpg";
+
+    brls::Logger::info("DownloadsManager: Downloading cover for {} from {}", itemId, coverUrl);
+
+    // Download the cover image
+    HttpClient http;
+    AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+    std::string token = client.getAuthToken();
+    if (!token.empty()) {
+        http.setDefaultHeader("Authorization", "Bearer " + token);
+    }
+
+    std::vector<char> imageData;
+    bool success = http.downloadFile(coverUrl,
+        [&imageData](const char* data, size_t size) {
+            imageData.insert(imageData.end(), data, data + size);
+            return true;
+        },
+        [](int64_t total) {}
+    );
+
+    if (!success || imageData.empty()) {
+        brls::Logger::warning("DownloadsManager: Failed to download cover for {}", itemId);
+        return "";
+    }
+
+    // Save to file
+#ifdef __vita__
+    SceUID fd = sceIoOpen(coverPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+    if (fd >= 0) {
+        sceIoWrite(fd, imageData.data(), imageData.size());
+        sceIoClose(fd);
+        brls::Logger::info("DownloadsManager: Saved cover to {}", coverPath);
+        return coverPath;
+    } else {
+        brls::Logger::error("DownloadsManager: Failed to save cover file {}", coverPath);
+        return "";
+    }
+#else
+    std::ofstream file(coverPath, std::ios::binary);
+    if (file.is_open()) {
+        file.write(imageData.data(), imageData.size());
+        file.close();
+        brls::Logger::info("DownloadsManager: Saved cover to {}", coverPath);
+        return coverPath;
+    } else {
+        brls::Logger::error("DownloadsManager: Failed to save cover file {}", coverPath);
+        return "";
+    }
+#endif
+}
+
+std::string DownloadsManager::getLocalCoverPath(const std::string& itemId) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (const auto& item : m_downloads) {
+        if (item.itemId == itemId && !item.localCoverPath.empty()) {
+            return item.localCoverPath;
+        }
+    }
+    return "";
+}
+
 bool DownloadsManager::registerCompletedDownload(const std::string& itemId, const std::string& episodeId,
                                                   const std::string& title, const std::string& authorName,
                                                   const std::string& localPath, int64_t fileSize,
-                                                  float duration, const std::string& mediaType) {
+                                                  float duration, const std::string& mediaType,
+                                                  const std::string& coverUrl,
+                                                  const std::string& description,
+                                                  const std::vector<DownloadChapter>& chapters) {
+    // Download cover image (do this outside the lock to avoid blocking)
+    std::string localCoverPath;
+    if (!coverUrl.empty()) {
+        localCoverPath = downloadCoverImage(itemId, coverUrl);
+    }
+
     std::lock_guard<std::mutex> lock(m_mutex);
 
     // Check if already registered
@@ -1080,6 +1290,18 @@ bool DownloadsManager::registerCompletedDownload(const std::string& itemId, cons
             item.totalBytes = fileSize;
             item.downloadedBytes = fileSize;
             item.state = DownloadState::COMPLETED;
+            // Update metadata if provided
+            if (!localCoverPath.empty()) {
+                item.localCoverPath = localCoverPath;
+                item.coverUrl = coverUrl;
+            }
+            if (!description.empty()) {
+                item.description = description;
+            }
+            if (!chapters.empty()) {
+                item.chapters = chapters;
+                item.numChapters = static_cast<int>(chapters.size());
+            }
             brls::Logger::info("DownloadsManager: Updated existing download: {}", title);
             saveState();
             return true;
@@ -1099,9 +1321,15 @@ bool DownloadsManager::registerCompletedDownload(const std::string& itemId, cons
     item.state = DownloadState::COMPLETED;
     item.mediaType = mediaType;
     item.numFiles = 1;
+    item.coverUrl = coverUrl;
+    item.localCoverPath = localCoverPath;
+    item.description = description;
+    item.chapters = chapters;
+    item.numChapters = static_cast<int>(chapters.size());
 
     m_downloads.push_back(item);
-    brls::Logger::info("DownloadsManager: Registered completed download: {} ({} bytes)", title, fileSize);
+    brls::Logger::info("DownloadsManager: Registered completed download: {} ({} bytes, cover: {})",
+                       title, fileSize, !localCoverPath.empty() ? "yes" : "no");
 
     saveState();
     return true;

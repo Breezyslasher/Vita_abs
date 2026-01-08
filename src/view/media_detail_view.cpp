@@ -575,9 +575,21 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
     std::string authorName = m_item.authorName;
     std::string itemType = m_item.type;
     float duration = m_item.duration;
+    std::string description = m_item.description;
+    std::string coverUrl = AudiobookshelfClient::getInstance().getCoverUrl(itemId);
+
+    // Copy chapters for offline use
+    std::vector<DownloadChapter> downloadChapters;
+    for (const auto& ch : m_item.chapters) {
+        DownloadChapter dch;
+        dch.title = ch.title;
+        dch.start = ch.start;
+        dch.end = ch.end;
+        downloadChapters.push_back(dch);
+    }
 
     // Run download in background
-    asyncRun([this, progressDialog, itemId, episodeId, title, authorName, itemType, duration, useDownloads, requestedStartTime]() {
+    asyncRun([this, progressDialog, itemId, episodeId, title, authorName, itemType, duration, useDownloads, requestedStartTime, coverUrl, description, downloadChapters]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
         // Start playback session
@@ -728,7 +740,7 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                     ? downloadsMgr.getDownloadsPath() + "/" + itemId + ".m4b"
                     : tempMgr.getTempFilePath(itemId, episodeId, ".m4b");
 
-                asyncRun([allTracks, currentTrackIdx, currentTrackPath, itemId, episodeId, baseExt, finalPath, title, authorName, duration, itemType, useDownloads]() {
+                asyncRun([allTracks, currentTrackIdx, currentTrackPath, itemId, episodeId, baseExt, finalPath, title, authorName, duration, itemType, useDownloads, coverUrl, description, downloadChapters]() {
                     brls::Logger::info("Background: Downloading remaining tracks...");
 
                     HttpClient bgHttpClient;
@@ -805,7 +817,8 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                             // Register the combined file
                             if (useDownloads) {
                                 bgDownloadsMgr.registerCompletedDownload(itemId, episodeId, title,
-                                    authorName, finalPath, totalSize, duration, itemType);
+                                    authorName, finalPath, totalSize, duration, itemType,
+                                    coverUrl, description, downloadChapters);
                             } else {
                                 bgTempMgr.registerTempFile(itemId, episodeId, finalPath, title, totalSize);
                             }
@@ -889,7 +902,8 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
             // Register the file
             if (useDownloads) {
                 downloadsMgr.registerCompletedDownload(itemId, episodeId, title,
-                    authorName, destPath, totalDownloaded, duration, itemType);
+                    authorName, destPath, totalDownloaded, duration, itemType,
+                    coverUrl, description, downloadChapters);
             } else {
                 tempMgr.registerTempFile(itemId, episodeId, destPath, title, totalDownloaded);
             }
@@ -966,9 +980,21 @@ void MediaDetailView::startDownloadOnly(const std::string& itemId, const std::st
     std::string authorName = m_item.authorName;
     std::string itemType = m_item.type;
     float duration = m_item.duration;
+    std::string description = m_item.description;
+    std::string coverUrl = AudiobookshelfClient::getInstance().getCoverUrl(itemId);
+
+    // Copy chapters for offline use
+    std::vector<DownloadChapter> downloadChapters;
+    for (const auto& ch : m_item.chapters) {
+        DownloadChapter dch;
+        dch.title = ch.title;
+        dch.start = ch.start;
+        dch.end = ch.end;
+        downloadChapters.push_back(dch);
+    }
 
     // Run download in background
-    asyncRun([this, progressDialog, downloadBtn, itemId, episodeId, title, authorName, itemType, duration]() {
+    asyncRun([this, progressDialog, downloadBtn, itemId, episodeId, title, authorName, itemType, duration, coverUrl, description, downloadChapters]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
         // Start playback session to get audio track info
@@ -1176,9 +1202,10 @@ void MediaDetailView::startDownloadOnly(const std::string& itemId, const std::st
                 fileSize = stat.st_size;
             }
 
-            // Register the download
+            // Register the download with cover and metadata for offline use
             downloadsMgr.registerCompletedDownload(itemId, episodeId, title,
-                authorName, destPath, fileSize, duration, itemType);
+                authorName, destPath, fileSize, duration, itemType,
+                coverUrl, description, downloadChapters);
 
             brls::Logger::info("Download complete: {}", destPath);
 

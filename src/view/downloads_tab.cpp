@@ -77,6 +77,17 @@ void DownloadsTab::refresh() {
         row->setBackgroundColor(nvgRGBA(40, 40, 40, 200));
         row->setCornerRadius(8);
 
+        // Cover image (if available)
+        if (!item.localCoverPath.empty()) {
+            auto coverImage = new brls::Image();
+            coverImage->setWidth(60);
+            coverImage->setHeight(60);
+            coverImage->setCornerRadius(4);
+            coverImage->setMargins(0, 15, 0, 0);
+            coverImage->setImageFromFile(item.localCoverPath);
+            row->addView(coverImage);
+        }
+
         // Title and info
         auto infoBox = new brls::Box();
         infoBox->setAxis(brls::Axis::COLUMN);
@@ -90,6 +101,15 @@ void DownloadsTab::refresh() {
         titleLabel->setText(displayTitle);
         titleLabel->setFontSize(18);
         infoBox->addView(titleLabel);
+
+        // Author name (if available)
+        if (!item.authorName.empty()) {
+            auto authorLabel = new brls::Label();
+            authorLabel->setText(item.authorName);
+            authorLabel->setFontSize(14);
+            authorLabel->setTextColor(nvgRGBA(180, 180, 180, 255));
+            infoBox->addView(authorLabel);
+        }
 
         // Status/progress
         auto statusLabel = new brls::Label();

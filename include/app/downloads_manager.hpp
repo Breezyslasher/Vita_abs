@@ -30,6 +30,13 @@ struct DownloadFileInfo {
     bool downloaded = false;    // Download complete
 };
 
+// Chapter info for offline playback
+struct DownloadChapter {
+    std::string title;
+    float start = 0.0f;   // Start time in seconds
+    float end = 0.0f;     // End time in seconds
+};
+
 // Download item information
 struct DownloadItem {
     std::string itemId;         // Audiobookshelf item ID
@@ -38,7 +45,9 @@ struct DownloadItem {
     std::string authorName;     // Author/narrator name
     std::string parentTitle;    // Series name or parent title (for display)
     std::string localPath;      // Local storage path (folder for multi-file)
-    std::string coverUrl;       // Cover image URL
+    std::string coverUrl;       // Cover image URL (remote)
+    std::string localCoverPath; // Local cover image path (for offline)
+    std::string description;    // Book/podcast description (for offline)
     int64_t totalBytes = 0;     // Total file size (all files combined)
     int64_t downloadedBytes = 0; // Downloaded so far
     float duration = 0.0f;      // Media duration in seconds
@@ -48,6 +57,7 @@ struct DownloadItem {
     std::string mediaType;      // "book", "podcast"
     std::string seriesName;     // Series name for audiobooks
     int numChapters = 0;        // Number of chapters
+    std::vector<DownloadChapter> chapters;  // Chapter info for offline
     int numFiles = 1;           // Number of audio files (1 = single file)
     int currentFileIndex = 0;   // Current file being downloaded
     std::vector<DownloadFileInfo> files;  // Multi-file info
@@ -119,7 +129,16 @@ public:
     bool registerCompletedDownload(const std::string& itemId, const std::string& episodeId,
                                    const std::string& title, const std::string& authorName,
                                    const std::string& localPath, int64_t fileSize,
-                                   float duration, const std::string& mediaType = "book");
+                                   float duration, const std::string& mediaType = "book",
+                                   const std::string& coverUrl = "",
+                                   const std::string& description = "",
+                                   const std::vector<DownloadChapter>& chapters = {});
+
+    // Download and save cover image to local storage
+    std::string downloadCoverImage(const std::string& itemId, const std::string& coverUrl);
+
+    // Get local cover path for a download (returns empty if not available)
+    std::string getLocalCoverPath(const std::string& itemId) const;
 
 private:
     DownloadsManager() = default;
