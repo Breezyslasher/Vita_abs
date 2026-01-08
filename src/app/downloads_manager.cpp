@@ -1205,6 +1205,11 @@ std::string DownloadsManager::downloadCoverImage(const std::string& itemId, cons
         return "";
     }
 
+    // Ensure initialized so we have the downloads path
+    if (m_downloadsPath.empty()) {
+        init();
+    }
+
     std::string coverPath = m_downloadsPath + "/" + itemId + "_cover.jpg";
 
     brls::Logger::info("DownloadsManager: Downloading cover for {} from {}", itemId, coverUrl);
@@ -1274,6 +1279,11 @@ bool DownloadsManager::registerCompletedDownload(const std::string& itemId, cons
                                                   const std::string& coverUrl,
                                                   const std::string& description,
                                                   const std::vector<DownloadChapter>& chapters) {
+    // Ensure manager is initialized
+    init();
+
+    brls::Logger::info("DownloadsManager: Registering download: {} at {}", title, localPath);
+
     // Download cover image (do this outside the lock to avoid blocking)
     std::string localCoverPath;
     if (!coverUrl.empty()) {

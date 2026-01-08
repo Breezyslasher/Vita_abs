@@ -58,7 +58,12 @@ void DownloadsTab::refresh() {
         m_listContainer->removeView(m_listContainer->getChildren()[0]);
     }
 
-    auto downloads = DownloadsManager::getInstance().getDownloads();
+    // Ensure manager is initialized and state is loaded
+    DownloadsManager& mgr = DownloadsManager::getInstance();
+    mgr.init();
+
+    auto downloads = mgr.getDownloads();
+    brls::Logger::info("DownloadsTab: Found {} downloads", downloads.size());
 
     if (downloads.empty()) {
         m_emptyLabel->setVisibility(brls::Visibility::VISIBLE);
