@@ -534,9 +534,10 @@ void MediaDetailView::onDownload() {
 
         // Set progress callback
         DownloadsManager::getInstance().setProgressCallback(
-            [progressDialog](int64_t downloaded, int64_t total) {
+            [progressDialog](float downloaded, float total) {
                 brls::sync([progressDialog, downloaded, total]() {
-                    progressDialog->updateDownloadProgress(downloaded, total);
+                    progressDialog->updateDownloadProgress(static_cast<int64_t>(downloaded),
+                                                           static_cast<int64_t>(total));
                 });
             }
         );

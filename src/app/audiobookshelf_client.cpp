@@ -984,12 +984,17 @@ bool AudiobookshelfClient::fetchItem(const std::string& itemId, MediaItem& item)
 
     item = parseMediaItem(resp.body);
 
+    // Extract media object for chapters and tracks
+    std::string mediaObj = extractJsonObject(resp.body, "media");
+    brls::Logger::debug("Media object found: {}", !mediaObj.empty() ? "yes" : "no");
+
     // Parse chapters - try root level first, then media.chapters
     std::string chaptersArray = extractJsonArray(resp.body, "chapters");
-    if (chaptersArray.empty()) {
-        std::string mediaObj = extractJsonObject(resp.body, "media");
+    if (chaptersArray.empty() && !mediaObj.empty()) {
         chaptersArray = extractJsonArray(mediaObj, "chapters");
     }
+    brls::Logger::debug("Chapters array found: {} chars", chaptersArray.length());
+
     if (!chaptersArray.empty()) {
         size_t pos = 0;
         // Look for "start" field which all chapters have (some don't have "id")
@@ -1018,8 +1023,7 @@ bool AudiobookshelfClient::fetchItem(const std::string& itemId, MediaItem& item)
 
     // Parse audio tracks
     std::string tracksArray = extractJsonArray(resp.body, "audioFiles");
-    if (tracksArray.empty()) {
-        std::string mediaObj = extractJsonObject(resp.body, "media");
+    if (tracksArray.empty() && !mediaObj.empty()) {
         tracksArray = extractJsonArray(mediaObj, "audioFiles");
     }
     if (!tracksArray.empty()) {
