@@ -373,6 +373,9 @@ bool Application::loadSettings() {
     m_settings.deleteAfterFinish = extractBool("deleteAfterFinish", false);
     m_settings.syncProgressOnConnect = extractBool("syncProgressOnConnect", true);
 
+    // Load player UI settings
+    m_settings.showDownloadProgress = extractBool("showDownloadProgress", true);
+
     // Load sleep/power settings
     m_settings.preventSleep = extractBool("preventSleep", true);
     m_settings.pauseOnHeadphoneDisconnect = extractBool("pauseOnHeadphoneDisconnect", true);
@@ -446,6 +449,9 @@ bool Application::saveSettings() {
     json += "  \"maxConcurrentDownloads\": " + std::to_string(m_settings.maxConcurrentDownloads) + ",\n";
     json += "  \"deleteAfterFinish\": " + std::string(m_settings.deleteAfterFinish ? "true" : "false") + ",\n";
     json += "  \"syncProgressOnConnect\": " + std::string(m_settings.syncProgressOnConnect ? "true" : "false") + ",\n";
+
+    // Player UI settings
+    json += "  \"showDownloadProgress\": " + std::string(m_settings.showDownloadProgress ? "true" : "false") + ",\n";
 
     // Sleep/power settings
     json += "  \"preventSleep\": " + std::string(m_settings.preventSleep ? "true" : "false") + ",\n";

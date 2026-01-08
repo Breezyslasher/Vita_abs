@@ -55,18 +55,24 @@
     <brls:Box
         axis="row"
         justifyContent="center"
-        marginBottom="30">
+        marginBottom="20">
 
         <brls:Button
             id="login/login_button"
             text="Login"
-            width="180"
-            marginRight="20"/>
+            width="150"
+            marginRight="15"/>
 
         <brls:Button
             id="login/pin_button"
-            text="Use PIN"
-            width="180"/>
+            text="Test"
+            width="100"
+            marginRight="15"/>
+
+        <brls:Button
+            id="login/offline_button"
+            text="Offline"
+            width="100"/>
 
     </brls:Box>
 

@@ -268,6 +268,14 @@ void SettingsTab::createPlaybackSection() {
         Application::getInstance().saveSettings();
     });
     m_contentBox->addView(sleepToggle);
+
+    // Show download progress in player
+    auto* downloadProgressToggle = new brls::BooleanCell();
+    downloadProgressToggle->init("Show Download Progress", settings.showDownloadProgress, [&settings](bool value) {
+        settings.showDownloadProgress = value;
+        Application::getInstance().saveSettings();
+    });
+    m_contentBox->addView(downloadProgressToggle);
 }
 
 void SettingsTab::createAudioSection() {

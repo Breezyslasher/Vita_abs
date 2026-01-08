@@ -113,6 +113,9 @@ struct AppSettings {
     int maxTempFiles = 5;              // Maximum number of temp files to keep
     int64_t maxTempSizeMB = 500;       // Maximum total temp size in MB (0 = unlimited)
 
+    // Player UI Settings
+    bool showDownloadProgress = true;  // Show background download progress in player for multi-file books
+
     // Sleep/Power Settings
     bool preventSleep = true;          // Prevent screen sleep during playback
     bool pauseOnHeadphoneDisconnect = true;
