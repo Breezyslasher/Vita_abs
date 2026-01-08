@@ -695,6 +695,12 @@ void MediaDetailView::showNewEpisodesDialog(const std::vector<MediaItem>& episod
     // Create a dialog to show new episodes
     auto* dialog = new brls::Dialog("New Episodes (" + std::to_string(episodes.size()) + ")");
 
+    // Register circle button to close dialog
+    dialog->registerAction("Back", brls::ControllerButton::BUTTON_B, [dialog](brls::View*) {
+        dialog->dismiss();
+        return true;
+    }, true);
+
     auto* contentBox = new brls::Box();
     contentBox->setAxis(brls::Axis::COLUMN);
     contentBox->setPadding(15);
@@ -740,25 +746,47 @@ void MediaDetailView::showNewEpisodesDialog(const std::vector<MediaItem>& episod
         auto* episodeRow = new brls::Box();
         episodeRow->setAxis(brls::Axis::ROW);
         episodeRow->setAlignItems(brls::AlignItems::CENTER);
-        episodeRow->setHeight(60);
-        episodeRow->setMarginBottom(5);
-        episodeRow->setPadding(10);
+        episodeRow->setMinHeight(70);  // Minimum height for multi-line titles
+        episodeRow->setMarginBottom(12);  // More space between episodes
+        episodeRow->setPadding(12);
         episodeRow->setBackgroundColor(nvgRGBA(60, 60, 60, 255));
-        episodeRow->setCornerRadius(5);
+        episodeRow->setCornerRadius(8);
         episodeRow->setFocusable(true);
 
         // Episode info
         auto* infoBox = new brls::Box();
         infoBox->setAxis(brls::Axis::COLUMN);
         infoBox->setGrow(1.0f);
+        infoBox->setJustifyContent(brls::JustifyContent::CENTER);
 
         auto* titleLabel = new brls::Label();
+        // Allow longer titles on multiple lines (wrap instead of truncate)
         std::string title = ep.title;
-        if (title.length() > 60) {
-            title = title.substr(0, 57) + "...";
+        // Insert line breaks for very long titles (approximately every 50 chars at word boundary)
+        if (title.length() > 55) {
+            std::string wrappedTitle;
+            size_t lineStart = 0;
+            while (lineStart < title.length()) {
+                size_t lineEnd = std::min(lineStart + 55, title.length());
+                if (lineEnd < title.length()) {
+                    // Find last space before lineEnd
+                    size_t lastSpace = title.rfind(' ', lineEnd);
+                    if (lastSpace > lineStart && lastSpace != std::string::npos) {
+                        lineEnd = lastSpace;
+                    }
+                }
+                if (!wrappedTitle.empty()) wrappedTitle += "\n";
+                wrappedTitle += title.substr(lineStart, lineEnd - lineStart);
+                lineStart = lineEnd + 1;
+                if (wrappedTitle.length() > 120) {  // Max 2 lines
+                    wrappedTitle += "...";
+                    break;
+                }
+            }
+            title = wrappedTitle;
         }
         titleLabel->setText(title);
-        titleLabel->setFontSize(16);
+        titleLabel->setFontSize(15);
         infoBox->addView(titleLabel);
 
         if (!ep.pubDate.empty()) {
@@ -766,6 +794,7 @@ void MediaDetailView::showNewEpisodesDialog(const std::vector<MediaItem>& episod
             dateLabel->setText(ep.pubDate);
             dateLabel->setFontSize(12);
             dateLabel->setTextColor(nvgRGB(150, 150, 150));
+            dateLabel->setMarginTop(4);
             infoBox->addView(dateLabel);
         }
 

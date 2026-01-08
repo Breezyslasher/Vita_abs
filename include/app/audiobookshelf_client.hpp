@@ -240,6 +240,9 @@ public:
     std::string getStreamUrl(const std::string& itemId, const std::string& episodeId = "");
     std::string getDirectStreamUrl(const std::string& itemId, int fileIndex = 0);
 
+    // File download (for local downloads - uses /api/items/{id}/file/{ino})
+    std::string getFileDownloadUrl(const std::string& itemId, const std::string& episodeId = "");
+
     // Progress
     bool updateProgress(const std::string& itemId, float currentTime, float duration,
                         bool isFinished = false, const std::string& episodeId = "");

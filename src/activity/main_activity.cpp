@@ -39,11 +39,60 @@ void MainActivity::onContentAvailable() {
 
     if (tabFrame) {
         AppSettings& settings = Application::getInstance().getSettings();
-
-        // Fetch libraries to calculate sidebar width and populate tabs
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+
+        // Try to fetch libraries - if this fails, we're offline
         std::vector<Library> sections;
-        client.fetchLibraries(sections);
+        bool isOnline = client.fetchLibraries(sections);
+
+        if (!isOnline || sections.empty()) {
+            // Offline mode - show only Downloads and Settings
+            brls::Logger::info("MainActivity: Offline mode - showing Downloads and Settings only");
+
+            // Set sidebar width for offline mode
+            brls::View* sidebar = tabFrame->getView("brls/tab_frame/sidebar");
+            if (sidebar) {
+                sidebar->setWidth(200);
+            }
+
+            // Add offline notice tab
+            tabFrame->addTab("Offline Mode", []() {
+                auto* box = new brls::Box();
+                box->setAxis(brls::Axis::COLUMN);
+                box->setPadding(40);
+                box->setJustifyContent(brls::JustifyContent::CENTER);
+                box->setAlignItems(brls::AlignItems::CENTER);
+                box->setGrow(1.0f);
+
+                auto* title = new brls::Label();
+                title->setText("No Server Connection");
+                title->setFontSize(24);
+                title->setMarginBottom(20);
+                box->addView(title);
+
+                auto* msg = new brls::Label();
+                msg->setText("Connect to WiFi and configure your\nAudiobookshelf server in Settings.\n\nYou can still access your downloaded\ncontent in the Downloads tab.");
+                msg->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+                msg->setFontSize(16);
+                box->addView(msg);
+
+                return box;
+            });
+
+            tabFrame->addTab("Downloads", []() { return new DownloadsTab(); });
+            tabFrame->addTab("Settings", []() { return new SettingsTab(); });
+
+            // Focus Downloads if we have any, otherwise show offline message
+            auto downloads = DownloadsManager::getInstance().getDownloads();
+            if (!downloads.empty()) {
+                tabFrame->focusTab(1);  // Downloads tab
+            } else {
+                tabFrame->focusTab(0);  // Offline message
+            }
+            return;
+        }
+
+        // Online mode - normal flow
         s_cachedSections = sections;
 
         // Calculate dynamic sidebar width based on content

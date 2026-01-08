@@ -300,18 +300,17 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
         return;
     }
 
-    // Get the download URL for the item
-    // Audiobookshelf provides direct file access or stream URL
-    std::string url = client.getStreamUrl(item.itemId, item.episodeId);
+    // Get the download URL for the item (using file API like Kodi addon)
+    std::string url = client.getFileDownloadUrl(item.itemId, item.episodeId);
 
     if (url.empty()) {
-        brls::Logger::error("DownloadsManager: Failed to get stream URL for {}", item.itemId);
+        brls::Logger::error("DownloadsManager: Failed to get download URL for {}", item.itemId);
         item.state = DownloadState::FAILED;
         saveState();
         return;
     }
 
-    brls::Logger::debug("DownloadsManager: Downloading from {}", url);
+    brls::Logger::info("DownloadsManager: Downloading from {}", url);
 
     // Open local file for writing
 #ifdef __vita__
