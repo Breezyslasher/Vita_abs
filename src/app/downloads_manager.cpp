@@ -453,11 +453,14 @@ DownloadItem* DownloadsManager::getDownload(const std::string& itemId) {
     return nullptr;
 }
 
-bool DownloadsManager::isDownloaded(const std::string& itemId) const {
+bool DownloadsManager::isDownloaded(const std::string& itemId, const std::string& episodeId) const {
     std::lock_guard<std::mutex> lock(m_mutex);
     for (const auto& item : m_downloads) {
         if (item.itemId == itemId && item.state == DownloadState::COMPLETED) {
-            return true;
+            // For episodes, also check episodeId
+            if (episodeId.empty() || item.episodeId == episodeId) {
+                return true;
+            }
         }
     }
     return false;

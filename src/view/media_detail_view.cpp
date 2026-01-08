@@ -545,10 +545,12 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
 
     // Check if we have a cached version - ALWAYS check downloads first, then temp
     std::string cachedPath;
+    bool isFromDownloads = false;
 
     // First check downloads folder (regardless of saveToDownloads setting)
-    if (downloadsMgr.isDownloaded(itemId)) {
+    if (downloadsMgr.isDownloaded(itemId, episodeId)) {
         cachedPath = downloadsMgr.getPlaybackPath(itemId);
+        isFromDownloads = true;
         brls::Logger::info("Found in downloads: {}", cachedPath);
     }
 
@@ -556,15 +558,47 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
     if (cachedPath.empty()) {
         cachedPath = tempMgr.getCachedFilePath(itemId, episodeId);
         if (!cachedPath.empty()) {
-            tempMgr.touchTempFile(itemId, episodeId);
-            brls::Logger::info("Found in temp cache: {}", cachedPath);
+            // If save to downloads is enabled and we're playing (not download only),
+            // delete the temp file and re-download to downloads folder
+            if (useDownloads && !downloadOnly) {
+                brls::Logger::info("Deleting temp file to re-download to downloads folder: {}", cachedPath);
+                tempMgr.deleteTempFile(itemId, episodeId);
+                cachedPath.clear();
+            } else {
+                tempMgr.touchTempFile(itemId, episodeId);
+                brls::Logger::info("Found in temp cache: {}", cachedPath);
+            }
         }
     }
 
-    // If cached, play immediately
+    // If cached, play immediately (fetch progress from server first if online)
     if (!cachedPath.empty()) {
         brls::Logger::info("Using cached file: {}", cachedPath);
-        Application::getInstance().pushPlayerActivityWithFile(itemId, episodeId, cachedPath, requestedStartTime);
+
+        // Fetch latest progress from server before playing
+        float startTime = requestedStartTime;
+        if (startTime < 0) {
+            AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+            if (client.isAuthenticated()) {
+                float serverTime = 0.0f, serverProgress = 0.0f;
+                bool serverFinished = false;
+                if (client.getProgress(itemId, serverTime, serverProgress, serverFinished, episodeId)) {
+                    startTime = serverTime;
+                    brls::Logger::info("Fetched progress from server: {}s", startTime);
+                }
+            }
+
+            // Also check local progress if from downloads
+            if (isFromDownloads && startTime <= 0) {
+                DownloadItem* download = downloadsMgr.getDownload(itemId);
+                if (download && download->currentTime > 0) {
+                    startTime = download->currentTime;
+                    brls::Logger::info("Using local download progress: {}s", startTime);
+                }
+            }
+        }
+
+        Application::getInstance().pushPlayerActivityWithFile(itemId, episodeId, cachedPath, startTime);
         return;
     }
 
@@ -953,15 +987,15 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
 void MediaDetailView::onDownload() {
     brls::Logger::info("onDownload called for item: {} ({})", m_item.title, m_item.id);
 
-    // Check if already downloaded
-    if (DownloadsManager::getInstance().isDownloaded(m_item.id)) {
-        brls::Application::notify("Already downloaded");
-        return;
-    }
-
     // Use the same download logic as streaming but save to downloads
     std::string itemId = (m_item.mediaType == MediaType::PODCAST_EPISODE) ? m_item.podcastId : m_item.id;
     std::string episodeId = (m_item.mediaType == MediaType::PODCAST_EPISODE) ? m_item.episodeId : "";
+
+    // Check if already downloaded (check both itemId and episodeId)
+    if (DownloadsManager::getInstance().isDownloaded(itemId, episodeId)) {
+        brls::Application::notify("Already downloaded");
+        return;
+    }
 
     startDownloadOnly(itemId, episodeId);
 }
@@ -969,11 +1003,11 @@ void MediaDetailView::onDownload() {
 void MediaDetailView::startDownloadOnly(const std::string& itemId, const std::string& episodeId) {
     brls::Logger::info("startDownloadOnly: itemId={}, episodeId={}", itemId, episodeId);
 
-    // Check if already downloaded
+    // Check if already downloaded (check both itemId and episodeId)
     DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
     downloadsMgr.init();
 
-    if (downloadsMgr.isDownloaded(itemId)) {
+    if (downloadsMgr.isDownloaded(itemId, episodeId)) {
         brls::Application::notify("Already downloaded");
         return;
     }
@@ -1030,8 +1064,8 @@ void MediaDetailView::batchDownloadEpisodes(const std::vector<MediaItem>& episod
                 progressDialog->setProgress(static_cast<float>(i) / totalEpisodes);
             });
 
-            // Check if already downloaded
-            if (downloadsMgr.isDownloaded(itemId)) {
+            // Check if already downloaded (check both itemId and episodeId)
+            if (downloadsMgr.isDownloaded(itemId, episodeId)) {
                 brls::Logger::info("Episode already downloaded: {}", ep.title);
                 completed++;
                 continue;
@@ -1134,6 +1168,9 @@ void MediaDetailView::batchDownloadEpisodes(const std::vector<MediaItem>& episod
             completed++;
 #endif
         }
+
+        // Ensure state is saved
+        downloadsMgr.saveState();
 
         // Show completion dialog
         brls::sync([progressDialog, completed, failed, totalEpisodes]() {

@@ -99,8 +99,8 @@ public:
     // Get a specific download by item ID
     DownloadItem* getDownload(const std::string& itemId);
 
-    // Check if media is downloaded
-    bool isDownloaded(const std::string& itemId) const;
+    // Check if media is downloaded (checks both itemId and episodeId for episodes)
+    bool isDownloaded(const std::string& itemId, const std::string& episodeId = "") const;
 
     // Get local playback path for downloaded media
     std::string getLocalPath(const std::string& itemId) const;
