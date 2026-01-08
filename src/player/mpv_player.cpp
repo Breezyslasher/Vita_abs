@@ -388,6 +388,26 @@ void MpvPlayer::toggleMute() {
     mpv_command_async(m_mpv, 0, cmd);
 }
 
+void MpvPlayer::setSpeed(float speed) {
+    if (!m_mpv || m_stopping) return;
+
+    // Clamp speed to valid range
+    if (speed < 0.25f) speed = 0.25f;
+    if (speed > 4.0f) speed = 4.0f;
+
+    double speedVal = static_cast<double>(speed);
+    mpv_set_property_async(m_mpv, 0, "speed", MPV_FORMAT_DOUBLE, &speedVal);
+    brls::Logger::info("MpvPlayer: Set playback speed to {}x", speed);
+}
+
+float MpvPlayer::getSpeed() const {
+    if (!m_mpv) return 1.0f;
+
+    double speed = 1.0;
+    mpv_get_property(m_mpv, "speed", MPV_FORMAT_DOUBLE, &speed);
+    return static_cast<float>(speed);
+}
+
 void MpvPlayer::setSubtitleTrack(int track) {
     if (!m_mpv || m_stopping) return;
 

@@ -88,6 +88,10 @@ public:
     bool isMuted() const;
     void toggleMute();
 
+    // Playback speed
+    void setSpeed(float speed);
+    float getSpeed() const;
+
     // Tracks
     void setSubtitleTrack(int track);
     void setAudioTrack(int track);

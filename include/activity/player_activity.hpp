@@ -40,10 +40,13 @@ private:
     void loadCoverArt(const std::string& coverUrl);
     void updateProgress();
     void updatePlayPauseButton();
+    void updateSpeedLabel();
+    void cyclePlaybackSpeed();
     void togglePlayPause();
     void seek(int seconds);
     std::string formatTime(double seconds);
     std::string formatTimeRemaining(double remaining);
+    float getSpeedValue(int index);
 
     std::string m_itemId;
     std::string m_episodeId;       // For podcast episodes
@@ -74,6 +77,8 @@ private:
     BRLS_BIND(brls::Label, rewindLabel, "player/rewindLabel");
     BRLS_BIND(brls::Label, forwardLabel, "player/forwardLabel");
     BRLS_BIND(brls::Label, playPauseIcon, "player/playPauseIcon");
+    BRLS_BIND(brls::Button, btnSpeed, "player/btnSpeed");
+    BRLS_BIND(brls::Label, speedLabel, "player/speedLabel");
     BRLS_BIND(brls::Label, chapterInfoLabel, "player/chapterInfo");
 
     // Legacy bindings (hidden but needed for compatibility)

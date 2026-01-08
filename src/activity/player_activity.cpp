@@ -11,8 +11,11 @@
 #include "utils/http_client.hpp"
 #include "utils/image_loader.hpp"
 #include "view/video_view.hpp"
+#include "view/progress_dialog.hpp"
 
 #include <cstdio>
+#include <iomanip>
+#include <sstream>
 
 #ifdef __vita__
 #include <psp2/io/fcntl.h>
@@ -129,6 +132,17 @@ void PlayerActivity::onContentAvailable() {
         seek(seekInterval);
         return true;
     });
+
+    // Set up speed button
+    if (btnSpeed) {
+        btnSpeed->registerClickAction([this](brls::View* view) {
+            cyclePlaybackSpeed();
+            return true;
+        });
+    }
+
+    // Initialize speed label from settings
+    updateSpeedLabel();
 
     // Start update timer
     m_updateTimer.setCallback([this]() {
@@ -307,6 +321,13 @@ void PlayerActivity::loadMedia() {
             return;
         }
 
+        // Apply saved playback speed
+        AppSettings& localSettings = Application::getInstance().getSettings();
+        float localSpeed = getSpeedValue(static_cast<int>(localSettings.playbackSpeed));
+        if (localSpeed != 1.0f) {
+            player.setSpeed(localSpeed);
+        }
+
         // Show video view
         if (videoView) {
             videoView->setVisibility(brls::Visibility::VISIBLE);
@@ -433,6 +454,9 @@ void PlayerActivity::loadMedia() {
 
         if (!needsDownload) {
             m_tempFilePath = cachedPath;
+            if (chapterInfoLabel) {
+                chapterInfoLabel->setText("Using cached file...");
+            }
         } else {
             // Need to download - determine destination path
             if (useDownloads) {
@@ -448,6 +472,11 @@ void PlayerActivity::loadMedia() {
             }
             brls::Logger::info("PlayerActivity: Downloading to {}: {}", useDownloads ? "downloads" : "temp", m_tempFilePath);
 
+            // Show loading indicator
+            if (chapterInfoLabel) {
+                chapterInfoLabel->setText("Downloading audio...");
+            }
+
             // Download the audio file
             HttpClient httpClient;
             httpClient.setTimeout(300); // 5 minute timeout for large audiobooks
@@ -456,6 +485,9 @@ void PlayerActivity::loadMedia() {
             SceUID fd = sceIoOpen(m_tempFilePath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
             if (fd < 0) {
                 brls::Logger::error("Failed to create file: {}", m_tempFilePath);
+                if (chapterInfoLabel) {
+                    chapterInfoLabel->setText("Failed to create file");
+                }
                 m_tempFilePath.clear();
                 m_loadingMedia = false;
                 return;
@@ -463,6 +495,7 @@ void PlayerActivity::loadMedia() {
 
             int64_t totalSize = 0;
             int64_t downloadedSize = 0;
+            brls::Label* progressLabel = chapterInfoLabel;
 
             bool downloadSuccess = httpClient.downloadFile(streamUrl,
                 [&](const char* data, size_t size) -> bool {
@@ -472,15 +505,32 @@ void PlayerActivity::loadMedia() {
                         return false;
                     }
                     downloadedSize += size;
-                    if (totalSize > 0 && downloadedSize % (1024 * 1024) < size) {
-                        // Log progress every ~1MB
-                        brls::Logger::debug("Download progress: {}%", (int)((downloadedSize * 100) / totalSize));
+
+                    // Update progress display
+                    if (totalSize > 0) {
+                        int percent = (int)((downloadedSize * 100) / totalSize);
+                        // Try to update UI (may not work during blocking I/O)
+                        brls::sync([progressLabel, percent, downloadedSize, totalSize]() {
+                            if (progressLabel) {
+                                int mb = (int)(downloadedSize / (1024 * 1024));
+                                int totalMb = (int)(totalSize / (1024 * 1024));
+                                char buf[64];
+                                snprintf(buf, sizeof(buf), "Downloading... %d%% (%d/%d MB)", percent, mb, totalMb);
+                                progressLabel->setText(buf);
+                            }
+                        });
                     }
                     return true;
                 },
                 [&](int64_t size) {
                     totalSize = size;
                     brls::Logger::info("PlayerActivity: Downloading {} bytes", size);
+                    if (progressLabel && size > 0) {
+                        int totalMb = (int)(size / (1024 * 1024));
+                        char buf[64];
+                        snprintf(buf, sizeof(buf), "Downloading... 0%% (0/%d MB)", totalMb);
+                        progressLabel->setText(buf);
+                    }
                 }
             );
 
@@ -488,6 +538,9 @@ void PlayerActivity::loadMedia() {
 
             if (!downloadSuccess) {
                 brls::Logger::error("Failed to download audio file");
+                if (chapterInfoLabel) {
+                    chapterInfoLabel->setText("Download failed");
+                }
                 sceIoRemove(m_tempFilePath.c_str());
                 m_tempFilePath.clear();
                 m_loadingMedia = false;
@@ -495,6 +548,9 @@ void PlayerActivity::loadMedia() {
             }
 
             brls::Logger::info("PlayerActivity: Download complete ({} bytes)", downloadedSize);
+            if (chapterInfoLabel) {
+                chapterInfoLabel->setText("");  // Clear download status
+            }
 
             // Register the downloaded file
             if (useDownloads) {
@@ -535,6 +591,13 @@ void PlayerActivity::loadMedia() {
             return;
         }
         brls::Logger::info("PlayerActivity: MPV loadUrl succeeded, waiting for playback to start...");
+
+        // Apply saved playback speed
+        AppSettings& playSettings = Application::getInstance().getSettings();
+        float speed = getSpeedValue(static_cast<int>(playSettings.playbackSpeed));
+        if (speed != 1.0f) {
+            player.setSpeed(speed);
+        }
 
         // Show video view for audio playback (shows progress/controls)
         if (videoView) {
@@ -700,6 +763,48 @@ void PlayerActivity::loadCoverArt(const std::string& coverUrl) {
         // Image is loaded into the target automatically
         brls::Logger::debug("Cover art loaded");
     }, coverImage);
+}
+
+float PlayerActivity::getSpeedValue(int index) {
+    // Speed values matching PlaybackSpeed enum: 0.5x, 0.75x, 1.0x, 1.25x, 1.5x, 1.75x, 2.0x
+    static const float speeds[] = {0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f};
+    if (index >= 0 && index < 7) {
+        return speeds[index];
+    }
+    return 1.0f;
+}
+
+void PlayerActivity::updateSpeedLabel() {
+    if (!speedLabel) return;
+
+    AppSettings& settings = Application::getInstance().getSettings();
+    float speed = getSpeedValue(static_cast<int>(settings.playbackSpeed));
+
+    // Format speed with one decimal place
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(1) << speed << "x";
+    speedLabel->setText(ss.str());
+}
+
+void PlayerActivity::cyclePlaybackSpeed() {
+    AppSettings& settings = Application::getInstance().getSettings();
+
+    // Cycle through speeds: 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0
+    int currentIndex = static_cast<int>(settings.playbackSpeed);
+    int nextIndex = (currentIndex + 1) % 7;  // 7 speed options
+
+    settings.playbackSpeed = static_cast<PlaybackSpeed>(nextIndex);
+    Application::getInstance().saveSettings();
+
+    // Apply new speed to player
+    MpvPlayer& player = MpvPlayer::getInstance();
+    float speed = getSpeedValue(nextIndex);
+    player.setSpeed(speed);
+
+    // Update the label
+    updateSpeedLabel();
+
+    brls::Logger::info("Playback speed changed to {}x", speed);
 }
 
 } // namespace vitaabs
