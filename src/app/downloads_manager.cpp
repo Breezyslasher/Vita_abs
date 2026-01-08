@@ -13,6 +13,7 @@
 #include <ctime>
 #include <cstdlib>
 #include <thread>
+#include <utility>
 
 #ifdef __vita__
 #include <psp2/io/fcntl.h>
@@ -537,6 +538,64 @@ void DownloadsManager::syncProgressToServer() {
     }
 
     saveState();
+}
+
+void DownloadsManager::syncProgressFromServer() {
+    std::vector<std::pair<std::string, std::string>> itemsToFetch;
+
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        for (const auto& item : m_downloads) {
+            if (item.state == DownloadState::COMPLETED) {
+                itemsToFetch.push_back({item.itemId, item.episodeId});
+            }
+        }
+    }
+
+    if (itemsToFetch.empty()) {
+        brls::Logger::debug("DownloadsManager: No downloaded items to sync from server");
+        return;
+    }
+
+    brls::Logger::info("DownloadsManager: Fetching progress from server for {} items", itemsToFetch.size());
+
+    for (const auto& item : itemsToFetch) {
+        fetchProgressFromServer(item.first, item.second);
+    }
+
+    saveState();
+}
+
+bool DownloadsManager::fetchProgressFromServer(const std::string& itemId, const std::string& episodeId) {
+    AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+
+    float serverTime = 0.0f;
+    float serverProgress = 0.0f;
+    bool serverFinished = false;
+
+    if (!client.getProgress(itemId, serverTime, serverProgress, serverFinished, episodeId)) {
+        brls::Logger::debug("DownloadsManager: Could not fetch progress for {}", itemId);
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (auto& item : m_downloads) {
+        if (item.itemId == itemId && item.episodeId == episodeId) {
+            // Only update if server progress is ahead of local progress
+            if (serverTime > item.currentTime) {
+                brls::Logger::info("DownloadsManager: Updating {} from {}s to {}s (from server)",
+                                  item.title, item.currentTime, serverTime);
+                item.currentTime = serverTime;
+                item.viewOffset = static_cast<int64_t>(serverTime * 1000.0f);
+            } else {
+                brls::Logger::debug("DownloadsManager: Local progress {}s is ahead of server {}s for {}",
+                                   item.currentTime, serverTime, item.title);
+            }
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void DownloadsManager::downloadItem(DownloadItem& item) {

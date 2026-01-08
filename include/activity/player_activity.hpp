@@ -43,6 +43,7 @@ private:
     void loadMedia();
     void loadCoverArt(const std::string& coverUrl);
     void updateProgress();
+    void syncProgressToServer();  // Periodic sync to server during playback
     void updatePlayPauseButton();
     void updateSpeedLabel();
     void cyclePlaybackSpeed();
@@ -67,6 +68,9 @@ private:
     double m_pendingSeek = 0.0;   // Pending seek position (set when resuming)
     double m_totalDuration = 0.0; // Total duration for display
     brls::RepeatingTimer m_updateTimer;
+    int m_syncCounter = 0;        // Counter for periodic server sync (every 30 updates = 30 seconds)
+    float m_lastSyncedTime = 0.0f; // Last position synced to server
+    std::string m_sessionId;      // Active playback session ID (for server sync)
 
     // Main UI bindings
     BRLS_BIND(brls::Box, playerContainer, "player/container");

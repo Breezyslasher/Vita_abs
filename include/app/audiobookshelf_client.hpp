@@ -307,6 +307,9 @@ public:
     const std::string& getServerUrl() const { return m_serverUrl; }
     const User& getCurrentUser() const { return m_currentUser; }
 
+    // Check if client is authenticated (has valid token and server URL)
+    bool isAuthenticated() const { return !m_authToken.empty() && !m_serverUrl.empty(); }
+
 private:
     AudiobookshelfClient() = default;
     ~AudiobookshelfClient() = default;

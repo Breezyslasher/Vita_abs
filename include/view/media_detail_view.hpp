@@ -24,6 +24,7 @@ private:
     void startDownloadAndPlay(const std::string& itemId, const std::string& episodeId,
                               float startTime = -1.0f, bool downloadOnly = false);
     void startDownloadOnly(const std::string& itemId, const std::string& episodeId);
+    void batchDownloadEpisodes(const std::vector<MediaItem>& episodes);
     void onDownload();
     void showDownloadOptions();
     void downloadAll();

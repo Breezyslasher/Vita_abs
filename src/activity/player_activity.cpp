@@ -15,6 +15,7 @@
 #include "view/progress_dialog.hpp"
 
 #include <cstdio>
+#include <cmath>
 #include <iomanip>
 #include <sstream>
 
@@ -189,16 +190,33 @@ void PlayerActivity::willDisappear(bool resetState) {
         double position = player.getPosition();
         if (position > 0) {
             float currentTime = (float)position;
+            float totalDuration = (float)player.getDuration();
 
             if (m_isLocalFile) {
                 // Save progress for downloaded media (in seconds)
                 DownloadsManager::getInstance().updateProgress(m_itemId, currentTime);
                 DownloadsManager::getInstance().saveState();
                 brls::Logger::info("PlayerActivity: Saved local progress {}s for {}", currentTime, m_itemId);
+
+                // Also sync to server if online
+                AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+                if (client.isAuthenticated()) {
+                    bool isFinished = (totalDuration > 0 && currentTime >= totalDuration * 0.95f);
+                    client.updateProgress(m_itemId, currentTime, totalDuration, isFinished, m_episodeId);
+                    brls::Logger::info("PlayerActivity: Synced local progress to server");
+                }
             } else {
-                // Save progress to Audiobookshelf server
-                float totalDuration = (float)player.getDuration();
-                AudiobookshelfClient::getInstance().updateProgress(m_itemId, currentTime, totalDuration, false, m_episodeId);
+                // Close playback session with final position
+                if (!m_sessionId.empty()) {
+                    float timeListened = currentTime - m_lastSyncedTime;
+                    if (timeListened < 0) timeListened = 0;
+                    AudiobookshelfClient::getInstance().closePlaybackSession(
+                        m_sessionId, currentTime, totalDuration, timeListened);
+                    brls::Logger::info("PlayerActivity: Closed session {} at {}s", m_sessionId, currentTime);
+                } else {
+                    // Fallback to progress update if no session
+                    AudiobookshelfClient::getInstance().updateProgress(m_itemId, currentTime, totalDuration, false, m_episodeId);
+                }
             }
         }
     }
@@ -328,6 +346,15 @@ void PlayerActivity::loadMedia() {
     // Handle local file playback (downloaded media)
     if (m_isLocalFile) {
         DownloadsManager& downloads = DownloadsManager::getInstance();
+
+        // Try to fetch latest progress from server before playing (if online)
+        // This ensures we have the most up-to-date resume position
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+        if (client.isAuthenticated()) {
+            brls::Logger::info("PlayerActivity: Fetching latest progress from server for {}", m_itemId);
+            downloads.fetchProgressFromServer(m_itemId, m_episodeId);
+        }
+
         DownloadItem* download = downloads.getDownload(m_itemId);
 
         if (!download || download->state != DownloadState::COMPLETED) {
@@ -437,6 +464,9 @@ void PlayerActivity::loadMedia() {
             m_loadingMedia = false;
             return;
         }
+
+        // Store session ID for periodic sync
+        m_sessionId = session.id;
 
         brls::Logger::info("PlayerActivity: Session created - id: {}, audioTracks: {}, playMethod: {}",
                           session.id, session.audioTracks.size(), session.playMethod);
@@ -861,6 +891,19 @@ void PlayerActivity::updateProgress() {
         }
     }
 
+    // Periodic progress sync to server (every 30 seconds while playing)
+    if (m_isPlaying && !m_isLocalFile && !m_isDirectFile) {
+        m_syncCounter++;
+        if (m_syncCounter >= 30) {  // Every 30 updates (30 seconds)
+            m_syncCounter = 0;
+            float currentPos = static_cast<float>(position);
+            // Only sync if position changed significantly (more than 5 seconds)
+            if (std::abs(currentPos - m_lastSyncedTime) > 5.0f) {
+                syncProgressToServer();
+            }
+        }
+    }
+
     // Check if playback ended (only if we were actually playing)
     if (m_isPlaying && player.hasEnded()) {
         m_isPlaying = false;  // Prevent multiple triggers
@@ -989,6 +1032,27 @@ void PlayerActivity::cyclePlaybackSpeed() {
     updateSpeedLabel();
 
     brls::Logger::info("Playback speed changed to {}x", speed);
+}
+
+void PlayerActivity::syncProgressToServer() {
+    MpvPlayer& player = MpvPlayer::getInstance();
+    if (!player.isInitialized()) return;
+
+    float currentTime = static_cast<float>(player.getPosition());
+    float duration = static_cast<float>(player.getDuration());
+
+    if (duration <= 0 || currentTime < 0) return;
+
+    brls::Logger::debug("PlayerActivity: Periodic sync - {}s of {}s", currentTime, duration);
+
+    // Use session sync if we have an active session, otherwise use progress update
+    if (!m_sessionId.empty()) {
+        AudiobookshelfClient::getInstance().syncPlaybackSession(m_sessionId, currentTime, duration);
+    } else {
+        AudiobookshelfClient::getInstance().updateProgress(m_itemId, currentTime, duration, false, m_episodeId);
+    }
+
+    m_lastSyncedTime = currentTime;
 }
 
 } // namespace vitaabs

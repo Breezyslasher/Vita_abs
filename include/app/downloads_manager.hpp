@@ -114,6 +114,13 @@ public:
     // Sync all offline progress to server (call when online)
     void syncProgressToServer();
 
+    // Sync progress from server for all downloaded items (call when online)
+    // Updates local progress with server progress if server is ahead
+    void syncProgressFromServer();
+
+    // Get latest progress from server for a specific item
+    bool fetchProgressFromServer(const std::string& itemId, const std::string& episodeId = "");
+
     // Save/load state to persistent storage
     void saveState();
     void loadState();

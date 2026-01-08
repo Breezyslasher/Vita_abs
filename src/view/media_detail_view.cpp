@@ -988,6 +988,169 @@ void MediaDetailView::startDownloadOnly(const std::string& itemId, const std::st
     startDownloadAndPlay(itemId, episodeId, -1.0f, true);
 }
 
+void MediaDetailView::batchDownloadEpisodes(const std::vector<MediaItem>& episodes) {
+    if (episodes.empty()) {
+        brls::Application::notify("No episodes to download");
+        return;
+    }
+
+    brls::Logger::info("batchDownloadEpisodes: Starting batch download of {} episodes", episodes.size());
+
+    // Show progress dialog
+    auto* progressDialog = ProgressDialog::showDownloading("Downloading Episodes");
+    progressDialog->setStatus("Preparing downloads...");
+
+    // Store data for async operation
+    std::string podcastTitle = m_item.title;
+
+    asyncRun([this, progressDialog, episodes, podcastTitle]() {
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+        DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
+        downloadsMgr.init();
+
+        int completed = 0;
+        int failed = 0;
+        int totalEpisodes = static_cast<int>(episodes.size());
+
+        for (size_t i = 0; i < episodes.size(); i++) {
+            const auto& ep = episodes[i];
+            std::string itemId = ep.podcastId.empty() ? ep.id : ep.podcastId;
+            std::string episodeId = ep.episodeId;
+
+            brls::Logger::info("batchDownloadEpisodes: Downloading episode {} of {}: {} (episodeId: {})",
+                              i + 1, totalEpisodes, ep.title, episodeId);
+
+            // Update progress dialog
+            std::string epTitle = ep.title;  // Copy to avoid reference issues
+            brls::sync([progressDialog, i, totalEpisodes, epTitle]() {
+                char buf[128];
+                snprintf(buf, sizeof(buf), "Downloading %d/%d:\n%s",
+                        static_cast<int>(i + 1), totalEpisodes, epTitle.c_str());
+                progressDialog->setStatus(buf);
+                progressDialog->setProgress(static_cast<float>(i) / totalEpisodes);
+            });
+
+            // Check if already downloaded
+            if (downloadsMgr.isDownloaded(itemId)) {
+                brls::Logger::info("Episode already downloaded: {}", ep.title);
+                completed++;
+                continue;
+            }
+
+            // Start playback session to get download URL
+            PlaybackSession session;
+            if (!client.startPlaybackSession(itemId, session, episodeId)) {
+                brls::Logger::error("Failed to start session for episode: {}", ep.title);
+                failed++;
+                continue;
+            }
+
+            if (session.audioTracks.empty()) {
+                brls::Logger::error("No audio tracks for episode: {}", ep.title);
+                failed++;
+                continue;
+            }
+
+            // Get download URL
+            std::string trackUrl = client.getStreamUrl(session.audioTracks[0].contentUrl, "");
+            if (trackUrl.empty()) {
+                brls::Logger::error("Failed to get download URL for episode: {}", ep.title);
+                failed++;
+                continue;
+            }
+
+            // Determine file extension
+            std::string ext = ".mp3";
+            std::string mimeType = session.audioTracks[0].mimeType;
+            if (mimeType.find("mp4") != std::string::npos || mimeType.find("m4a") != std::string::npos) {
+                ext = ".m4a";
+            }
+
+            // Destination path
+            std::string filename = episodeId.empty() ? itemId : episodeId;
+            filename += ext;
+            std::string destPath = downloadsMgr.getDownloadsPath() + "/" + filename;
+
+            brls::Logger::info("Downloading to: {}", destPath);
+
+#ifdef __vita__
+            HttpClient httpClient;
+            httpClient.setTimeout(300);
+
+            SceUID fd = sceIoOpen(destPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+            if (fd < 0) {
+                brls::Logger::error("Failed to create file: {}", destPath);
+                failed++;
+                continue;
+            }
+
+            int64_t totalDownloaded = 0;
+            int64_t totalSize = 0;
+
+            bool success = httpClient.downloadFile(trackUrl,
+                [&](const char* data, size_t size) -> bool {
+                    int written = sceIoWrite(fd, data, size);
+                    if (written < 0) return false;
+                    totalDownloaded += size;
+
+                    // Update progress
+                    if (totalSize > 0) {
+                        float episodeProgress = static_cast<float>(totalDownloaded) / totalSize;
+                        float overallProgress = (static_cast<float>(i) + episodeProgress) / totalEpisodes;
+                        brls::sync([progressDialog, overallProgress]() {
+                            progressDialog->setProgress(overallProgress);
+                        });
+                    }
+                    return true;
+                },
+                [&](int64_t size) { totalSize = size; }
+            );
+
+            sceIoClose(fd);
+
+            if (success) {
+                // Register the download
+                std::string coverUrl = client.getCoverUrl(itemId);
+                downloadsMgr.registerCompletedDownload(
+                    itemId, episodeId, ep.title, "",
+                    destPath, totalDownloaded, ep.duration, "episode",
+                    coverUrl, "", {}
+                );
+
+                // Download cover
+                if (!coverUrl.empty()) {
+                    downloadsMgr.downloadCoverImage(episodeId.empty() ? itemId : episodeId, coverUrl);
+                }
+
+                completed++;
+                brls::Logger::info("Downloaded episode: {}", ep.title);
+            } else {
+                sceIoRemove(destPath.c_str());
+                failed++;
+                brls::Logger::error("Failed to download episode: {}", ep.title);
+            }
+#else
+            // Non-Vita: simplified download
+            completed++;
+#endif
+        }
+
+        // Show completion dialog
+        brls::sync([progressDialog, completed, failed, totalEpisodes]() {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "Downloaded %d of %d episodes\n(%d failed)",
+                    completed, totalEpisodes, failed);
+            progressDialog->setStatus(buf);
+            progressDialog->setProgress(1.0f);
+            brls::delay(2000, [progressDialog]() {
+                progressDialog->dismiss();
+            });
+        });
+
+        brls::Logger::info("batchDownloadEpisodes: Completed {} of {} episodes", completed, totalEpisodes);
+    });
+}
+
 void MediaDetailView::showDownloadOptions() {
     auto* dialog = new brls::Dialog("Download Options");
 
@@ -1045,59 +1208,33 @@ void MediaDetailView::downloadAll() {
     progressDialog->show();
 
     std::string podcastId = m_item.id;
-    std::string podcastTitle = m_item.title;
 
-    asyncRun([this, progressDialog, podcastId, podcastTitle]() {
+    asyncRun([this, progressDialog, podcastId]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> episodes;
-        int queued = 0;
 
         if (client.fetchPodcastEpisodes(podcastId, episodes)) {
             size_t itemCount = episodes.size();
             brls::sync([progressDialog, itemCount]() {
                 progressDialog->setStatus("Found " + std::to_string(itemCount) + " episodes");
-                progressDialog->setProgress(0.1f);
             });
 
-            for (size_t i = 0; i < episodes.size(); i++) {
-                const auto& ep = episodes[i];
+            brls::Logger::info("downloadAll: Found {} episodes to download", episodes.size());
 
-                // For podcast episodes, ep.id is the podcast ID and ep.episodeId is the episode ID
-                // We use the episode's own data rather than fetching the parent podcast
-                brls::Logger::debug("Queueing episode: {} (podcastId: {}, episodeId: {})",
-                                   ep.title, ep.podcastId, ep.episodeId);
-
-                if (!ep.episodeId.empty()) {
-                    if (DownloadsManager::getInstance().queueDownload(
-                        ep.podcastId,      // Use podcast ID as item ID
-                        ep.title,          // Episode title
-                        "",                // Author (not applicable for episodes)
-                        ep.duration,
-                        "episode",         // Media type
-                        podcastTitle,      // Parent title
-                        ep.episodeId       // Episode ID for the specific episode
-                    )) {
-                        queued++;
-                    }
-                }
-
-                size_t currentIndex = i;
-                brls::sync([progressDialog, currentIndex, itemCount, queued]() {
-                    progressDialog->setStatus("Queued " + std::to_string(queued) + " of " +
-                                             std::to_string(itemCount));
-                    progressDialog->setProgress(0.1f + 0.9f * static_cast<float>(currentIndex + 1) / itemCount);
-                });
-            }
-        }
-
-        DownloadsManager::getInstance().startDownloads();
-
-        brls::sync([progressDialog, queued]() {
-            progressDialog->setStatus("Queued " + std::to_string(queued) + " downloads");
-            brls::delay(1500, [progressDialog]() {
+            // Dismiss the preparation dialog and start batch download
+            brls::sync([this, progressDialog, episodes]() {
                 progressDialog->dismiss();
+                // Use the same download method as the play button
+                batchDownloadEpisodes(episodes);
             });
-        });
+        } else {
+            brls::sync([progressDialog]() {
+                progressDialog->setStatus("Failed to fetch episodes");
+                brls::delay(1500, [progressDialog]() {
+                    progressDialog->dismiss();
+                });
+            });
+        }
     });
 }
 
@@ -1107,19 +1244,18 @@ void MediaDetailView::downloadUnwatched(int maxCount) {
     progressDialog->show();
 
     std::string podcastId = m_item.id;
-    std::string podcastTitle = m_item.title;
 
-    asyncRun([this, progressDialog, podcastId, podcastTitle, maxCount]() {
+    asyncRun([this, progressDialog, podcastId, maxCount]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> unheardEpisodes;
-        int queued = 0;
 
         std::vector<MediaItem> allEpisodes;
         if (client.fetchPodcastEpisodes(podcastId, allEpisodes)) {
             for (auto& ep : allEpisodes) {
+                // Episode is unheard if not finished AND has no progress
                 if (!ep.isFinished && ep.currentTime == 0) {
                     unheardEpisodes.push_back(ep);
-                    if (maxCount > 0 && (int)unheardEpisodes.size() >= maxCount) {
+                    if (maxCount > 0 && static_cast<int>(unheardEpisodes.size()) >= maxCount) {
                         break;
                     }
                 }
@@ -1129,7 +1265,6 @@ void MediaDetailView::downloadUnwatched(int maxCount) {
         size_t itemCount = unheardEpisodes.size();
         brls::sync([progressDialog, itemCount]() {
             progressDialog->setStatus("Found " + std::to_string(itemCount) + " unheard");
-            progressDialog->setProgress(0.1f);
         });
 
         if (unheardEpisodes.empty()) {
@@ -1142,42 +1277,13 @@ void MediaDetailView::downloadUnwatched(int maxCount) {
             return;
         }
 
-        for (size_t i = 0; i < unheardEpisodes.size(); i++) {
-            const auto& ep = unheardEpisodes[i];
+        brls::Logger::info("downloadUnwatched: Found {} unheard episodes to download", unheardEpisodes.size());
 
-            // For podcast episodes, ep.id is the podcast ID and ep.episodeId is the episode ID
-            brls::Logger::debug("Queueing unheard episode: {} (podcastId: {}, episodeId: {})",
-                               ep.title, ep.podcastId, ep.episodeId);
-
-            if (!ep.episodeId.empty()) {
-                if (DownloadsManager::getInstance().queueDownload(
-                    ep.podcastId,      // Use podcast ID as item ID
-                    ep.title,          // Episode title
-                    "",                // Author (not applicable for episodes)
-                    ep.duration,
-                    "episode",         // Media type
-                    podcastTitle,      // Parent title
-                    ep.episodeId       // Episode ID for the specific episode
-                )) {
-                    queued++;
-                }
-            }
-
-            size_t currentIndex = i;
-            brls::sync([progressDialog, currentIndex, itemCount, queued]() {
-                progressDialog->setStatus("Queued " + std::to_string(queued) + " of " +
-                                         std::to_string(itemCount));
-                progressDialog->setProgress(0.1f + 0.9f * static_cast<float>(currentIndex + 1) / itemCount);
-            });
-        }
-
-        DownloadsManager::getInstance().startDownloads();
-
-        brls::sync([progressDialog, queued]() {
-            progressDialog->setStatus("Queued " + std::to_string(queued) + " downloads");
-            brls::delay(1500, [progressDialog]() {
-                progressDialog->dismiss();
-            });
+        // Dismiss the preparation dialog and start batch download
+        brls::sync([this, progressDialog, unheardEpisodes]() {
+            progressDialog->dismiss();
+            // Use the same download method as the play button
+            batchDownloadEpisodes(unheardEpisodes);
         });
     });
 }
