@@ -4,7 +4,9 @@
 
 #include "activity/player_activity.hpp"
 #include "app/audiobookshelf_client.hpp"
+#include "app/application.hpp"
 #include "app/downloads_manager.hpp"
+#include "app/temp_file_manager.hpp"
 #include "player/mpv_player.hpp"
 #include "utils/http_client.hpp"
 #include "utils/image_loader.hpp"
@@ -18,29 +20,6 @@
 #endif
 
 namespace vitaabs {
-
-// Temp directory for streaming playback
-static const char* TEMP_DIR = "ux0:data/VitaABS/temp";
-
-// Helper to ensure temp directory exists
-static void ensureTempDir() {
-#ifdef __vita__
-    sceIoMkdir("ux0:data/VitaABS", 0777);
-    sceIoMkdir(TEMP_DIR, 0777);
-#endif
-}
-
-// Helper to delete temp file
-static void deleteTempFile(const std::string& path) {
-    if (!path.empty()) {
-#ifdef __vita__
-        sceIoRemove(path.c_str());
-#else
-        std::remove(path.c_str());
-#endif
-        brls::Logger::debug("Deleted temp file: {}", path);
-    }
-}
 
 PlayerActivity::PlayerActivity(const std::string& itemId)
     : m_itemId(itemId), m_isLocalFile(false) {
@@ -192,9 +171,13 @@ void PlayerActivity::willDisappear(bool resetState) {
 
     m_isPlaying = false;
 
-    // Clean up temp file if we were streaming
+    // Update last access time for cached temp file (don't delete - we want to cache)
+    // Only touch temp files if not using downloads (downloads persist permanently)
     if (!m_tempFilePath.empty()) {
-        deleteTempFile(m_tempFilePath);
+        AppSettings& settings = Application::getInstance().getSettings();
+        if (!settings.saveToDownloads) {
+            TempFileManager::getInstance().touchTempFile(m_itemId, m_episodeId);
+        }
         m_tempFilePath.clear();
     }
 }
@@ -396,62 +379,123 @@ void PlayerActivity::loadMedia() {
             ext = ".ogg";
         }
 
-        // Create temp file path
-        ensureTempDir();
-        m_tempFilePath = std::string(TEMP_DIR) + "/playback_temp" + ext;
-        brls::Logger::info("PlayerActivity: Downloading to temp file: {}", m_tempFilePath);
+        // Get settings to check if we should save to downloads
+        AppSettings& settings = Application::getInstance().getSettings();
+        bool useDownloads = settings.saveToDownloads;
 
-        // Download the audio file to temp
-        HttpClient httpClient;
-        httpClient.setTimeout(120); // 2 minute timeout for large files
+        // Initialize managers
+        TempFileManager& tempMgr = TempFileManager::getInstance();
+        DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
+        tempMgr.init();
+        downloadsMgr.init();
+
+        // Clean up old temp files before downloading (respects settings limits)
+        if (!useDownloads) {
+            tempMgr.cleanupTempFiles();
+        }
+
+        // Check if we have a cached version (in temp or downloads)
+        std::string cachedPath;
+        bool needsDownload = true;
+
+        if (useDownloads) {
+            // Check downloads folder first
+            if (downloadsMgr.isDownloaded(m_itemId)) {
+                cachedPath = downloadsMgr.getPlaybackPath(m_itemId);
+                if (!cachedPath.empty()) {
+                    brls::Logger::info("PlayerActivity: Using downloaded file: {}", cachedPath);
+                    needsDownload = false;
+                }
+            }
+        } else {
+            // Check temp cache
+            cachedPath = tempMgr.getCachedFilePath(m_itemId, m_episodeId);
+            if (!cachedPath.empty()) {
+                brls::Logger::info("PlayerActivity: Using cached file: {}", cachedPath);
+                tempMgr.touchTempFile(m_itemId, m_episodeId);
+                needsDownload = false;
+            }
+        }
+
+        if (!needsDownload) {
+            m_tempFilePath = cachedPath;
+        } else {
+            // Need to download - determine destination path
+            if (useDownloads) {
+                // Generate filename for downloads folder
+                std::string filename = m_itemId;
+                if (!m_episodeId.empty()) {
+                    filename += "_" + m_episodeId;
+                }
+                filename += ext;
+                m_tempFilePath = downloadsMgr.getDownloadsPath() + "/" + filename;
+            } else {
+                m_tempFilePath = tempMgr.getTempFilePath(m_itemId, m_episodeId, ext);
+            }
+            brls::Logger::info("PlayerActivity: Downloading to {}: {}", useDownloads ? "downloads" : "temp", m_tempFilePath);
+
+            // Download the audio file
+            HttpClient httpClient;
+            httpClient.setTimeout(300); // 5 minute timeout for large audiobooks
 
 #ifdef __vita__
-        SceUID fd = sceIoOpen(m_tempFilePath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
-        if (fd < 0) {
-            brls::Logger::error("Failed to create temp file: {}", m_tempFilePath);
-            m_tempFilePath.clear();
-            m_loadingMedia = false;
-            return;
-        }
-
-        int64_t totalSize = 0;
-        int64_t downloadedSize = 0;
-
-        bool downloadSuccess = httpClient.downloadFile(streamUrl,
-            [&](const char* data, size_t size) -> bool {
-                int written = sceIoWrite(fd, data, size);
-                if (written < 0) {
-                    brls::Logger::error("Failed to write to temp file");
-                    return false;
-                }
-                downloadedSize += size;
-                if (totalSize > 0 && downloadedSize % (1024 * 1024) < size) {
-                    // Log progress every ~1MB
-                    brls::Logger::debug("Download progress: {}%", (int)((downloadedSize * 100) / totalSize));
-                }
-                return true;
-            },
-            [&](int64_t size) {
-                totalSize = size;
-                brls::Logger::info("PlayerActivity: Downloading {} bytes", size);
+            SceUID fd = sceIoOpen(m_tempFilePath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+            if (fd < 0) {
+                brls::Logger::error("Failed to create file: {}", m_tempFilePath);
+                m_tempFilePath.clear();
+                m_loadingMedia = false;
+                return;
             }
-        );
 
-        sceIoClose(fd);
+            int64_t totalSize = 0;
+            int64_t downloadedSize = 0;
 
-        if (!downloadSuccess) {
-            brls::Logger::error("Failed to download audio file");
-            deleteTempFile(m_tempFilePath);
-            m_tempFilePath.clear();
-            m_loadingMedia = false;
-            return;
-        }
+            bool downloadSuccess = httpClient.downloadFile(streamUrl,
+                [&](const char* data, size_t size) -> bool {
+                    int written = sceIoWrite(fd, data, size);
+                    if (written < 0) {
+                        brls::Logger::error("Failed to write to file");
+                        return false;
+                    }
+                    downloadedSize += size;
+                    if (totalSize > 0 && downloadedSize % (1024 * 1024) < size) {
+                        // Log progress every ~1MB
+                        brls::Logger::debug("Download progress: {}%", (int)((downloadedSize * 100) / totalSize));
+                    }
+                    return true;
+                },
+                [&](int64_t size) {
+                    totalSize = size;
+                    brls::Logger::info("PlayerActivity: Downloading {} bytes", size);
+                }
+            );
 
-        brls::Logger::info("PlayerActivity: Download complete ({} bytes)", downloadedSize);
+            sceIoClose(fd);
+
+            if (!downloadSuccess) {
+                brls::Logger::error("Failed to download audio file");
+                sceIoRemove(m_tempFilePath.c_str());
+                m_tempFilePath.clear();
+                m_loadingMedia = false;
+                return;
+            }
+
+            brls::Logger::info("PlayerActivity: Download complete ({} bytes)", downloadedSize);
+
+            // Register the downloaded file
+            if (useDownloads) {
+                // Register as a completed download
+                downloadsMgr.registerCompletedDownload(m_itemId, m_episodeId, item.title,
+                    item.authorName, m_tempFilePath, downloadedSize, item.duration, item.type);
+            } else {
+                // Register in temp manager for caching
+                tempMgr.registerTempFile(m_itemId, m_episodeId, m_tempFilePath, item.title, downloadedSize);
+            }
 #else
-        // Non-Vita: just use the stream URL directly
-        m_tempFilePath = streamUrl;
+            // Non-Vita: just use the stream URL directly
+            m_tempFilePath = streamUrl;
 #endif
+        }
 
         // Now play the local temp file
         MpvPlayer& player = MpvPlayer::getInstance();
@@ -460,7 +504,7 @@ void PlayerActivity::loadMedia() {
             brls::Logger::info("PlayerActivity: Initializing MPV player...");
             if (!player.init()) {
                 brls::Logger::error("Failed to initialize MPV player");
-                deleteTempFile(m_tempFilePath);
+                tempMgr.deleteTempFile(m_itemId, m_episodeId);
                 m_tempFilePath.clear();
                 m_loadingMedia = false;
                 return;
@@ -471,7 +515,7 @@ void PlayerActivity::loadMedia() {
         brls::Logger::info("PlayerActivity: Loading temp file: {}", m_tempFilePath);
         if (!player.loadUrl(m_tempFilePath, item.title)) {
             brls::Logger::error("Failed to load temp file: {}", m_tempFilePath);
-            deleteTempFile(m_tempFilePath);
+            tempMgr.deleteTempFile(m_itemId, m_episodeId);
             m_tempFilePath.clear();
             m_loadingMedia = false;
             return;

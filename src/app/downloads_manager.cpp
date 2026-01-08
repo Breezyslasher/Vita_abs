@@ -1066,4 +1066,45 @@ std::string DownloadsManager::getDownloadsPath() const {
     return m_downloadsPath;
 }
 
+bool DownloadsManager::registerCompletedDownload(const std::string& itemId, const std::string& episodeId,
+                                                  const std::string& title, const std::string& authorName,
+                                                  const std::string& localPath, int64_t fileSize,
+                                                  float duration, const std::string& mediaType) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    // Check if already registered
+    for (auto& item : m_downloads) {
+        if (item.itemId == itemId && item.episodeId == episodeId) {
+            // Update existing entry
+            item.localPath = localPath;
+            item.totalBytes = fileSize;
+            item.downloadedBytes = fileSize;
+            item.state = DownloadState::COMPLETED;
+            brls::Logger::info("DownloadsManager: Updated existing download: {}", title);
+            saveState();
+            return true;
+        }
+    }
+
+    // Create new download entry
+    DownloadItem item;
+    item.itemId = itemId;
+    item.episodeId = episodeId;
+    item.title = title;
+    item.authorName = authorName;
+    item.localPath = localPath;
+    item.totalBytes = fileSize;
+    item.downloadedBytes = fileSize;
+    item.duration = duration;
+    item.state = DownloadState::COMPLETED;
+    item.mediaType = mediaType;
+    item.numFiles = 1;
+
+    m_downloads.push_back(item);
+    brls::Logger::info("DownloadsManager: Registered completed download: {} ({} bytes)", title, fileSize);
+
+    saveState();
+    return true;
+}
+
 } // namespace vitaabs

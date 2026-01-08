@@ -108,6 +108,11 @@ struct AppSettings {
     bool deleteAfterFinish = false;    // Delete downloaded book after finishing
     bool syncProgressOnConnect = true;
 
+    // Streaming/Temp File Settings
+    bool saveToDownloads = false;      // Save streamed files to downloads folder instead of temp
+    int maxTempFiles = 5;              // Maximum number of temp files to keep
+    int64_t maxTempSizeMB = 500;       // Maximum total temp size in MB (0 = unlimited)
+
     // Sleep/Power Settings
     bool preventSleep = true;          // Prevent screen sleep during playback
     bool pauseOnHeadphoneDisconnect = true;

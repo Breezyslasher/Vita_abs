@@ -114,6 +114,13 @@ public:
     // Get downloads directory path
     std::string getDownloadsPath() const;
 
+    // Register an already-downloaded file as a completed download
+    // Used when streaming cache is saved to downloads folder
+    bool registerCompletedDownload(const std::string& itemId, const std::string& episodeId,
+                                   const std::string& title, const std::string& authorName,
+                                   const std::string& localPath, int64_t fileSize,
+                                   float duration, const std::string& mediaType = "book");
+
 private:
     DownloadsManager() = default;
     ~DownloadsManager() = default;

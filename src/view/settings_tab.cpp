@@ -6,6 +6,7 @@
 #include "app/application.hpp"
 #include "app/audiobookshelf_client.hpp"
 #include "app/downloads_manager.hpp"
+#include "app/temp_file_manager.hpp"
 #include "player/mpv_player.hpp"
 #include "activity/player_activity.hpp"
 #include <set>
@@ -39,6 +40,7 @@ SettingsTab::SettingsTab() {
     createContentDisplaySection();
     createPlaybackSection();
     createAudioSection();
+    createStreamingSection();
     createDownloadsSection();
     createDebugSection();
     createAboutSection();
@@ -303,6 +305,133 @@ void SettingsTab::createAudioSection() {
         Application::getInstance().saveSettings();
     });
     m_contentBox->addView(chapterToggle);
+}
+
+void SettingsTab::createStreamingSection() {
+    Application& app = Application::getInstance();
+    AppSettings& settings = app.getSettings();
+
+    // Section header
+    auto* header = new brls::Header();
+    header->setTitle("Streaming Cache");
+    m_contentBox->addView(header);
+
+    // Description
+    auto* descLabel = new brls::Label();
+    descLabel->setText("Streamed audio is cached locally for faster replay");
+    descLabel->setFontSize(14);
+    descLabel->setMarginLeft(16);
+    descLabel->setMarginBottom(8);
+    m_contentBox->addView(descLabel);
+
+    // Max temp files selector
+    auto* maxFilesSelector = new brls::SelectorCell();
+    int maxFilesIndex = 0;
+    if (settings.maxTempFiles == 3) maxFilesIndex = 0;
+    else if (settings.maxTempFiles == 5) maxFilesIndex = 1;
+    else if (settings.maxTempFiles == 10) maxFilesIndex = 2;
+    else if (settings.maxTempFiles == 20) maxFilesIndex = 3;
+    else maxFilesIndex = 1; // Default to 5
+
+    maxFilesSelector->init("Max Cached Files",
+        {"3 files", "5 files", "10 files", "20 files"},
+        maxFilesIndex,
+        [&settings](int index) {
+            switch (index) {
+                case 0: settings.maxTempFiles = 3; break;
+                case 1: settings.maxTempFiles = 5; break;
+                case 2: settings.maxTempFiles = 10; break;
+                case 3: settings.maxTempFiles = 20; break;
+            }
+            Application::getInstance().saveSettings();
+        });
+    m_contentBox->addView(maxFilesSelector);
+
+    // Max temp size selector
+    auto* maxSizeSelector = new brls::SelectorCell();
+    int maxSizeIndex = 0;
+    if (settings.maxTempSizeMB == 100) maxSizeIndex = 0;
+    else if (settings.maxTempSizeMB == 250) maxSizeIndex = 1;
+    else if (settings.maxTempSizeMB == 500) maxSizeIndex = 2;
+    else if (settings.maxTempSizeMB == 1000) maxSizeIndex = 3;
+    else if (settings.maxTempSizeMB == 0) maxSizeIndex = 4;
+    else maxSizeIndex = 2; // Default to 500 MB
+
+    maxSizeSelector->init("Max Cache Size",
+        {"100 MB", "250 MB", "500 MB", "1 GB", "Unlimited"},
+        maxSizeIndex,
+        [&settings](int index) {
+            switch (index) {
+                case 0: settings.maxTempSizeMB = 100; break;
+                case 1: settings.maxTempSizeMB = 250; break;
+                case 2: settings.maxTempSizeMB = 500; break;
+                case 3: settings.maxTempSizeMB = 1000; break;
+                case 4: settings.maxTempSizeMB = 0; break; // 0 = unlimited
+            }
+            Application::getInstance().saveSettings();
+        });
+    m_contentBox->addView(maxSizeSelector);
+
+    // Save to downloads toggle
+    auto* saveToDownloadsToggle = new brls::BooleanCell();
+    saveToDownloadsToggle->init("Save to Downloads", settings.saveToDownloads, [&settings](bool value) {
+        settings.saveToDownloads = value;
+        Application::getInstance().saveSettings();
+    });
+    m_contentBox->addView(saveToDownloadsToggle);
+
+    // Save to downloads description
+    auto* saveInfoLabel = new brls::Label();
+    saveInfoLabel->setText("When enabled, streamed files are saved permanently");
+    saveInfoLabel->setFontSize(14);
+    saveInfoLabel->setMarginLeft(16);
+    saveInfoLabel->setMarginTop(4);
+    m_contentBox->addView(saveInfoLabel);
+
+    // Clear cache button
+    TempFileManager& tempMgr = TempFileManager::getInstance();
+    tempMgr.init();
+    int64_t cacheSize = tempMgr.getTotalTempSize();
+    int cacheCount = tempMgr.getTempFileCount();
+
+    auto* clearCacheCell = new brls::DetailCell();
+    clearCacheCell->setText("Clear Streaming Cache");
+
+    std::string cacheInfo;
+    if (cacheCount == 0) {
+        cacheInfo = "Empty";
+    } else {
+        // Format size
+        if (cacheSize >= 1024 * 1024) {
+            cacheInfo = std::to_string(cacheSize / (1024 * 1024)) + " MB (" + std::to_string(cacheCount) + " files)";
+        } else if (cacheSize >= 1024) {
+            cacheInfo = std::to_string(cacheSize / 1024) + " KB (" + std::to_string(cacheCount) + " files)";
+        } else {
+            cacheInfo = std::to_string(cacheSize) + " bytes (" + std::to_string(cacheCount) + " files)";
+        }
+    }
+    clearCacheCell->setDetailText(cacheInfo);
+
+    clearCacheCell->registerClickAction([clearCacheCell](brls::View* view) {
+        brls::Dialog* dialog = new brls::Dialog("Clear all cached streaming files?");
+
+        dialog->addButton("Cancel", [dialog]() {
+            dialog->close();
+        });
+
+        dialog->addButton("Clear", [dialog, clearCacheCell]() {
+            TempFileManager::getInstance().clearAllTempFiles();
+            if (clearCacheCell) {
+                clearCacheCell->setDetailText("Empty");
+            }
+            dialog->close();
+            brls::Application::notify("Streaming cache cleared");
+        });
+
+        dialog->open();
+        return true;
+    });
+    m_contentBox->addView(clearCacheCell);
 }
 
 void SettingsTab::createDownloadsSection() {
