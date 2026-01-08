@@ -373,6 +373,13 @@ bool Application::loadSettings() {
     m_settings.deleteAfterFinish = extractBool("deleteAfterFinish", false);
     m_settings.syncProgressOnConnect = extractBool("syncProgressOnConnect", true);
 
+    // Load streaming/temp file settings
+    m_settings.saveToDownloads = extractBool("saveToDownloads", false);
+    m_settings.maxTempFiles = extractInt("maxTempFiles");
+    if (m_settings.maxTempFiles <= 0) m_settings.maxTempFiles = 5;
+    m_settings.maxTempSizeMB = extractInt("maxTempSizeMB");
+    if (m_settings.maxTempSizeMB <= 0) m_settings.maxTempSizeMB = 500;
+
     // Load player UI settings
     m_settings.showDownloadProgress = extractBool("showDownloadProgress", true);
 
@@ -449,6 +456,11 @@ bool Application::saveSettings() {
     json += "  \"maxConcurrentDownloads\": " + std::to_string(m_settings.maxConcurrentDownloads) + ",\n";
     json += "  \"deleteAfterFinish\": " + std::string(m_settings.deleteAfterFinish ? "true" : "false") + ",\n";
     json += "  \"syncProgressOnConnect\": " + std::string(m_settings.syncProgressOnConnect ? "true" : "false") + ",\n";
+
+    // Streaming/temp file settings
+    json += "  \"saveToDownloads\": " + std::string(m_settings.saveToDownloads ? "true" : "false") + ",\n";
+    json += "  \"maxTempFiles\": " + std::to_string(m_settings.maxTempFiles) + ",\n";
+    json += "  \"maxTempSizeMB\": " + std::to_string(m_settings.maxTempSizeMB) + ",\n";
 
     // Player UI settings
     json += "  \"showDownloadProgress\": " + std::string(m_settings.showDownloadProgress ? "true" : "false") + ",\n";
