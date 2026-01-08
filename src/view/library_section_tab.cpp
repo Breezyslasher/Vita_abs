@@ -40,18 +40,18 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
     m_viewModeBox->setAlignItems(brls::AlignItems::CENTER);
     m_viewModeBox->setMarginBottom(15);
 
-    // All Items button
-    m_allBtn = new brls::Button();
-    m_allBtn->setText("All");
-    m_allBtn->setMarginRight(10);
-    m_allBtn->registerClickAction([this](brls::View* view) {
-        showAllItems();
-        return true;
-    });
-    m_viewModeBox->addView(m_allBtn);
-
-    // Collections button (only show if enabled)
+    // All Items button (only show if collections are enabled - otherwise no need for view switching)
     if (settings.showCollections) {
+        m_allBtn = new brls::Button();
+        m_allBtn->setText("All");
+        m_allBtn->setMarginRight(10);
+        m_allBtn->registerClickAction([this](brls::View* view) {
+            showAllItems();
+            return true;
+        });
+        m_viewModeBox->addView(m_allBtn);
+
+        // Collections button
         m_collectionsBtn = new brls::Button();
         m_collectionsBtn->setText("Collections");
         m_collectionsBtn->setMarginRight(10);
@@ -297,7 +297,9 @@ void LibrarySectionTab::updateViewModeButtons() {
 
     // Show/hide mode buttons
     bool showModeButtons = (m_viewMode != LibraryViewMode::FILTERED);
-    m_allBtn->setVisibility(showModeButtons ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+    if (m_allBtn) {
+        m_allBtn->setVisibility(showModeButtons ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+    }
     if (m_collectionsBtn) {
         m_collectionsBtn->setVisibility(showModeButtons && !m_collections.empty() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
     }
