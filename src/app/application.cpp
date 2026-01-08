@@ -492,4 +492,19 @@ bool Application::saveSettings() {
 #endif
 }
 
+void Application::setBackgroundDownloadProgress(const BackgroundDownloadProgress& progress) {
+    std::lock_guard<std::mutex> lock(m_bgDownloadMutex);
+    m_bgDownloadProgress = progress;
+}
+
+BackgroundDownloadProgress Application::getBackgroundDownloadProgress() const {
+    std::lock_guard<std::mutex> lock(m_bgDownloadMutex);
+    return m_bgDownloadProgress;
+}
+
+void Application::clearBackgroundDownloadProgress() {
+    std::lock_guard<std::mutex> lock(m_bgDownloadMutex);
+    m_bgDownloadProgress = BackgroundDownloadProgress();
+}
+
 } // namespace vitaabs

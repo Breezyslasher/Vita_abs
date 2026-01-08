@@ -686,201 +686,378 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
         bool downloadSuccess = true;
 
         if (isMultiFile) {
-            // Multi-file audiobook: download all tracks, start playing when first is ready
+            // Multi-file audiobook handling
             int numTracks = static_cast<int>(session.audioTracks.size());
             std::vector<std::string> trackFiles;
-            std::string currentTrackPath;
-            int currentTrackIdx = 0;
-            float trackSeekTime = startTime;
 
-            // Find which track contains the current playback position
-            for (size_t i = 0; i < session.audioTracks.size(); i++) {
-                const AudioTrack& track = session.audioTracks[i];
-                float trackEnd = track.startOffset + track.duration;
+            if (downloadOnly) {
+                // Download-only mode: download ALL tracks first, combine, register, no playback
+                brls::Logger::info("Download-only mode: Downloading all {} tracks for multi-file audiobook", numTracks);
 
-                if (startTime >= track.startOffset && startTime < trackEnd) {
-                    currentTrackIdx = static_cast<int>(i);
-                    trackSeekTime = startTime - track.startOffset;
-                    brls::Logger::info("Current position {}s is in track {} (offset {}s, seek {}s)",
-                                      startTime, currentTrackIdx, track.startOffset, trackSeekTime);
-                    break;
+                int64_t grandTotalSize = 0;
+                int64_t grandTotalDownloaded = 0;
+
+                // First pass: get total size of all tracks
+                for (const auto& track : session.audioTracks) {
+                    grandTotalSize += track.size;
                 }
-            }
 
-            // Download all tracks, starting with the current one
-            brls::Logger::info("Downloading {} tracks for multi-file audiobook", numTracks);
+                // Download all tracks sequentially
+                for (int trackIdx = 0; trackIdx < numTracks && downloadSuccess; trackIdx++) {
+                    const AudioTrack& track = session.audioTracks[trackIdx];
+                    std::string trackUrl = client.getStreamUrl(track.contentUrl, "");
 
-            // First, download the current track so we can start playing
-            {
-                const AudioTrack& track = session.audioTracks[currentTrackIdx];
-                std::string trackUrl = client.getStreamUrl(track.contentUrl, "");
+                    if (trackUrl.empty()) {
+                        brls::Logger::error("Failed to get URL for track {}", trackIdx);
+                        downloadSuccess = false;
+                        break;
+                    }
 
-                if (trackUrl.empty()) {
-                    brls::Logger::error("Failed to get URL for current track {}", currentTrackIdx);
-                    downloadSuccess = false;
-                } else {
                     std::string trackExt = ext;
                     if (!track.mimeType.empty() && (track.mimeType.find("mp4") != std::string::npos ||
                         track.mimeType.find("m4a") != std::string::npos)) {
                         trackExt = ".m4a";
                     }
 
-                    currentTrackPath = tempMgr.getTempFilePath(itemId + "_track" + std::to_string(currentTrackIdx), "", trackExt);
+                    std::string trackPath = tempMgr.getTempFilePath(itemId + "_track" + std::to_string(trackIdx), "", trackExt);
+                    trackFiles.push_back(trackPath);
 
-                    brls::sync([progressDialog, currentTrackIdx, numTracks]() {
+                    int currentTrack = trackIdx;
+                    brls::sync([progressDialog, currentTrack, numTracks]() {
                         char buf[64];
-                        snprintf(buf, sizeof(buf), "Downloading track %d/%d...", currentTrackIdx + 1, numTracks);
+                        snprintf(buf, sizeof(buf), "Downloading track %d/%d...", currentTrack + 1, numTracks);
                         progressDialog->setStatus(buf);
                     });
 
-                    SceUID fd = sceIoOpen(currentTrackPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
-                    if (fd >= 0) {
-                        int64_t totalSize = 0;
-                        downloadSuccess = httpClient.downloadFile(trackUrl,
-                            [&](const char* data, size_t size) -> bool {
-                                int written = sceIoWrite(fd, data, size);
-                                if (written < 0) return false;
-                                totalDownloaded += size;
-                                if (totalSize > 0) {
-                                    brls::sync([progressDialog, totalDownloaded, totalSize]() {
-                                        progressDialog->updateDownloadProgress(totalDownloaded, totalSize);
-                                    });
-                                }
-                                return true;
-                            },
-                            [&](int64_t size) { totalSize = size; }
-                        );
-                        sceIoClose(fd);
-                        if (!downloadSuccess) {
-                            sceIoRemove(currentTrackPath.c_str());
-                        }
-                    } else {
+                    SceUID fd = sceIoOpen(trackPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+                    if (fd < 0) {
+                        brls::Logger::error("Failed to create track file: {}", trackPath);
                         downloadSuccess = false;
+                        break;
+                    }
+
+                    int64_t trackDownloaded = 0;
+                    int64_t trackSize = track.size;
+
+                    bool trackOk = httpClient.downloadFile(trackUrl,
+                        [&](const char* data, size_t size) -> bool {
+                            int written = sceIoWrite(fd, data, size);
+                            if (written < 0) return false;
+                            trackDownloaded += size;
+
+                            // Update progress with total across all tracks
+                            int64_t currentTotal = grandTotalDownloaded + trackDownloaded;
+                            if (grandTotalSize > 0) {
+                                brls::sync([progressDialog, currentTotal, grandTotalSize]() {
+                                    progressDialog->updateDownloadProgress(currentTotal, grandTotalSize);
+                                });
+                            }
+                            return true;
+                        },
+                        [&](int64_t size) {
+                            if (size > 0) trackSize = size;
+                        }
+                    );
+
+                    sceIoClose(fd);
+
+                    if (!trackOk) {
+                        brls::Logger::error("Failed to download track {}", trackIdx);
+                        sceIoRemove(trackPath.c_str());
+                        downloadSuccess = false;
+                    } else {
+                        grandTotalDownloaded += trackDownloaded;
+                        totalDownloaded = grandTotalDownloaded;
+                        brls::Logger::info("Track {}/{} complete ({} bytes)", trackIdx + 1, numTracks, trackDownloaded);
                     }
                 }
-            }
 
-            if (downloadSuccess) {
-                // Start playback immediately with the current track
-                float seekTime = trackSeekTime;
-                brls::sync([progressDialog, itemId, episodeId, currentTrackPath, seekTime]() {
-                    progressDialog->dismiss();
-                    Application::getInstance().pushPlayerActivityWithFile(itemId, episodeId, currentTrackPath, seekTime);
-                });
+                // Combine all tracks if all downloaded successfully
+                if (downloadSuccess) {
+                    brls::sync([progressDialog]() {
+                        progressDialog->setStatus("Combining audio files...");
+                    });
 
-                // Now download remaining tracks in background and combine when done
-                std::vector<AudioTrack> allTracks = session.audioTracks;
-                std::string baseExt = ext;
-                std::string finalPath = useDownloads
-                    ? downloadsMgr.getDownloadsPath() + "/" + itemId + ".m4b"
-                    : tempMgr.getTempFilePath(itemId, episodeId, ".m4b");
+                    brls::Logger::info("Combining {} tracks into {}", numTracks, destPath);
 
-                asyncRun([allTracks, currentTrackIdx, currentTrackPath, itemId, episodeId, baseExt, finalPath, title, authorName, duration, itemType, useDownloads, coverUrl, description, downloadChapters, downloadOnly]() {
-                    brls::Logger::info("Background: Downloading remaining tracks...");
+                    if (concatenateAudioFiles(trackFiles, destPath)) {
+                        brls::Logger::info("Successfully combined {} tracks", numTracks);
 
-                    HttpClient bgHttpClient;
-                    bgHttpClient.setTimeout(300);
-                    TempFileManager& bgTempMgr = TempFileManager::getInstance();
-                    DownloadsManager& bgDownloadsMgr = DownloadsManager::getInstance();
-
-                    std::vector<std::string> allTrackFiles(allTracks.size());
-                    allTrackFiles[currentTrackIdx] = currentTrackPath;
-
-                    // Download all other tracks
-                    AudiobookshelfClient& bgClient = AudiobookshelfClient::getInstance();
-                    bool allDownloaded = true;
-
-                    for (size_t i = 0; i < allTracks.size() && allDownloaded; i++) {
-                        if (static_cast<int>(i) == currentTrackIdx) continue;  // Already downloaded
-
-                        const AudioTrack& track = allTracks[i];
-                        std::string trackUrl = bgClient.getStreamUrl(track.contentUrl, "");
-
-                        if (trackUrl.empty()) {
-                            brls::Logger::error("Background: Failed to get URL for track {}", i);
-                            allDownloaded = false;
-                            break;
+                        // Get final file size
+                        SceIoStat stat;
+                        if (sceIoGetstat(destPath.c_str(), &stat) >= 0) {
+                            totalDownloaded = stat.st_size;
                         }
 
-                        std::string trackExt = baseExt;
+                        // Clean up individual track files
+                        for (const auto& trackFile : trackFiles) {
+                            sceIoRemove(trackFile.c_str());
+                        }
+                    } else {
+                        brls::Logger::error("Failed to combine tracks");
+                        downloadSuccess = false;
+                        // Clean up partial files
+                        for (const auto& trackFile : trackFiles) {
+                            sceIoRemove(trackFile.c_str());
+                        }
+                    }
+                } else {
+                    // Clean up partial downloads
+                    for (const auto& trackFile : trackFiles) {
+                        if (!trackFile.empty()) {
+                            sceIoRemove(trackFile.c_str());
+                        }
+                    }
+                }
+
+                // Continue to the result handling below (will register download and update UI)
+
+            } else {
+                // Play mode: download first track, start playback, download rest in background
+                std::string currentTrackPath;
+                int currentTrackIdx = 0;
+                float trackSeekTime = startTime;
+
+                // Find which track contains the current playback position
+                for (size_t i = 0; i < session.audioTracks.size(); i++) {
+                    const AudioTrack& track = session.audioTracks[i];
+                    float trackEnd = track.startOffset + track.duration;
+
+                    if (startTime >= track.startOffset && startTime < trackEnd) {
+                        currentTrackIdx = static_cast<int>(i);
+                        trackSeekTime = startTime - track.startOffset;
+                        brls::Logger::info("Current position {}s is in track {} (offset {}s, seek {}s)",
+                                          startTime, currentTrackIdx, track.startOffset, trackSeekTime);
+                        break;
+                    }
+                }
+
+                // Download all tracks, starting with the current one
+                brls::Logger::info("Downloading {} tracks for multi-file audiobook", numTracks);
+
+                // First, download the current track so we can start playing
+                {
+                    const AudioTrack& track = session.audioTracks[currentTrackIdx];
+                    std::string trackUrl = client.getStreamUrl(track.contentUrl, "");
+
+                    if (trackUrl.empty()) {
+                        brls::Logger::error("Failed to get URL for current track {}", currentTrackIdx);
+                        downloadSuccess = false;
+                    } else {
+                        std::string trackExt = ext;
                         if (!track.mimeType.empty() && (track.mimeType.find("mp4") != std::string::npos ||
                             track.mimeType.find("m4a") != std::string::npos)) {
                             trackExt = ".m4a";
                         }
 
-                        std::string trackPath = bgTempMgr.getTempFilePath(itemId + "_track" + std::to_string(i), "", trackExt);
-                        allTrackFiles[i] = trackPath;
+                        currentTrackPath = tempMgr.getTempFilePath(itemId + "_track" + std::to_string(currentTrackIdx), "", trackExt);
 
-                        brls::Logger::info("Background: Downloading track {}/{}...", i + 1, allTracks.size());
+                        brls::sync([progressDialog, currentTrackIdx, numTracks]() {
+                            char buf[64];
+                            snprintf(buf, sizeof(buf), "Downloading track %d/%d...", currentTrackIdx + 1, numTracks);
+                            progressDialog->setStatus(buf);
+                        });
 
-                        SceUID fd = sceIoOpen(trackPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
-                        if (fd < 0) {
-                            allDownloaded = false;
-                            break;
-                        }
-
-                        bool trackOk = bgHttpClient.downloadFile(trackUrl,
-                            [&](const char* data, size_t size) -> bool {
-                                return sceIoWrite(fd, data, size) >= 0;
-                            },
-                            nullptr
-                        );
-
-                        sceIoClose(fd);
-
-                        if (!trackOk) {
-                            brls::Logger::error("Background: Failed to download track {}", i);
-                            sceIoRemove(trackPath.c_str());
-                            allDownloaded = false;
-                        }
-                    }
-
-                    // Combine all tracks if all downloaded successfully
-                    if (allDownloaded) {
-                        brls::Logger::info("Background: Combining {} tracks...", allTracks.size());
-
-                        if (concatenateAudioFiles(allTrackFiles, finalPath)) {
-                            brls::Logger::info("Background: Successfully combined into {}", finalPath);
-
-                            // Get total file size
-                            SceIoStat stat;
+                        SceUID fd = sceIoOpen(currentTrackPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+                        if (fd >= 0) {
                             int64_t totalSize = 0;
-                            if (sceIoGetstat(finalPath.c_str(), &stat) >= 0) {
-                                totalSize = stat.st_size;
+                            downloadSuccess = httpClient.downloadFile(trackUrl,
+                                [&](const char* data, size_t size) -> bool {
+                                    int written = sceIoWrite(fd, data, size);
+                                    if (written < 0) return false;
+                                    totalDownloaded += size;
+                                    if (totalSize > 0) {
+                                        brls::sync([progressDialog, totalDownloaded, totalSize]() {
+                                            progressDialog->updateDownloadProgress(totalDownloaded, totalSize);
+                                        });
+                                    }
+                                    return true;
+                                },
+                                [&](int64_t size) { totalSize = size; }
+                            );
+                            sceIoClose(fd);
+                            if (!downloadSuccess) {
+                                sceIoRemove(currentTrackPath.c_str());
                             }
-
-                            // Register the combined file
-                            if (useDownloads) {
-                                bgDownloadsMgr.registerCompletedDownload(itemId, episodeId, title,
-                                    authorName, finalPath, totalSize, duration, itemType,
-                                    coverUrl, description, downloadChapters);
-                            } else {
-                                bgTempMgr.registerTempFile(itemId, episodeId, finalPath, title, totalSize);
-                            }
-
-                            // Clean up individual track files
-                            for (const auto& trackFile : allTrackFiles) {
-                                sceIoRemove(trackFile.c_str());
-                            }
-
-                            brls::sync([]() {
-                                brls::Application::notify("Audiobook fully downloaded");
-                            });
                         } else {
-                            brls::Logger::error("Background: Failed to combine tracks");
-                        }
-                    } else {
-                        // Clean up partial downloads
-                        for (const auto& trackFile : allTrackFiles) {
-                            if (!trackFile.empty()) {
-                                sceIoRemove(trackFile.c_str());
-                            }
+                            downloadSuccess = false;
                         }
                     }
-                });
+                }
 
-                // Return early - playback already started
-                return;
+                if (downloadSuccess) {
+                    // Start playback immediately with the current track
+                    float seekTime = trackSeekTime;
+                    brls::sync([progressDialog, itemId, episodeId, currentTrackPath, seekTime]() {
+                        progressDialog->dismiss();
+                        Application::getInstance().pushPlayerActivityWithFile(itemId, episodeId, currentTrackPath, seekTime);
+                    });
+
+                    // Now download remaining tracks in background and combine when done
+                    std::vector<AudioTrack> allTracks = session.audioTracks;
+                    std::string baseExt = ext;
+                    std::string finalPath = useDownloads
+                        ? downloadsMgr.getDownloadsPath() + "/" + itemId + ".m4b"
+                        : tempMgr.getTempFilePath(itemId, episodeId, ".m4b");
+
+                    asyncRun([allTracks, currentTrackIdx, currentTrackPath, itemId, episodeId, baseExt, finalPath, title, authorName, duration, itemType, useDownloads, coverUrl, description, downloadChapters]() {
+                        brls::Logger::info("Background: Downloading remaining tracks...");
+
+                        HttpClient bgHttpClient;
+                        bgHttpClient.setTimeout(300);
+                        TempFileManager& bgTempMgr = TempFileManager::getInstance();
+                        DownloadsManager& bgDownloadsMgr = DownloadsManager::getInstance();
+
+                        std::vector<std::string> allTrackFiles(allTracks.size());
+                        allTrackFiles[currentTrackIdx] = currentTrackPath;
+
+                        // Calculate total size for progress tracking
+                        int64_t grandTotalSize = 0;
+                        int64_t grandDownloaded = 0;
+                        for (const auto& track : allTracks) {
+                            grandTotalSize += track.size;
+                        }
+                        // Account for already downloaded first track
+                        if (currentTrackIdx < static_cast<int>(allTracks.size())) {
+                            grandDownloaded = allTracks[currentTrackIdx].size;
+                        }
+
+                        // Set initial background progress
+                        BackgroundDownloadProgress bgProgress;
+                        bgProgress.active = true;
+                        bgProgress.itemId = itemId;
+                        bgProgress.currentTrack = currentTrackIdx + 1;
+                        bgProgress.totalTracks = static_cast<int>(allTracks.size());
+                        bgProgress.downloadedBytes = grandDownloaded;
+                        bgProgress.totalBytes = grandTotalSize;
+                        bgProgress.status = "Downloading remaining tracks...";
+                        Application::getInstance().setBackgroundDownloadProgress(bgProgress);
+
+                        // Download all other tracks
+                        AudiobookshelfClient& bgClient = AudiobookshelfClient::getInstance();
+                        bool allDownloaded = true;
+
+                        for (size_t i = 0; i < allTracks.size() && allDownloaded; i++) {
+                            if (static_cast<int>(i) == currentTrackIdx) continue;  // Already downloaded
+
+                            const AudioTrack& track = allTracks[i];
+                            std::string trackUrl = bgClient.getStreamUrl(track.contentUrl, "");
+
+                            if (trackUrl.empty()) {
+                                brls::Logger::error("Background: Failed to get URL for track {}", i);
+                                allDownloaded = false;
+                                break;
+                            }
+
+                            std::string trackExt = baseExt;
+                            if (!track.mimeType.empty() && (track.mimeType.find("mp4") != std::string::npos ||
+                                track.mimeType.find("m4a") != std::string::npos)) {
+                                trackExt = ".m4a";
+                            }
+
+                            std::string trackPath = bgTempMgr.getTempFilePath(itemId + "_track" + std::to_string(i), "", trackExt);
+                            allTrackFiles[i] = trackPath;
+
+                            brls::Logger::info("Background: Downloading track {}/{}...", i + 1, allTracks.size());
+
+                            // Update background progress
+                            bgProgress.currentTrack = static_cast<int>(i) + 1;
+                            char statusBuf[64];
+                            snprintf(statusBuf, sizeof(statusBuf), "Downloading track %d/%d...",
+                                    static_cast<int>(i) + 1, static_cast<int>(allTracks.size()));
+                            bgProgress.status = statusBuf;
+                            Application::getInstance().setBackgroundDownloadProgress(bgProgress);
+
+                            SceUID fd = sceIoOpen(trackPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+                            if (fd < 0) {
+                                allDownloaded = false;
+                                break;
+                            }
+
+                            int64_t trackDownloaded = 0;
+                            bool trackOk = bgHttpClient.downloadFile(trackUrl,
+                                [&](const char* data, size_t size) -> bool {
+                                    int written = sceIoWrite(fd, data, size);
+                                    if (written < 0) return false;
+                                    trackDownloaded += size;
+                                    // Update progress periodically (every 64KB)
+                                    if ((trackDownloaded % (64 * 1024)) < size) {
+                                        bgProgress.downloadedBytes = grandDownloaded + trackDownloaded;
+                                        Application::getInstance().setBackgroundDownloadProgress(bgProgress);
+                                    }
+                                    return true;
+                                },
+                                nullptr
+                            );
+
+                            sceIoClose(fd);
+
+                            if (!trackOk) {
+                                brls::Logger::error("Background: Failed to download track {}", i);
+                                sceIoRemove(trackPath.c_str());
+                                allDownloaded = false;
+                            } else {
+                                grandDownloaded += trackDownloaded;
+                                bgProgress.downloadedBytes = grandDownloaded;
+                                Application::getInstance().setBackgroundDownloadProgress(bgProgress);
+                            }
+                        }
+
+                        // Combine all tracks if all downloaded successfully
+                        if (allDownloaded) {
+                            brls::Logger::info("Background: Combining {} tracks...", allTracks.size());
+
+                            bgProgress.status = "Combining audio files...";
+                            Application::getInstance().setBackgroundDownloadProgress(bgProgress);
+
+                            if (concatenateAudioFiles(allTrackFiles, finalPath)) {
+                                brls::Logger::info("Background: Successfully combined into {}", finalPath);
+
+                                // Get total file size
+                                SceIoStat stat;
+                                int64_t totalSize = 0;
+                                if (sceIoGetstat(finalPath.c_str(), &stat) >= 0) {
+                                    totalSize = stat.st_size;
+                                }
+
+                                // Register the combined file
+                                if (useDownloads) {
+                                    bgDownloadsMgr.registerCompletedDownload(itemId, episodeId, title,
+                                        authorName, finalPath, totalSize, duration, itemType,
+                                        coverUrl, description, downloadChapters);
+                                } else {
+                                    bgTempMgr.registerTempFile(itemId, episodeId, finalPath, title, totalSize);
+                                }
+
+                                // Clean up individual track files
+                                for (const auto& trackFile : allTrackFiles) {
+                                    sceIoRemove(trackFile.c_str());
+                                }
+
+                                // Clear background progress
+                                Application::getInstance().clearBackgroundDownloadProgress();
+
+                                brls::sync([]() {
+                                    brls::Application::notify("Audiobook fully downloaded");
+                                });
+                            } else {
+                                brls::Logger::error("Background: Failed to combine tracks");
+                                Application::getInstance().clearBackgroundDownloadProgress();
+                            }
+                        } else {
+                            // Clean up partial downloads
+                            for (const auto& trackFile : allTrackFiles) {
+                                if (!trackFile.empty()) {
+                                    sceIoRemove(trackFile.c_str());
+                                }
+                            }
+                            Application::getInstance().clearBackgroundDownloadProgress();
+                        }
+                    });
+
+                    // Return early - playback already started
+                    return;
+                }
             }
 
         } else {

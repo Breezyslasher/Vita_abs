@@ -904,6 +904,32 @@ void PlayerActivity::updateProgress() {
         }
     }
 
+    // Check for and display background download progress (multi-file audiobooks)
+    AppSettings& settings = Application::getInstance().getSettings();
+    if (settings.showDownloadProgress && chapterInfoLabel) {
+        BackgroundDownloadProgress bgProgress = Application::getInstance().getBackgroundDownloadProgress();
+        if (bgProgress.active && bgProgress.itemId == m_itemId) {
+            // Show download progress
+            char progressBuf[128];
+            if (bgProgress.totalBytes > 0) {
+                int percent = static_cast<int>((bgProgress.downloadedBytes * 100) / bgProgress.totalBytes);
+                int dlMB = static_cast<int>(bgProgress.downloadedBytes / (1024 * 1024));
+                int totalMB = static_cast<int>(bgProgress.totalBytes / (1024 * 1024));
+                snprintf(progressBuf, sizeof(progressBuf), "Track %d/%d - %d%% (%d/%d MB)",
+                        bgProgress.currentTrack, bgProgress.totalTracks,
+                        percent, dlMB, totalMB);
+            } else {
+                snprintf(progressBuf, sizeof(progressBuf), "Track %d/%d - %s",
+                        bgProgress.currentTrack, bgProgress.totalTracks,
+                        bgProgress.status.c_str());
+            }
+            chapterInfoLabel->setText(progressBuf);
+        } else if (!bgProgress.active && chapterInfoLabel->getFullText().find("Track") != std::string::npos) {
+            // Clear the label when download completes
+            chapterInfoLabel->setText("");
+        }
+    }
+
     // Check if playback ended (only if we were actually playing)
     if (m_isPlaying && player.hasEnded()) {
         m_isPlaying = false;  // Prevent multiple triggers

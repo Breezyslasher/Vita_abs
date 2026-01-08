@@ -7,6 +7,7 @@
 
 #include <string>
 #include <functional>
+#include <mutex>
 
 // Application version
 #define VITA_ABS_VERSION "1.0.0"
@@ -58,6 +59,17 @@ enum class SleepTimer {
     MINUTES_45 = 5,
     MINUTES_60 = 6,
     END_OF_CHAPTER = 7
+};
+
+// Background download progress tracking
+struct BackgroundDownloadProgress {
+    bool active = false;          // Whether a background download is in progress
+    std::string itemId;           // Item being downloaded
+    int currentTrack = 0;         // Current track number (1-based)
+    int totalTracks = 0;          // Total number of tracks
+    int64_t downloadedBytes = 0;  // Total bytes downloaded so far
+    int64_t totalBytes = 0;       // Total bytes to download
+    std::string status;           // Current status message
 };
 
 // Application settings structure
@@ -182,6 +194,11 @@ public:
     static std::string formatTime(float seconds);
     static std::string formatDuration(float seconds);
 
+    // Background download progress tracking (for multi-file audiobooks)
+    void setBackgroundDownloadProgress(const BackgroundDownloadProgress& progress);
+    BackgroundDownloadProgress getBackgroundDownloadProgress() const;
+    void clearBackgroundDownloadProgress();
+
 private:
     Application() = default;
     ~Application() = default;
@@ -194,6 +211,10 @@ private:
     std::string m_username;
     std::string m_currentLibraryId;
     AppSettings m_settings;
+
+    // Background download progress tracking
+    mutable std::mutex m_bgDownloadMutex;
+    BackgroundDownloadProgress m_bgDownloadProgress;
 };
 
 } // namespace vitaabs
