@@ -47,6 +47,16 @@ PlayerActivity::PlayerActivity(const std::string& itemId, bool isLocalFile)
                        isLocalFile ? "local" : "remote", itemId);
 }
 
+PlayerActivity::PlayerActivity(const std::string& itemId, const std::string& episodeId,
+                               const std::string& preDownloadedPath, float startTime)
+    : m_itemId(itemId), m_episodeId(episodeId), m_isLocalFile(false), m_isPreDownloaded(true) {
+    m_tempFilePath = preDownloadedPath;
+    if (startTime >= 0) {
+        m_pendingSeek = static_cast<double>(startTime);
+    }
+    brls::Logger::debug("PlayerActivity created with pre-downloaded file: {}", preDownloadedPath);
+}
+
 PlayerActivity* PlayerActivity::createForDirectFile(const std::string& filePath) {
     PlayerActivity* activity = new PlayerActivity("", false);
     activity->m_isDirectFile = true;
@@ -218,6 +228,56 @@ void PlayerActivity::loadMedia() {
         return;
     }
     m_loadingMedia = true;
+
+    // Handle pre-downloaded file (downloaded in media detail view before player push)
+    if (m_isPreDownloaded && !m_tempFilePath.empty()) {
+        brls::Logger::info("PlayerActivity: Playing pre-downloaded file: {}", m_tempFilePath);
+
+        // Fetch item details for metadata
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+        MediaItem item;
+        if (client.fetchItem(m_itemId, item)) {
+            if (titleLabel) titleLabel->setText(item.title);
+            if (authorLabel && !item.authorName.empty()) authorLabel->setText(item.authorName);
+            if (!item.coverPath.empty()) {
+                std::string fullCoverUrl = client.getCoverUrl(m_itemId);
+                loadCoverArt(fullCoverUrl);
+            }
+        }
+
+        // Initialize and load player
+        MpvPlayer& player = MpvPlayer::getInstance();
+        if (!player.isInitialized()) {
+            if (!player.init()) {
+                brls::Logger::error("Failed to initialize MPV player");
+                m_loadingMedia = false;
+                return;
+            }
+        }
+
+        std::string title = titleLabel ? titleLabel->getFullText() : m_itemId;
+        if (!player.loadUrl(m_tempFilePath, title)) {
+            brls::Logger::error("Failed to load pre-downloaded file: {}", m_tempFilePath);
+            m_loadingMedia = false;
+            return;
+        }
+
+        // Apply saved playback speed
+        AppSettings& preDownloadSettings = Application::getInstance().getSettings();
+        float preDownloadSpeed = getSpeedValue(static_cast<int>(preDownloadSettings.playbackSpeed));
+        if (preDownloadSpeed != 1.0f) {
+            player.setSpeed(preDownloadSpeed);
+        }
+
+        if (videoView) {
+            videoView->setVisibility(brls::Visibility::VISIBLE);
+            videoView->setVideoVisible(true);
+        }
+
+        m_isPlaying = true;
+        m_loadingMedia = false;
+        return;
+    }
 
     // Handle direct file playback (debug/testing)
     if (m_isDirectFile) {

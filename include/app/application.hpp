@@ -135,6 +135,9 @@ public:
     void pushMainActivity();
     void pushPlayerActivity(const std::string& itemId, const std::string& episodeId = "",
                             float startTime = -1.0f);
+    // Push player with pre-downloaded file (downloaded before player push)
+    void pushPlayerActivityWithFile(const std::string& itemId, const std::string& episodeId,
+                                    const std::string& preDownloadedPath, float startTime = -1.0f);
 
     // Authentication state
     bool isLoggedIn() const { return !m_authToken.empty(); }

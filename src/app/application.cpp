@@ -118,6 +118,11 @@ void Application::pushPlayerActivity(const std::string& itemId, const std::strin
     brls::Application::pushActivity(new PlayerActivity(itemId, episodeId, startTime));
 }
 
+void Application::pushPlayerActivityWithFile(const std::string& itemId, const std::string& episodeId,
+                                              const std::string& preDownloadedPath, float startTime) {
+    brls::Application::pushActivity(new PlayerActivity(itemId, episodeId, preDownloadedPath, startTime));
+}
+
 void Application::applyTheme() {
     brls::ThemeVariant variant;
 

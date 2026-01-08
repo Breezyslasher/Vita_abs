@@ -21,6 +21,8 @@ private:
     void loadChildren();
     void loadMusicCategories();
     void onPlay(bool resume = false);
+    void startDownloadAndPlay(const std::string& itemId, const std::string& episodeId,
+                              float startTime = -1.0f);
     void onDownload();
     void showDownloadOptions();
     void downloadAll();
