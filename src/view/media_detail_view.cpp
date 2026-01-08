@@ -111,6 +111,17 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         });
         leftBox->addView(m_playButton);
 
+        // Find New Episodes button - check RSS for new episodes
+        m_findEpisodesButton = new brls::Button();
+        m_findEpisodesButton->setText("Find New Episodes");
+        m_findEpisodesButton->setWidth(200);
+        m_findEpisodesButton->setMarginTop(10);
+        m_findEpisodesButton->registerClickAction([this](brls::View* view) {
+            findNewEpisodes();
+            return true;
+        });
+        leftBox->addView(m_findEpisodesButton);
+
         m_downloadButton = new brls::Button();
         m_downloadButton->setText("Download...");
         m_downloadButton->setWidth(200);
@@ -648,6 +659,187 @@ void MediaDetailView::downloadUnwatched(int maxCount) {
             brls::delay(1500, [progressDialog]() {
                 progressDialog->dismiss();
             });
+        });
+    });
+}
+
+void MediaDetailView::findNewEpisodes() {
+    brls::Application::notify("Checking RSS feed for new episodes...");
+
+    std::string podcastId = m_item.id;
+    std::string podcastTitle = m_item.title;
+
+    asyncRun([this, podcastId, podcastTitle]() {
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+        std::vector<MediaItem> newEpisodes;
+
+        if (client.checkNewEpisodes(podcastId, newEpisodes)) {
+            brls::sync([this, newEpisodes, podcastId, podcastTitle]() {
+                if (newEpisodes.empty()) {
+                    brls::Application::notify("No new episodes found");
+                } else {
+                    showNewEpisodesDialog(newEpisodes, podcastId, podcastTitle);
+                }
+            });
+        } else {
+            brls::sync([]() {
+                brls::Application::notify("Failed to check for new episodes");
+            });
+        }
+    });
+}
+
+void MediaDetailView::showNewEpisodesDialog(const std::vector<MediaItem>& episodes,
+                                             const std::string& podcastId,
+                                             const std::string& podcastTitle) {
+    // Create a dialog to show new episodes
+    auto* dialog = new brls::Dialog("New Episodes (" + std::to_string(episodes.size()) + ")");
+
+    auto* contentBox = new brls::Box();
+    contentBox->setAxis(brls::Axis::COLUMN);
+    contentBox->setPadding(15);
+    contentBox->setWidth(700);
+
+    // Add "Download All" button at the top
+    auto* downloadAllBtn = new brls::Button();
+    downloadAllBtn->setText("Download All to Server");
+    downloadAllBtn->setMarginBottom(15);
+    downloadAllBtn->registerClickAction([this, episodes, podcastId, dialog](brls::View*) {
+        dialog->dismiss();
+        downloadNewEpisodesToServer(podcastId, episodes);
+        return true;
+    });
+    contentBox->addView(downloadAllBtn);
+
+    // Separator
+    auto* separator = new brls::Rectangle();
+    separator->setHeight(1);
+    separator->setColor(nvgRGB(80, 80, 80));
+    separator->setMarginBottom(15);
+    contentBox->addView(separator);
+
+    // Instructions
+    auto* instructionsLabel = new brls::Label();
+    instructionsLabel->setText("Select episodes to add to server:");
+    instructionsLabel->setFontSize(14);
+    instructionsLabel->setTextColor(nvgRGB(180, 180, 180));
+    instructionsLabel->setMarginBottom(10);
+    contentBox->addView(instructionsLabel);
+
+    // Create scrollable list of episodes
+    auto* scrollFrame = new brls::ScrollingFrame();
+    scrollFrame->setHeight(350);
+
+    auto* episodesList = new brls::Box();
+    episodesList->setAxis(brls::Axis::COLUMN);
+
+    // Store selected episodes
+    auto selectedEpisodes = std::make_shared<std::vector<std::string>>();
+
+    for (const auto& ep : episodes) {
+        auto* episodeRow = new brls::Box();
+        episodeRow->setAxis(brls::Axis::ROW);
+        episodeRow->setAlignItems(brls::AlignItems::CENTER);
+        episodeRow->setHeight(60);
+        episodeRow->setMarginBottom(5);
+        episodeRow->setPadding(10);
+        episodeRow->setBackgroundColor(nvgRGBA(60, 60, 60, 255));
+        episodeRow->setCornerRadius(5);
+        episodeRow->setFocusable(true);
+
+        // Episode info
+        auto* infoBox = new brls::Box();
+        infoBox->setAxis(brls::Axis::COLUMN);
+        infoBox->setGrow(1.0f);
+
+        auto* titleLabel = new brls::Label();
+        std::string title = ep.title;
+        if (title.length() > 50) {
+            title = title.substr(0, 47) + "...";
+        }
+        titleLabel->setText(title);
+        titleLabel->setFontSize(16);
+        infoBox->addView(titleLabel);
+
+        if (!ep.pubDate.empty()) {
+            auto* dateLabel = new brls::Label();
+            dateLabel->setText(ep.pubDate);
+            dateLabel->setFontSize(12);
+            dateLabel->setTextColor(nvgRGB(150, 150, 150));
+            infoBox->addView(dateLabel);
+        }
+
+        episodeRow->addView(infoBox);
+
+        // Add button for this episode
+        auto* addBtn = new brls::Button();
+        addBtn->setText("Add");
+        addBtn->setWidth(80);
+
+        std::string episodeId = ep.episodeId;
+        std::string pId = podcastId;
+        addBtn->registerClickAction([this, episodeId, pId, addBtn](brls::View*) {
+            // Download this single episode to server
+            std::vector<std::string> ids = {episodeId};
+            AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+            if (client.downloadEpisodesToServer(pId, ids)) {
+                addBtn->setText("Added!");
+                brls::Application::notify("Episode queued for download on server");
+            } else {
+                brls::Application::notify("Failed to add episode");
+            }
+            return true;
+        });
+        episodeRow->addView(addBtn);
+
+        // Register click on entire row to add episode
+        episodeRow->registerAction("Add Episode", brls::ControllerButton::BUTTON_A, [addBtn](brls::View*) {
+            // Trigger the add button
+            addBtn->onFocusGained();
+            return true;
+        });
+
+        episodesList->addView(episodeRow);
+    }
+
+    scrollFrame->setContentView(episodesList);
+    contentBox->addView(scrollFrame);
+
+    // Close button
+    auto* closeBtn = new brls::Button();
+    closeBtn->setText("Close");
+    closeBtn->setMarginTop(15);
+    closeBtn->registerClickAction([dialog](brls::View*) {
+        dialog->dismiss();
+        return true;
+    });
+    contentBox->addView(closeBtn);
+
+    dialog->addView(contentBox);
+    brls::Application::pushActivity(new brls::Activity(dialog));
+}
+
+void MediaDetailView::downloadNewEpisodesToServer(const std::string& podcastId,
+                                                   const std::vector<MediaItem>& episodes) {
+    brls::Application::notify("Adding " + std::to_string(episodes.size()) + " episodes to server...");
+
+    std::vector<std::string> episodeIds;
+    for (const auto& ep : episodes) {
+        if (!ep.episodeId.empty()) {
+            episodeIds.push_back(ep.episodeId);
+        }
+    }
+
+    asyncRun([podcastId, episodeIds]() {
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+        bool success = client.downloadEpisodesToServer(podcastId, episodeIds);
+
+        brls::sync([success, episodeIds]() {
+            if (success) {
+                brls::Application::notify("Queued " + std::to_string(episodeIds.size()) + " episodes for download");
+            } else {
+                brls::Application::notify("Failed to queue episodes");
+            }
         });
     });
 }

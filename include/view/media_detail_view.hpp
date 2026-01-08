@@ -26,6 +26,14 @@ private:
     void downloadAll();
     void downloadUnwatched(int maxCount = -1);
 
+    // Podcast episode management
+    void findNewEpisodes();
+    void showNewEpisodesDialog(const std::vector<MediaItem>& episodes,
+                               const std::string& podcastId,
+                               const std::string& podcastTitle);
+    void downloadNewEpisodesToServer(const std::string& podcastId,
+                                      const std::vector<MediaItem>& episodes);
+
     brls::HScrollingFrame* createMediaRow(const std::string& title, brls::Box** contentOut);
 
     MediaItem m_item;
@@ -44,6 +52,7 @@ private:
     brls::Button* m_playButton = nullptr;
     brls::Button* m_resumeButton = nullptr;
     brls::Button* m_downloadButton = nullptr;
+    brls::Button* m_findEpisodesButton = nullptr;  // Find New Episodes button for podcasts
     brls::Box* m_childrenBox = nullptr;
 
     // Music category rows for artists
