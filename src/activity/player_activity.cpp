@@ -95,21 +95,24 @@ void PlayerActivity::onContentAvailable() {
 
     // Set up button click handlers
     if (btnPlayPause) {
-        btnPlayPause->getClickEvent()->subscribe([this](brls::View* view) {
+        btnPlayPause->registerClickAction([this](brls::View* view) {
             togglePlayPause();
+            return true;
         });
         btnPlayPause->setFocusable(true);
     }
 
     if (btnRewind) {
-        btnRewind->getClickEvent()->subscribe([this](brls::View* view) {
+        btnRewind->registerClickAction([this](brls::View* view) {
             seek(-30);
+            return true;
         });
     }
 
     if (btnForward) {
-        btnForward->getClickEvent()->subscribe([this](brls::View* view) {
+        btnForward->registerClickAction([this](brls::View* view) {
             seek(30);
+            return true;
         });
     }
 
@@ -340,7 +343,7 @@ void PlayerActivity::loadMedia() {
         }
 
         // Load cover art
-        if (!item.coverUrl.empty()) {
+        if (!item.coverPath.empty()) {
             std::string fullCoverUrl = client.getCoverUrl(m_itemId);
             loadCoverArt(fullCoverUrl);
         }
@@ -635,11 +638,10 @@ void PlayerActivity::loadCoverArt(const std::string& coverUrl) {
     brls::Logger::debug("Loading cover art: {}", coverUrl);
 
     // Use the image loader to load the cover asynchronously
-    ImageLoader::loadAsync(coverUrl, [this](const std::string& imagePath) {
-        if (!m_destroying && coverImage) {
-            coverImage->setImageFromFile(imagePath);
-        }
-    });
+    ImageLoader::loadAsync(coverUrl, [this](brls::Image* img) {
+        // Image is loaded into the target automatically
+        brls::Logger::debug("Cover art loaded");
+    }, coverImage);
 }
 
 } // namespace vitaabs
