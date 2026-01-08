@@ -29,73 +29,35 @@ bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
         return false;
     }
 
-    // If only one file, just return success (no need to concatenate)
+    // If only one file, just rename/copy it
     if (inputFiles.size() == 1) {
-        brls::Logger::info("concatenateAudioFiles: Only one file, no concatenation needed");
+        brls::Logger::info("concatenateAudioFiles: Only one file, renaming to output");
+#ifdef __vita__
+        // Copy file on Vita
+        SceUID srcFd = sceIoOpen(inputFiles[0].c_str(), SCE_O_RDONLY, 0);
+        if (srcFd < 0) return false;
+
+        SceUID dstFd = sceIoOpen(outputPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+        if (dstFd < 0) {
+            sceIoClose(srcFd);
+            return false;
+        }
+
+        char buffer[8192];
+        int bytesRead;
+        while ((bytesRead = sceIoRead(srcFd, buffer, sizeof(buffer))) > 0) {
+            sceIoWrite(dstFd, buffer, bytesRead);
+        }
+
+        sceIoClose(srcFd);
+        sceIoClose(dstFd);
+#else
+        std::rename(inputFiles[0].c_str(), outputPath.c_str());
+#endif
         return true;
     }
 
     brls::Logger::info("concatenateAudioFiles: Combining {} files into {}", inputFiles.size(), outputPath);
-
-    // Create a concat file list for the concat demuxer
-    std::string concatListPath = outputPath + ".concat.txt";
-
-#ifdef __vita__
-    SceUID listFd = sceIoOpen(concatListPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
-    if (listFd >= 0) {
-        for (const auto& file : inputFiles) {
-            std::string line = "file '" + file + "'\n";
-            sceIoWrite(listFd, line.c_str(), line.size());
-        }
-        sceIoClose(listFd);
-    } else {
-        brls::Logger::error("concatenateAudioFiles: Failed to create concat list file");
-        return false;
-    }
-#else
-    std::ofstream listFile(concatListPath);
-    if (listFile.is_open()) {
-        for (const auto& file : inputFiles) {
-            listFile << "file '" << file << "'\n";
-        }
-        listFile.close();
-    } else {
-        brls::Logger::error("concatenateAudioFiles: Failed to create concat list file");
-        return false;
-    }
-#endif
-
-    // Open input using concat demuxer
-    AVFormatContext* inputFmtCtx = nullptr;
-    AVDictionary* options = nullptr;
-
-    // Set safe option for concat demuxer to allow absolute paths
-    av_dict_set(&options, "safe", "0", 0);
-
-    // Use the concat demuxer format
-    const AVInputFormat* concatFmt = av_find_input_format("concat");
-    if (!concatFmt) {
-        brls::Logger::error("concatenateAudioFiles: concat demuxer not available");
-        av_dict_free(&options);
-        return false;
-    }
-
-    int ret = avformat_open_input(&inputFmtCtx, concatListPath.c_str(), concatFmt, &options);
-    av_dict_free(&options);
-
-    if (ret < 0) {
-        char errbuf[128];
-        av_strerror(ret, errbuf, sizeof(errbuf));
-        brls::Logger::error("concatenateAudioFiles: Could not open input: {}", errbuf);
-        return false;
-    }
-
-    ret = avformat_find_stream_info(inputFmtCtx, nullptr);
-    if (ret < 0) {
-        brls::Logger::error("concatenateAudioFiles: Could not find stream info");
-        avformat_close_input(&inputFmtCtx);
-        return false;
-    }
 
     // Create output format context
     AVFormatContext* outputFmtCtx = nullptr;
@@ -114,43 +76,65 @@ bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
         outputFormat = "ogg";
     }
 
-    ret = avformat_alloc_output_context2(&outputFmtCtx, nullptr, outputFormat, outputPath.c_str());
+    int ret = avformat_alloc_output_context2(&outputFmtCtx, nullptr, outputFormat, outputPath.c_str());
     if (ret < 0 || !outputFmtCtx) {
         brls::Logger::error("concatenateAudioFiles: Could not create output context");
-        avformat_close_input(&inputFmtCtx);
         return false;
     }
 
-    // Copy streams from input to output
+    // Open first input file to get stream info
+    AVFormatContext* firstInputCtx = nullptr;
+    ret = avformat_open_input(&firstInputCtx, inputFiles[0].c_str(), nullptr, nullptr);
+    if (ret < 0) {
+        char errbuf[128];
+        av_strerror(ret, errbuf, sizeof(errbuf));
+        brls::Logger::error("concatenateAudioFiles: Could not open first input: {}", errbuf);
+        avformat_free_context(outputFmtCtx);
+        return false;
+    }
+
+    ret = avformat_find_stream_info(firstInputCtx, nullptr);
+    if (ret < 0) {
+        brls::Logger::error("concatenateAudioFiles: Could not find stream info");
+        avformat_close_input(&firstInputCtx);
+        avformat_free_context(outputFmtCtx);
+        return false;
+    }
+
+    // Find audio stream and create output stream
     int audioStreamIndex = -1;
-    for (unsigned int i = 0; i < inputFmtCtx->nb_streams; i++) {
-        AVStream* inStream = inputFmtCtx->streams[i];
-        if (inStream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
-            AVStream* outStream = avformat_new_stream(outputFmtCtx, nullptr);
+    AVStream* outStream = nullptr;
+
+    for (unsigned int i = 0; i < firstInputCtx->nb_streams; i++) {
+        if (firstInputCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+            audioStreamIndex = i;
+
+            outStream = avformat_new_stream(outputFmtCtx, nullptr);
             if (!outStream) {
                 brls::Logger::error("concatenateAudioFiles: Could not create output stream");
-                avformat_close_input(&inputFmtCtx);
+                avformat_close_input(&firstInputCtx);
                 avformat_free_context(outputFmtCtx);
                 return false;
             }
 
-            ret = avcodec_parameters_copy(outStream->codecpar, inStream->codecpar);
+            ret = avcodec_parameters_copy(outStream->codecpar, firstInputCtx->streams[i]->codecpar);
             if (ret < 0) {
                 brls::Logger::error("concatenateAudioFiles: Could not copy codec parameters");
-                avformat_close_input(&inputFmtCtx);
+                avformat_close_input(&firstInputCtx);
                 avformat_free_context(outputFmtCtx);
                 return false;
             }
 
             outStream->codecpar->codec_tag = 0;
-            audioStreamIndex = i;
+            outStream->time_base = firstInputCtx->streams[i]->time_base;
             break;
         }
     }
 
-    if (audioStreamIndex < 0) {
+    avformat_close_input(&firstInputCtx);
+
+    if (audioStreamIndex < 0 || !outStream) {
         brls::Logger::error("concatenateAudioFiles: No audio stream found");
-        avformat_close_input(&inputFmtCtx);
         avformat_free_context(outputFmtCtx);
         return false;
     }
@@ -162,7 +146,6 @@ bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
             char errbuf[128];
             av_strerror(ret, errbuf, sizeof(errbuf));
             brls::Logger::error("concatenateAudioFiles: Could not open output file: {}", errbuf);
-            avformat_close_input(&inputFmtCtx);
             avformat_free_context(outputFmtCtx);
             return false;
         }
@@ -172,41 +155,107 @@ bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
     ret = avformat_write_header(outputFmtCtx, nullptr);
     if (ret < 0) {
         brls::Logger::error("concatenateAudioFiles: Could not write header");
-        avformat_close_input(&inputFmtCtx);
         if (!(outputFmtCtx->oformat->flags & AVFMT_NOFILE))
             avio_closep(&outputFmtCtx->pb);
         avformat_free_context(outputFmtCtx);
         return false;
     }
 
-    // Copy packets
+    // Process each input file
     AVPacket* pkt = av_packet_alloc();
+    int64_t currentPts = 0;
+    int64_t currentDts = 0;
     int64_t packetsWritten = 0;
-    int64_t lastProgressReport = 0;
+    int filesProcessed = 0;
 
-    while (av_read_frame(inputFmtCtx, pkt) >= 0) {
-        if (pkt->stream_index == audioStreamIndex) {
-            // Rescale timestamps
-            AVStream* inStream = inputFmtCtx->streams[audioStreamIndex];
-            AVStream* outStream = outputFmtCtx->streams[0];
+    for (size_t fileIdx = 0; fileIdx < inputFiles.size(); fileIdx++) {
+        const std::string& inputFile = inputFiles[fileIdx];
 
-            pkt->stream_index = 0;
-            av_packet_rescale_ts(pkt, inStream->time_base, outStream->time_base);
+        brls::Logger::info("concatenateAudioFiles: Processing file {}/{}: {}",
+                          fileIdx + 1, inputFiles.size(), inputFile);
 
-            ret = av_interleaved_write_frame(outputFmtCtx, pkt);
-            if (ret < 0) {
-                brls::Logger::warning("concatenateAudioFiles: Error writing packet");
-            }
+        AVFormatContext* inputFmtCtx = nullptr;
+        ret = avformat_open_input(&inputFmtCtx, inputFile.c_str(), nullptr, nullptr);
+        if (ret < 0) {
+            char errbuf[128];
+            av_strerror(ret, errbuf, sizeof(errbuf));
+            brls::Logger::warning("concatenateAudioFiles: Could not open input {}: {}", inputFile, errbuf);
+            continue;
+        }
 
-            packetsWritten++;
+        ret = avformat_find_stream_info(inputFmtCtx, nullptr);
+        if (ret < 0) {
+            brls::Logger::warning("concatenateAudioFiles: Could not find stream info for {}", inputFile);
+            avformat_close_input(&inputFmtCtx);
+            continue;
+        }
 
-            // Report progress periodically
-            if (progressCallback && packetsWritten - lastProgressReport > 1000) {
-                progressCallback(static_cast<int>(packetsWritten), 0);
-                lastProgressReport = packetsWritten;
+        // Find audio stream in this file
+        int inAudioIdx = -1;
+        for (unsigned int i = 0; i < inputFmtCtx->nb_streams; i++) {
+            if (inputFmtCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+                inAudioIdx = i;
+                break;
             }
         }
-        av_packet_unref(pkt);
+
+        if (inAudioIdx < 0) {
+            brls::Logger::warning("concatenateAudioFiles: No audio stream in {}", inputFile);
+            avformat_close_input(&inputFmtCtx);
+            continue;
+        }
+
+        AVStream* inStream = inputFmtCtx->streams[inAudioIdx];
+        int64_t fileDuration = 0;
+        int64_t firstPts = AV_NOPTS_VALUE;
+
+        // Read all packets from this file
+        while (av_read_frame(inputFmtCtx, pkt) >= 0) {
+            if (pkt->stream_index == inAudioIdx) {
+                // Track first PTS for offset calculation
+                if (firstPts == AV_NOPTS_VALUE && pkt->pts != AV_NOPTS_VALUE) {
+                    firstPts = pkt->pts;
+                }
+
+                // Rescale timestamps
+                int64_t pts_offset = (firstPts != AV_NOPTS_VALUE) ? firstPts : 0;
+
+                if (pkt->pts != AV_NOPTS_VALUE) {
+                    pkt->pts = av_rescale_q(pkt->pts - pts_offset, inStream->time_base, outStream->time_base) + currentPts;
+                }
+                if (pkt->dts != AV_NOPTS_VALUE) {
+                    pkt->dts = av_rescale_q(pkt->dts - pts_offset, inStream->time_base, outStream->time_base) + currentDts;
+                }
+
+                pkt->stream_index = 0;
+                pkt->duration = av_rescale_q(pkt->duration, inStream->time_base, outStream->time_base);
+
+                // Track max timestamp for next file offset
+                if (pkt->pts != AV_NOPTS_VALUE && pkt->pts + pkt->duration > fileDuration) {
+                    fileDuration = pkt->pts + pkt->duration;
+                }
+
+                ret = av_interleaved_write_frame(outputFmtCtx, pkt);
+                if (ret < 0) {
+                    // Don't fail on individual packet errors
+                }
+
+                packetsWritten++;
+            }
+            av_packet_unref(pkt);
+        }
+
+        // Update offset for next file
+        currentPts = fileDuration;
+        currentDts = fileDuration;
+
+        avformat_close_input(&inputFmtCtx);
+        filesProcessed++;
+
+        // Report progress
+        if (progressCallback) {
+            progressCallback(filesProcessed, static_cast<int>(inputFiles.size()));
+        }
     }
 
     av_packet_free(&pkt);
@@ -215,21 +264,13 @@ bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
     av_write_trailer(outputFmtCtx);
 
     // Cleanup
-    avformat_close_input(&inputFmtCtx);
     if (!(outputFmtCtx->oformat->flags & AVFMT_NOFILE))
         avio_closep(&outputFmtCtx->pb);
     avformat_free_context(outputFmtCtx);
 
-    // Remove concat list file
-#ifdef __vita__
-    sceIoRemove(concatListPath.c_str());
-#else
-    std::remove(concatListPath.c_str());
-#endif
-
     brls::Logger::info("concatenateAudioFiles: Successfully combined {} files ({} packets)",
-                       inputFiles.size(), packetsWritten);
-    return true;
+                       filesProcessed, packetsWritten);
+    return filesProcessed > 0;
 }
 
 } // namespace vitaabs
