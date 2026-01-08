@@ -93,7 +93,7 @@
         <brls:Button
             id="player/btnRewind"
             style="borderless"
-            width="80"
+            width="90"
             height="70"
             marginRight="25">
             <brls:Label
@@ -101,7 +101,8 @@
                 text="-30"
                 fontSize="18"
                 textColor="#ffffff"
-                horizontalAlign="center"/>
+                horizontalAlign="center"
+                width="90"/>
         </brls:Button>
 
         <!-- Play/Pause button -->
@@ -124,7 +125,7 @@
         <brls:Button
             id="player/btnForward"
             style="borderless"
-            width="85"
+            width="90"
             height="70"
             marginLeft="25">
             <brls:Label
@@ -132,7 +133,8 @@
                 text="+30"
                 fontSize="18"
                 textColor="#ffffff"
-                horizontalAlign="center"/>
+                horizontalAlign="center"
+                width="90"/>
         </brls:Button>
 
     </brls:Box>
