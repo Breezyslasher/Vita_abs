@@ -189,7 +189,10 @@ void LibrarySectionTab::loadContent() {
                 if (!alive || !*alive) return;
 
                 // Offline - show downloaded items instead and hide navigation
-                m_titleLabel->setText(m_title + " (Offline)");
+                // Only add "(Offline)" if not already in title (e.g. offline-mode tabs)
+                if (m_title.find("(Offline)") == std::string::npos) {
+                    m_titleLabel->setText(m_title + " (Offline)");
+                }
                 m_viewMode = LibraryViewMode::DOWNLOADED;
                 m_contentGrid->setDataSource(m_downloadedItems);
                 hideNavigationButtons();

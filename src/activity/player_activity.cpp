@@ -401,7 +401,8 @@ void PlayerActivity::loadMedia() {
             downloads.fetchProgressFromServer(m_itemId, m_episodeId);
         }
 
-        DownloadItem* download = downloads.getDownload(m_itemId);
+        // Get download item (using episodeId for podcast episodes)
+        DownloadItem* download = downloads.getDownload(m_itemId, m_episodeId);
 
         if (!download || download->state != DownloadState::COMPLETED) {
             brls::Logger::error("PlayerActivity: Downloaded media not found or incomplete");
@@ -488,7 +489,14 @@ void PlayerActivity::loadMedia() {
         if (downloadsMgr.isDownloaded(m_itemId, m_episodeId)) {
             brls::Logger::info("PlayerActivity: Item is downloaded, using local playback");
 
-            // Find the download info
+            // Try to fetch latest progress from server before playing (if online)
+            AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+            if (client.isAuthenticated()) {
+                brls::Logger::info("PlayerActivity: Fetching latest progress from server for downloaded item");
+                downloadsMgr.fetchProgressFromServer(m_itemId, m_episodeId);
+            }
+
+            // Find the download info (after potential server update)
             auto allDownloads = downloadsMgr.getDownloads();
             for (const auto& dl : allDownloads) {
                 if (dl.itemId == m_itemId && dl.state == DownloadState::COMPLETED) {

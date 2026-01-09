@@ -1832,7 +1832,7 @@ bool AudiobookshelfClient::updateProgress(const std::string& itemId, float curre
 
 bool AudiobookshelfClient::getProgress(const std::string& itemId, float& currentTime, float& progress,
                                         bool& isFinished, const std::string& episodeId) {
-    brls::Logger::debug("Getting progress for item: {}", itemId);
+    brls::Logger::info("Getting progress for item: {} episode: {}", itemId, episodeId.empty() ? "(none)" : episodeId);
 
     HttpClient client;
     HttpRequest req;
@@ -1844,15 +1844,23 @@ bool AudiobookshelfClient::getProgress(const std::string& itemId, float& current
     req.headers["Accept"] = "application/json";
     req.headers["Authorization"] = "Bearer " + m_authToken;
 
+    brls::Logger::debug("getProgress URL: {}", req.url);
+
     HttpResponse resp = client.request(req);
 
     if (resp.statusCode != 200) {
+        brls::Logger::warning("getProgress failed: status={} body={}", resp.statusCode, resp.body.substr(0, 200));
         return false;
     }
+
+    brls::Logger::debug("getProgress response: {}", resp.body.substr(0, 300));
 
     currentTime = extractJsonFloat(resp.body, "currentTime");
     progress = extractJsonFloat(resp.body, "progress");
     isFinished = extractJsonBool(resp.body, "isFinished");
+
+    brls::Logger::info("getProgress result: currentTime={}s progress={} finished={}",
+                      currentTime, progress, isFinished ? "yes" : "no");
 
     return true;
 }

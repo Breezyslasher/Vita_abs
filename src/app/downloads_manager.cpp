@@ -604,6 +604,19 @@ DownloadItem* DownloadsManager::getDownload(const std::string& itemId) {
     return nullptr;
 }
 
+DownloadItem* DownloadsManager::getDownload(const std::string& itemId, const std::string& episodeId) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (auto& item : m_downloads) {
+        if (item.itemId == itemId) {
+            // For episodes, also check episodeId
+            if (episodeId.empty() || item.episodeId == episodeId) {
+                return &item;
+            }
+        }
+    }
+    return nullptr;
+}
+
 bool DownloadsManager::isDownloaded(const std::string& itemId, const std::string& episodeId) const {
     std::lock_guard<std::mutex> lock(m_mutex);
     for (const auto& item : m_downloads) {
@@ -721,6 +734,9 @@ void DownloadsManager::syncProgressFromServer() {
 }
 
 bool DownloadsManager::fetchProgressFromServer(const std::string& itemId, const std::string& episodeId) {
+    brls::Logger::info("DownloadsManager::fetchProgressFromServer itemId={} episodeId={}",
+                      itemId, episodeId.empty() ? "(none)" : episodeId);
+
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
     float serverTime = 0.0f;
@@ -728,27 +744,34 @@ bool DownloadsManager::fetchProgressFromServer(const std::string& itemId, const 
     bool serverFinished = false;
 
     if (!client.getProgress(itemId, serverTime, serverProgress, serverFinished, episodeId)) {
-        brls::Logger::debug("DownloadsManager: Could not fetch progress for {}", itemId);
+        brls::Logger::warning("DownloadsManager: Could not fetch progress for {} from server", itemId);
         return false;
     }
 
+    brls::Logger::info("DownloadsManager: Server returned progress {}s for {}", serverTime, itemId);
+
     std::lock_guard<std::mutex> lock(m_mutex);
     for (auto& item : m_downloads) {
+        brls::Logger::debug("DownloadsManager: Checking download item '{}' itemId={} episodeId={}",
+                           item.title, item.itemId, item.episodeId.empty() ? "(none)" : item.episodeId);
+
         if (item.itemId == itemId && item.episodeId == episodeId) {
             // Only update if server progress is ahead of local progress
             if (serverTime > item.currentTime) {
-                brls::Logger::info("DownloadsManager: Updating {} from {}s to {}s (from server)",
+                brls::Logger::info("DownloadsManager: Updating '{}' from {}s to {}s (from server)",
                                   item.title, item.currentTime, serverTime);
                 item.currentTime = serverTime;
                 item.viewOffset = static_cast<int64_t>(serverTime * 1000.0f);
             } else {
-                brls::Logger::debug("DownloadsManager: Local progress {}s is ahead of server {}s for {}",
+                brls::Logger::info("DownloadsManager: Local progress {}s >= server {}s for '{}', keeping local",
                                    item.currentTime, serverTime, item.title);
             }
             return true;
         }
     }
 
+    brls::Logger::warning("DownloadsManager: No matching download found for itemId={} episodeId={}",
+                         itemId, episodeId.empty() ? "(none)" : episodeId);
     return false;
 }
 

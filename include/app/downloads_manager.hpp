@@ -102,6 +102,9 @@ public:
     // Get a specific download by item ID
     DownloadItem* getDownload(const std::string& itemId);
 
+    // Get a specific download by item ID and episode ID (for podcasts)
+    DownloadItem* getDownload(const std::string& itemId, const std::string& episodeId);
+
     // Check if media is downloaded (checks both itemId and episodeId for episodes)
     bool isDownloaded(const std::string& itemId, const std::string& episodeId = "") const;
 
