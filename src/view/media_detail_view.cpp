@@ -14,6 +14,7 @@
 #include "utils/audio_utils.hpp"
 #include "utils/async.hpp"
 #include <thread>
+#include <algorithm>
 
 #ifdef __vita__
 #include <psp2/kernel/threadmgr.h>
@@ -140,19 +141,17 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         });
         leftBox->addView(m_findEpisodesButton);
 
-        // Download button - will be hidden if all episodes are downloaded (checked in loadChildren)
-        AppSettings& podcastSettings = Application::getInstance().getSettings();
-        if (!podcastSettings.saveToDownloads) {
-            m_downloadButton = new brls::Button();
-            m_downloadButton->setText("Download...");
-            m_downloadButton->setWidth(200);
-            m_downloadButton->setMarginTop(10);
-            m_downloadButton->registerClickAction([this](brls::View* view) {
-                showDownloadOptions();
-                return true;
-            });
-            leftBox->addView(m_downloadButton);
-        }
+        // Download button for podcasts - always show (will be hidden if all episodes are downloaded in loadChildren)
+        // Note: Unlike audiobooks, podcasts always show download button regardless of saveToDownloads setting
+        m_downloadButton = new brls::Button();
+        m_downloadButton->setText("Download...");
+        m_downloadButton->setWidth(200);
+        m_downloadButton->setMarginTop(10);
+        m_downloadButton->registerClickAction([this](brls::View* view) {
+            showDownloadOptions();
+            return true;
+        });
+        leftBox->addView(m_downloadButton);
 
         // Delete button for downloaded episodes - initially hidden, shown if any episodes downloaded
         m_deleteButton = new brls::Button();
@@ -1297,34 +1296,154 @@ void MediaDetailView::deleteAllDownloadedEpisodes() {
     brls::Logger::info("deleteAllDownloadedEpisodes called for podcast: {} ({})", m_item.title, m_item.id);
 
     std::string podcastId = m_item.id;
-    std::string title = m_item.title;
+    std::string podcastTitle = m_item.title;
 
-    // Show confirmation dialog
-    brls::Dialog* dialog = new brls::Dialog("Delete all downloaded episodes?\n\n\"" + title + "\"");
+    // Get downloaded episodes for this podcast
+    DownloadsManager& mgr = DownloadsManager::getInstance();
+    auto downloads = mgr.getDownloads();
+
+    // Collect downloaded episode info
+    std::vector<std::pair<std::string, std::string>> downloadedEpisodes;  // itemId, title
+    for (const auto& dl : downloads) {
+        if (dl.itemId == podcastId && dl.state == DownloadState::COMPLETED) {
+            downloadedEpisodes.push_back({dl.itemId, dl.title});
+        }
+    }
+
+    if (downloadedEpisodes.empty()) {
+        brls::Application::notify("No downloaded episodes found");
+        return;
+    }
+
+    if (downloadedEpisodes.size() == 1) {
+        // Single episode - show simple confirmation
+        std::string episodeTitle = downloadedEpisodes[0].second;
+        std::string itemId = downloadedEpisodes[0].first;
+
+        brls::Dialog* dialog = new brls::Dialog("Delete downloaded episode?\n\n\"" + episodeTitle + "\"");
+
+        dialog->addButton("Cancel", [dialog]() {
+            dialog->close();
+        });
+
+        dialog->addButton("Delete", [dialog, itemId, this]() {
+            DownloadsManager::getInstance().deleteDownload(itemId);
+            brls::Application::notify("Episode deleted");
+
+            // Update UI
+            if (m_deleteButton) {
+                m_deleteButton->setVisibility(brls::Visibility::GONE);
+            }
+            if (m_downloadButton) {
+                m_downloadButton->setVisibility(brls::Visibility::VISIBLE);
+            }
+
+            dialog->close();
+        });
+
+        dialog->open();
+    } else {
+        // Multiple episodes - show selection dialog similar to new episodes dialog
+        showDeleteEpisodesDialog(downloadedEpisodes, podcastId, podcastTitle);
+    }
+}
+
+void MediaDetailView::showDeleteEpisodesDialog(
+    const std::vector<std::pair<std::string, std::string>>& episodes,
+    const std::string& podcastId,
+    const std::string& podcastTitle) {
+
+    // Create a dialog with episode list
+    auto* dialog = new brls::Dialog("Downloaded Episodes");
+
+    // Create content box with episode list
+    auto* content = new brls::Box();
+    content->setAxis(brls::Axis::COLUMN);
+    content->setPadding(20);
+
+    auto* titleLabel = new brls::Label();
+    titleLabel->setText("Select episodes to delete from \"" + podcastTitle + "\":");
+    titleLabel->setFontSize(16);
+    titleLabel->setMarginBottom(15);
+    content->addView(titleLabel);
+
+    // Track selected episodes
+    auto selectedEpisodes = std::make_shared<std::vector<std::string>>();
+
+    // Create scrolling list of episodes with checkboxes
+    auto* scrollView = new brls::ScrollingFrame();
+    scrollView->setHeight(300);
+
+    auto* listBox = new brls::Box();
+    listBox->setAxis(brls::Axis::COLUMN);
+
+    for (const auto& ep : episodes) {
+        auto* row = new brls::Box();
+        row->setAxis(brls::Axis::ROW);
+        row->setAlignItems(brls::AlignItems::CENTER);
+        row->setPadding(8);
+        row->setMarginBottom(5);
+        row->setBackgroundColor(nvgRGBA(60, 60, 60, 200));
+        row->setCornerRadius(4);
+
+        auto* checkbox = new brls::BooleanCell();
+        std::string itemId = ep.first;
+        checkbox->init(ep.second, true, [selectedEpisodes, itemId](bool checked) {
+            if (checked) {
+                // Add to selected if not already there
+                auto it = std::find(selectedEpisodes->begin(), selectedEpisodes->end(), itemId);
+                if (it == selectedEpisodes->end()) {
+                    selectedEpisodes->push_back(itemId);
+                }
+            } else {
+                // Remove from selected
+                auto it = std::find(selectedEpisodes->begin(), selectedEpisodes->end(), itemId);
+                if (it != selectedEpisodes->end()) {
+                    selectedEpisodes->erase(it);
+                }
+            }
+        });
+        // Initially all selected
+        selectedEpisodes->push_back(itemId);
+
+        row->addView(checkbox);
+        listBox->addView(row);
+    }
+
+    scrollView->setContentView(listBox);
+    content->addView(scrollView);
+
+    dialog->addView(content);
 
     dialog->addButton("Cancel", [dialog]() {
         dialog->close();
     });
 
-    dialog->addButton("Delete All", [dialog, podcastId, this]() {
-        DownloadsManager& mgr = DownloadsManager::getInstance();
-        auto downloads = mgr.getDownloads();
-        int deleted = 0;
+    dialog->addButton("Delete Selected", [dialog, selectedEpisodes, this]() {
+        if (selectedEpisodes->empty()) {
+            brls::Application::notify("No episodes selected");
+            return;
+        }
 
-        for (const auto& dl : downloads) {
-            if (dl.itemId == podcastId && dl.state == DownloadState::COMPLETED) {
-                mgr.deleteDownload(dl.itemId);
+        // Collect IDs first, then delete (to avoid modifying list while iterating)
+        std::vector<std::string> toDelete = *selectedEpisodes;
+        DownloadsManager& mgr = DownloadsManager::getInstance();
+
+        int deleted = 0;
+        for (const auto& itemId : toDelete) {
+            if (mgr.deleteDownload(itemId)) {
                 deleted++;
             }
         }
 
         brls::Application::notify("Deleted " + std::to_string(deleted) + " episode(s)");
 
-        // Update UI
+        // Update UI based on remaining downloads
+        bool anyRemaining = hasAnyDownloadedEpisodes();
         if (m_deleteButton) {
-            m_deleteButton->setVisibility(brls::Visibility::GONE);
+            m_deleteButton->setVisibility(anyRemaining ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
         }
-        if (m_downloadButton) {
+        if (m_downloadButton && !areAllEpisodesDownloaded()) {
             m_downloadButton->setVisibility(brls::Visibility::VISIBLE);
         }
 

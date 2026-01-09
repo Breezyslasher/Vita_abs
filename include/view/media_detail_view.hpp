@@ -31,6 +31,9 @@ private:
     void downloadAll();
     void downloadUnwatched(int maxCount = -1);
     void deleteAllDownloadedEpisodes();
+    void showDeleteEpisodesDialog(const std::vector<std::pair<std::string, std::string>>& episodes,
+                                   const std::string& podcastId,
+                                   const std::string& podcastTitle);
     bool areAllEpisodesDownloaded();
     bool hasAnyDownloadedEpisodes();
 
