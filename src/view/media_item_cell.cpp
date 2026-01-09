@@ -142,6 +142,9 @@ void MediaItemCell::setItem(const MediaItem& item) {
 void MediaItemCell::loadThumbnail() {
     if (!m_thumbnailImage) return;
 
+    brls::Logger::debug("MediaItemCell::loadThumbnail for '{}' id='{}' coverPath='{}'",
+                       m_item.title, m_item.id, m_item.coverPath);
+
     // Check if we have a Vita local cover path (for downloaded items)
     // Vita local paths start with "ux0:"
     if (!m_item.coverPath.empty() && m_item.coverPath.find("ux0:") == 0) {
@@ -159,14 +162,15 @@ void MediaItemCell::loadThumbnail() {
 
     // Use item ID for cover URL
     if (m_item.id.empty()) {
-        brls::Logger::debug("MediaItemCell: No item ID for cover");
+        brls::Logger::warning("MediaItemCell: No item ID for cover of '{}'", m_item.title);
         return;
     }
 
     std::string url = client.getCoverUrl(m_item.id, size, size);
+    brls::Logger::debug("MediaItemCell: Loading cover from URL: {}", url);
 
     ImageLoader::loadAsync(url, [this](brls::Image* image) {
-        // Cover loaded
+        brls::Logger::debug("MediaItemCell: Cover loaded for '{}'", m_item.title);
     }, m_thumbnailImage);
 }
 
