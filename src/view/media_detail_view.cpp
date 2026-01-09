@@ -418,7 +418,7 @@ void MediaDetailView::loadDetails() {
                 // Load chapters for audiobooks
                 if (!dl.chapters.empty() && m_item.chapters.empty()) {
                     for (const auto& ch : dl.chapters) {
-                        ChapterInfo ci;
+                        Chapter ci;
                         ci.title = ch.title;
                         ci.start = ch.start;
                         ci.end = ch.end;
