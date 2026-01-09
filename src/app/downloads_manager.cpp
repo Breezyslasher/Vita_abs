@@ -44,6 +44,98 @@ static bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
 
     brls::Logger::info("concatenateAudioFiles: Combining {} files into {}", inputFiles.size(), outputPath);
 
+    // Determine output format based on extension
+    std::string outputExt = ".m4b";
+    size_t dotPos = outputPath.rfind('.');
+    if (dotPos != std::string::npos) {
+        outputExt = outputPath.substr(dotPos);
+    }
+
+    // For MP3 files, use simple binary concatenation (MP3 frames are self-contained)
+    if (outputExt == ".mp3") {
+        brls::Logger::info("concatenateAudioFiles: Using binary concatenation for MP3");
+
+        // Use heap allocation to avoid stack overflow on Vita
+        const size_t BUFFER_SIZE = 8192;
+        char* buffer = new char[BUFFER_SIZE];
+        if (!buffer) {
+            brls::Logger::error("concatenateAudioFiles: Failed to allocate buffer");
+            return false;
+        }
+
+#ifdef __vita__
+        SceUID outFd = sceIoOpen(outputPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+        if (outFd < 0) {
+            brls::Logger::error("concatenateAudioFiles: Could not create output file");
+            delete[] buffer;
+            return false;
+        }
+
+        int filesProcessed = 0;
+
+        for (size_t fileIdx = 0; fileIdx < inputFiles.size(); fileIdx++) {
+            const std::string& inputFile = inputFiles[fileIdx];
+
+            SceUID inFd = sceIoOpen(inputFile.c_str(), SCE_O_RDONLY, 0);
+            if (inFd < 0) {
+                brls::Logger::warning("concatenateAudioFiles: Could not open {}", inputFile);
+                continue;
+            }
+
+            int bytesRead;
+            while ((bytesRead = sceIoRead(inFd, buffer, BUFFER_SIZE)) > 0) {
+                sceIoWrite(outFd, buffer, bytesRead);
+            }
+
+            sceIoClose(inFd);
+            filesProcessed++;
+
+            if (progressCallback) {
+                progressCallback(filesProcessed, static_cast<int>(inputFiles.size()));
+            }
+        }
+
+        sceIoClose(outFd);
+        delete[] buffer;
+        brls::Logger::info("concatenateAudioFiles: Successfully concatenated {} MP3 files", filesProcessed);
+        return filesProcessed > 0;
+#else
+        std::ofstream outFile(outputPath, std::ios::binary);
+        if (!outFile) {
+            brls::Logger::error("concatenateAudioFiles: Could not create output file");
+            delete[] buffer;
+            return false;
+        }
+
+        int filesProcessed = 0;
+
+        for (size_t fileIdx = 0; fileIdx < inputFiles.size(); fileIdx++) {
+            const std::string& inputFile = inputFiles[fileIdx];
+
+            std::ifstream inFile(inputFile, std::ios::binary);
+            if (!inFile) {
+                brls::Logger::warning("concatenateAudioFiles: Could not open {}", inputFile);
+                continue;
+            }
+
+            while (inFile.read(buffer, BUFFER_SIZE) || inFile.gcount() > 0) {
+                outFile.write(buffer, inFile.gcount());
+            }
+
+            filesProcessed++;
+
+            if (progressCallback) {
+                progressCallback(filesProcessed, static_cast<int>(inputFiles.size()));
+            }
+        }
+
+        delete[] buffer;
+        brls::Logger::info("concatenateAudioFiles: Successfully concatenated {} MP3 files", filesProcessed);
+        return filesProcessed > 0;
+#endif
+    }
+
+    // For non-MP3, use FFmpeg concat demuxer
     // Create a concat file list for the concat demuxer
     std::string concatListPath = outputPath + ".concat.txt";
 
@@ -106,25 +198,16 @@ static bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
         return false;
     }
 
-    // Create output format context
+    // Create output format context (for non-MP3 formats)
     AVFormatContext* outputFmtCtx = nullptr;
-
-    // Determine output format based on extension
-    std::string outputExt = ".m4b";
-    size_t dotPos = outputPath.rfind('.');
-    if (dotPos != std::string::npos) {
-        outputExt = outputPath.substr(dotPos);
-    }
 
     // Try multiple formats in order of preference
     // Note: "ipod" format may not be available on all platforms (like Vita)
+    // MP3 is handled above via binary concatenation
     const char* formatOptions[] = { nullptr, nullptr, nullptr };
     int numFormats = 0;
 
-    if (outputExt == ".mp3") {
-        formatOptions[0] = "mp3";
-        numFormats = 1;
-    } else if (outputExt == ".ogg") {
+    if (outputExt == ".ogg") {
         formatOptions[0] = "ogg";
         numFormats = 1;
     } else {

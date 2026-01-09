@@ -70,14 +70,22 @@ bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
     if (outputExt == ".mp3") {
         brls::Logger::info("concatenateAudioFiles: Using binary concatenation for MP3");
 
+        // Use heap allocation to avoid stack overflow on Vita
+        const size_t BUFFER_SIZE = 8192;
+        char* buffer = new char[BUFFER_SIZE];
+        if (!buffer) {
+            brls::Logger::error("concatenateAudioFiles: Failed to allocate buffer");
+            return false;
+        }
+
 #ifdef __vita__
         SceUID outFd = sceIoOpen(outputPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
         if (outFd < 0) {
             brls::Logger::error("concatenateAudioFiles: Could not create output file");
+            delete[] buffer;
             return false;
         }
 
-        char buffer[32768];
         int filesProcessed = 0;
 
         for (size_t fileIdx = 0; fileIdx < inputFiles.size(); fileIdx++) {
@@ -92,7 +100,7 @@ bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
             }
 
             int bytesRead;
-            while ((bytesRead = sceIoRead(inFd, buffer, sizeof(buffer))) > 0) {
+            while ((bytesRead = sceIoRead(inFd, buffer, BUFFER_SIZE)) > 0) {
                 sceIoWrite(outFd, buffer, bytesRead);
             }
 
@@ -105,16 +113,17 @@ bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
         }
 
         sceIoClose(outFd);
+        delete[] buffer;
         brls::Logger::info("concatenateAudioFiles: Successfully concatenated {} MP3 files", filesProcessed);
         return filesProcessed > 0;
 #else
         std::ofstream outFile(outputPath, std::ios::binary);
         if (!outFile) {
             brls::Logger::error("concatenateAudioFiles: Could not create output file");
+            delete[] buffer;
             return false;
         }
 
-        char buffer[32768];
         int filesProcessed = 0;
 
         for (size_t fileIdx = 0; fileIdx < inputFiles.size(); fileIdx++) {
@@ -128,7 +137,7 @@ bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
                 continue;
             }
 
-            while (inFile.read(buffer, sizeof(buffer)) || inFile.gcount() > 0) {
+            while (inFile.read(buffer, BUFFER_SIZE) || inFile.gcount() > 0) {
                 outFile.write(buffer, inFile.gcount());
             }
 
@@ -139,6 +148,7 @@ bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
             }
         }
 
+        delete[] buffer;
         brls::Logger::info("concatenateAudioFiles: Successfully concatenated {} MP3 files", filesProcessed);
         return filesProcessed > 0;
 #endif
