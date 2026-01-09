@@ -177,7 +177,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         // Delete button for downloaded episodes - initially hidden, shown if any episodes downloaded
         m_deleteButton = new brls::Button();
         m_deleteButton->setText("Remove");
-        m_deleteButton->setWidth(100);
+        m_deleteButton->setWidth(115);
         m_deleteButton->setHeight(40);
         m_deleteButton->setVisibility(brls::Visibility::GONE);  // Hidden until we check downloads
         m_deleteButton->registerClickAction([this](brls::View* view) {

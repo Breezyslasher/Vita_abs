@@ -18,6 +18,7 @@
 #include <cmath>
 #include <iomanip>
 #include <sstream>
+#include <fstream>
 
 #ifdef __vita__
 #include <psp2/io/fcntl.h>
@@ -251,15 +252,60 @@ void PlayerActivity::loadMedia() {
     if (m_isPreDownloaded && !m_tempFilePath.empty()) {
         brls::Logger::info("PlayerActivity: Playing pre-downloaded file: {}", m_tempFilePath);
 
-        // Fetch item details for metadata
-        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-        MediaItem item;
-        if (client.fetchItem(m_itemId, item)) {
-            if (titleLabel) titleLabel->setText(item.title);
-            if (authorLabel && !item.authorName.empty()) authorLabel->setText(item.authorName);
-            if (!item.coverPath.empty()) {
-                std::string fullCoverUrl = client.getCoverUrl(m_itemId);
-                loadCoverArt(fullCoverUrl);
+        // First try to get metadata from downloads manager (works offline)
+        DownloadsManager& downloads = DownloadsManager::getInstance();
+
+        // Find the matching download item (works for both books and podcast episodes)
+        std::string offlineTitle, offlineAuthor, offlineCoverPath, offlineCoverUrl;
+        bool foundInDownloads = false;
+
+        auto allDownloads = downloads.getDownloads();
+        for (const auto& dl : allDownloads) {
+            if (dl.itemId == m_itemId && dl.state == DownloadState::COMPLETED) {
+                // For episodes, also match episodeId
+                if (m_episodeId.empty() || dl.episodeId == m_episodeId) {
+                    offlineTitle = dl.title;
+                    offlineAuthor = dl.authorName;
+                    offlineCoverPath = dl.localCoverPath;
+                    offlineCoverUrl = dl.coverUrl;
+                    foundInDownloads = true;
+                    break;
+                }
+            }
+        }
+
+        bool metadataLoaded = false;
+        if (foundInDownloads) {
+            brls::Logger::info("PlayerActivity: Using offline metadata from downloads manager");
+            if (titleLabel && !offlineTitle.empty()) {
+                titleLabel->setText(offlineTitle);
+                metadataLoaded = true;
+            }
+            if (authorLabel && !offlineAuthor.empty()) {
+                authorLabel->setText(offlineAuthor);
+            }
+            // Load local cover if available, otherwise try server
+            if (!offlineCoverPath.empty()) {
+                brls::Logger::info("PlayerActivity: Loading local cover: {}", offlineCoverPath);
+                loadCoverArt(offlineCoverPath);
+            } else if (!offlineCoverUrl.empty()) {
+                loadCoverArt(offlineCoverUrl);
+            }
+        }
+
+        // If no metadata from downloads, try server (when online)
+        if (!metadataLoaded) {
+            AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+            MediaItem item;
+            if (client.fetchItem(m_itemId, item)) {
+                if (titleLabel) titleLabel->setText(item.title);
+                if (authorLabel && !item.authorName.empty()) authorLabel->setText(item.authorName);
+                if (!item.coverPath.empty()) {
+                    std::string fullCoverUrl = client.getCoverUrl(m_itemId);
+                    loadCoverArt(fullCoverUrl);
+                }
+            } else {
+                brls::Logger::warning("PlayerActivity: Could not fetch metadata (offline or error)");
             }
         }
 
@@ -1011,11 +1057,56 @@ void PlayerActivity::loadCoverArt(const std::string& coverUrl) {
 
     brls::Logger::debug("Loading cover art: {}", coverUrl);
 
-    // Use the image loader to load the cover asynchronously
-    ImageLoader::loadAsync(coverUrl, [this](brls::Image* img) {
-        // Image is loaded into the target automatically
-        brls::Logger::debug("Cover art loaded");
-    }, coverImage);
+    // Check if this is a local file path (starts with ux0: or / or doesn't start with http)
+    bool isLocalPath = (coverUrl.find("ux0:") == 0 ||
+                        coverUrl.find("/") == 0 ||
+                        coverUrl.find("http") != 0);
+
+    if (isLocalPath) {
+        // Load local file directly
+        brls::Logger::info("Loading local cover image: {}", coverUrl);
+#ifdef __vita__
+        SceUID fd = sceIoOpen(coverUrl.c_str(), SCE_O_RDONLY, 0);
+        if (fd >= 0) {
+            // Get file size
+            SceOff size = sceIoLseek(fd, 0, SCE_SEEK_END);
+            sceIoLseek(fd, 0, SCE_SEEK_SET);
+
+            if (size > 0 && size < 10 * 1024 * 1024) {  // Max 10MB for cover
+                std::vector<uint8_t> data(size);
+                if (sceIoRead(fd, data.data(), size) == size) {
+                    coverImage->setImageFromMem(data.data(), data.size());
+                    brls::Logger::debug("Local cover art loaded ({} bytes)", size);
+                }
+            }
+            sceIoClose(fd);
+        } else {
+            brls::Logger::warning("Failed to open local cover: {}", coverUrl);
+        }
+#else
+        // Non-Vita: use standard file I/O
+        std::ifstream file(coverUrl, std::ios::binary | std::ios::ate);
+        if (file.is_open()) {
+            std::streamsize size = file.tellg();
+            file.seekg(0, std::ios::beg);
+
+            if (size > 0 && size < 10 * 1024 * 1024) {
+                std::vector<uint8_t> data(size);
+                if (file.read(reinterpret_cast<char*>(data.data()), size)) {
+                    coverImage->setImageFromMem(data.data(), data.size());
+                    brls::Logger::debug("Local cover art loaded ({} bytes)", size);
+                }
+            }
+            file.close();
+        }
+#endif
+    } else {
+        // Use the image loader to load the cover asynchronously (HTTP)
+        ImageLoader::loadAsync(coverUrl, [this](brls::Image* img) {
+            // Image is loaded into the target automatically
+            brls::Logger::debug("Cover art loaded");
+        }, coverImage);
+    }
 }
 
 float PlayerActivity::getSpeedValue(int index) {
