@@ -10,6 +10,8 @@
 #include "view/media_detail_view.hpp"
 #include "app/application.hpp"
 #include "utils/async.hpp"
+#include <map>
+#include <tuple>
 
 namespace vitaabs {
 
@@ -281,6 +283,10 @@ void LibrarySectionTab::loadDownloadedItems() {
     auto downloads = mgr.getDownloads();
     std::vector<MediaItem> downloadedItems;
 
+    // For podcasts, group episodes by podcast
+    // Map: podcastId -> {podcastName, coverPath, episodeCount}
+    std::map<std::string, std::tuple<std::string, std::string, int>> podcastGroups;
+
     for (const auto& dl : downloads) {
         // Filter by media type to match this library's type
         bool matchesType = false;
@@ -291,22 +297,52 @@ void LibrarySectionTab::loadDownloadedItems() {
         }
 
         if (matchesType && dl.state == DownloadState::COMPLETED) {
-            MediaItem item;
-            item.id = dl.itemId;
-            item.title = dl.title;
-            item.authorName = dl.authorName;
-            item.description = dl.description;
-            item.duration = dl.duration;
-            item.currentTime = dl.currentTime;
-            item.coverPath = dl.localCoverPath;
-            item.type = dl.mediaType;
-            item.mediaType = (sectionType == "book") ? MediaType::BOOK : MediaType::PODCAST;
+            // For podcast episodes, group by podcast
+            if (sectionType == "podcast" && !dl.episodeId.empty()) {
+                // This is a podcast episode - group by podcastId
+                std::string podcastId = dl.itemId;
+                if (podcastGroups.find(podcastId) == podcastGroups.end()) {
+                    // First episode for this podcast
+                    std::string podcastName = dl.parentTitle.empty() ? dl.title : dl.parentTitle;
+                    podcastGroups[podcastId] = std::make_tuple(podcastName, dl.localCoverPath, 1);
+                } else {
+                    // Add to episode count
+                    std::get<2>(podcastGroups[podcastId])++;
+                }
+            } else {
+                // Audiobook or standalone item
+                MediaItem item;
+                item.id = dl.itemId;
+                item.title = dl.title;
+                item.authorName = dl.authorName;
+                item.description = dl.description;
+                item.duration = dl.duration;
+                item.currentTime = dl.currentTime;
+                item.coverPath = dl.localCoverPath;
+                item.type = dl.mediaType;
+                item.mediaType = MediaType::BOOK;
 
-            // Mark as downloaded for UI purposes
-            item.isDownloaded = true;
+                // Mark as downloaded for UI purposes
+                item.isDownloaded = true;
 
-            downloadedItems.push_back(item);
+                downloadedItems.push_back(item);
+            }
         }
+    }
+
+    // Convert grouped podcasts to MediaItems
+    for (const auto& [podcastId, podcastInfo] : podcastGroups) {
+        MediaItem item;
+        item.id = podcastId;
+        item.title = std::get<0>(podcastInfo);  // Podcast name
+        item.coverPath = std::get<1>(podcastInfo);  // Cover path
+        int episodeCount = std::get<2>(podcastInfo);
+        item.authorName = std::to_string(episodeCount) + " episode" + (episodeCount > 1 ? "s" : "") + " downloaded";
+        item.type = "podcast";
+        item.mediaType = MediaType::PODCAST;
+        item.isDownloaded = true;
+
+        downloadedItems.push_back(item);
     }
 
     brls::Logger::info("LibrarySectionTab: Found {} downloaded items for type {}", downloadedItems.size(), sectionType);
