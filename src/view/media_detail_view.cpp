@@ -1269,7 +1269,15 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                             bgProgress.status = "Combining audio files...";
                             Application::getInstance().setBackgroundDownloadProgress(bgProgress);
 
-                            if (concatenateAudioFiles(allTrackFiles, finalPath)) {
+                            int totalFiles = static_cast<int>(allTrackFiles.size());
+                            if (concatenateAudioFiles(allTrackFiles, finalPath, [&bgProgress, totalFiles](int current, int total) {
+                                char statusBuf[64];
+                                snprintf(statusBuf, sizeof(statusBuf), "Combining file %d/%d...", current, totalFiles);
+                                bgProgress.status = statusBuf;
+                                bgProgress.currentTrack = current;
+                                bgProgress.totalTracks = totalFiles;
+                                Application::getInstance().setBackgroundDownloadProgress(bgProgress);
+                            })) {
                                 brls::Logger::info("Background: Successfully combined into {}", finalPath);
 
                                 // Get total file size
