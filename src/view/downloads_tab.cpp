@@ -131,14 +131,21 @@ void DownloadsTab::refresh() {
         coverImage->setMargins(0, 15, 0, 0);
         row->addView(coverImage);
 
+        brls::Logger::debug("DownloadsTab: Item '{}' - localCoverPath='{}', coverUrl empty={}",
+                           item.title, item.localCoverPath, item.coverUrl.empty() ? "yes" : "no");
+
         if (!item.localCoverPath.empty()) {
             // Load local cover using Vita-compatible method
+            brls::Logger::debug("DownloadsTab: Loading local cover for '{}'", item.title);
             loadLocalCoverImage(coverImage, item.localCoverPath);
         } else if (!item.coverUrl.empty()) {
             // Load from remote URL
+            brls::Logger::debug("DownloadsTab: Loading remote cover for '{}'", item.title);
             ImageLoader::loadAsync(item.coverUrl, [coverImage](brls::Image* img) {
                 // Image loaded callback - image already set by ImageLoader
             });
+        } else {
+            brls::Logger::debug("DownloadsTab: No cover available for '{}'", item.title);
         }
 
         // Title and info
