@@ -166,7 +166,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         // Download button for podcasts - always show (will be hidden if all episodes are downloaded in loadChildren)
         m_downloadButton = new brls::Button();
         m_downloadButton->setText("Download");
-        m_downloadButton->setWidth(120);
+        m_downloadButton->setWidth(130);
         m_downloadButton->setHeight(40);
         m_downloadButton->setMarginRight(10);
         m_downloadButton->registerClickAction([this](brls::View* view) {
@@ -1860,6 +1860,7 @@ void MediaDetailView::batchDownloadEpisodes(const std::vector<MediaItem>& episod
 
             int64_t totalDownloaded = 0;
             int64_t totalSize = 0;
+            int currentEpisodeNum = static_cast<int>(i) + 1;
 
             bool success = httpClient.downloadFile(trackUrl,
                 [&](const char* data, size_t size) -> bool {
@@ -1867,11 +1868,18 @@ void MediaDetailView::batchDownloadEpisodes(const std::vector<MediaItem>& episod
                     if (written < 0) return false;
                     totalDownloaded += size;
 
-                    // Update progress
+                    // Update progress with detailed MB info like audiobooks
                     if (totalSize > 0) {
                         float episodeProgress = static_cast<float>(totalDownloaded) / totalSize;
                         float overallProgress = (static_cast<float>(i) + episodeProgress) / totalEpisodes;
-                        brls::sync([progressDialog, overallProgress]() {
+                        int percent = static_cast<int>(episodeProgress * 100);
+                        int dlMB = static_cast<int>(totalDownloaded / (1024 * 1024));
+                        int sizeMB = static_cast<int>(totalSize / (1024 * 1024));
+                        brls::sync([progressDialog, overallProgress, currentEpisodeNum, totalEpisodes, percent, dlMB, sizeMB, epTitle]() {
+                            char buf[160];
+                            snprintf(buf, sizeof(buf), "Episode %d/%d: %d%% (%d/%d MB)\n%s",
+                                    currentEpisodeNum, totalEpisodes, percent, dlMB, sizeMB, epTitle.c_str());
+                            progressDialog->setStatus(buf);
                             progressDialog->setProgress(overallProgress);
                         });
                     }
@@ -1913,13 +1921,31 @@ void MediaDetailView::batchDownloadEpisodes(const std::vector<MediaItem>& episod
         // Ensure state is saved
         downloadsMgr.saveState();
 
-        // Show completion dialog
-        brls::sync([progressDialog, completed, failed, totalEpisodes]() {
+        // Check if all episodes are now downloaded
+        bool allDownloaded = (completed == totalEpisodes && failed == 0);
+
+        // Show completion dialog and update button visibility
+        brls::sync([this, progressDialog, completed, failed, totalEpisodes, allDownloaded]() {
             char buf[128];
             snprintf(buf, sizeof(buf), "Downloaded %d of %d episodes\n(%d failed)",
                     completed, totalEpisodes, failed);
             progressDialog->setStatus(buf);
             progressDialog->setProgress(1.0f);
+
+            // Update Download/Remove button visibility
+            if (completed > 0) {
+                // Some episodes were downloaded - show Remove button
+                if (m_deleteButton) {
+                    m_deleteButton->setVisibility(brls::Visibility::VISIBLE);
+                }
+            }
+            if (allDownloaded) {
+                // All episodes downloaded - hide Download button
+                if (m_downloadButton) {
+                    m_downloadButton->setVisibility(brls::Visibility::GONE);
+                }
+            }
+
             brls::delay(2000, [progressDialog]() {
                 progressDialog->dismiss();
             });
