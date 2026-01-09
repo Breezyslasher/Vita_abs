@@ -142,19 +142,16 @@ void MediaItemCell::setItem(const MediaItem& item) {
 void MediaItemCell::loadThumbnail() {
     if (!m_thumbnailImage) return;
 
-    brls::Logger::debug("MediaItemCell: loadThumbnail for '{}' - coverPath='{}'",
-                       m_item.title, m_item.coverPath);
-
-    // Check if we have a local cover path (for downloaded items)
-    // Local paths on Vita start with "ux0:" not "http"
-    if (!m_item.coverPath.empty() && m_item.coverPath.find("http") != 0) {
-        // Local path - load directly
+    // Check if we have a Vita local cover path (for downloaded items)
+    // Vita local paths start with "ux0:"
+    if (!m_item.coverPath.empty() && m_item.coverPath.find("ux0:") == 0) {
+        // Local Vita path - load directly from file
         brls::Logger::debug("MediaItemCell: Loading local cover from {}", m_item.coverPath);
         loadLocalCoverToImage(m_thumbnailImage, m_item.coverPath);
         return;
     }
 
-    // Fall back to server URL
+    // Load from server URL
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
     // Use square dimensions for audiobook/podcast covers (request larger size for quality)
@@ -167,10 +164,9 @@ void MediaItemCell::loadThumbnail() {
     }
 
     std::string url = client.getCoverUrl(m_item.id, size, size);
-    brls::Logger::debug("MediaItemCell: Loading cover from {}", url);
 
     ImageLoader::loadAsync(url, [this](brls::Image* image) {
-        brls::Logger::debug("MediaItemCell: Cover loaded for {}", m_item.title);
+        // Cover loaded
     }, m_thumbnailImage);
 }
 
