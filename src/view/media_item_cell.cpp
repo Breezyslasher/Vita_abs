@@ -142,8 +142,12 @@ void MediaItemCell::setItem(const MediaItem& item) {
 void MediaItemCell::loadThumbnail() {
     if (!m_thumbnailImage) return;
 
+    brls::Logger::debug("MediaItemCell: loadThumbnail for '{}' - coverPath='{}'",
+                       m_item.title, m_item.coverPath);
+
     // Check if we have a local cover path (for downloaded items)
-    if (!m_item.coverPath.empty() && m_item.coverPath[0] != 'h') {
+    // Local paths on Vita start with "ux0:" not "http"
+    if (!m_item.coverPath.empty() && m_item.coverPath.find("http") != 0) {
         // Local path - load directly
         brls::Logger::debug("MediaItemCell: Loading local cover from {}", m_item.coverPath);
         loadLocalCoverToImage(m_thumbnailImage, m_item.coverPath);
