@@ -1161,7 +1161,7 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                         ? downloadsMgr.getDownloadsPath() + "/" + itemId + combinedExt
                         : tempMgr.getTempFilePath(itemId, episodeId, combinedExt);
 
-                    asyncRun([allTracks, currentTrackIdx, currentTrackPath, itemId, episodeId, baseExt, finalPath, title, authorName, duration, itemType, useDownloads, coverUrl, description, downloadChapters]() {
+                    asyncRunLargeStack([allTracks, currentTrackIdx, currentTrackPath, itemId, episodeId, baseExt, finalPath, title, authorName, duration, itemType, useDownloads, coverUrl, description, downloadChapters]() {
                         brls::Logger::info("Background: Downloading remaining tracks...");
 
                         HttpClient bgHttpClient;
