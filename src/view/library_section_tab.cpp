@@ -303,7 +303,9 @@ void LibrarySectionTab::loadDownloadedItems() {
             if (sectionType == "podcast" && !dl.episodeId.empty()) {
                 // This is a podcast episode - group by podcastId
                 std::string podcastId = dl.itemId;
-                std::string podcastName = dl.parentTitle.empty() ? "Unknown Podcast" : dl.parentTitle;
+                // Use parentTitle first, fall back to authorName, then "Unknown Podcast"
+                std::string podcastName = !dl.parentTitle.empty() ? dl.parentTitle :
+                                          (!dl.authorName.empty() ? dl.authorName : "Unknown Podcast");
                 podcastNames[podcastId] = podcastName;
                 // Store: episodeId, episodeTitle, coverPath, podcastName
                 podcastEpisodes[podcastId].push_back(std::make_tuple(dl.episodeId, dl.title, dl.localCoverPath, podcastName));

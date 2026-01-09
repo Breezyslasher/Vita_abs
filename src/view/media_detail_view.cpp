@@ -385,6 +385,76 @@ void MediaDetailView::loadDetails() {
             m_chaptersScroll->setContentView(m_chaptersBox);
             m_mainContent->addView(m_chaptersScroll);
         }
+    } else {
+        // Server fetch failed - try to load metadata from DownloadsManager (offline mode)
+        brls::Logger::info("MediaDetailView: Server fetch failed, loading metadata from downloads");
+        DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
+        auto allDownloads = downloadsMgr.getDownloads();
+
+        // Find matching download (for audiobooks, match itemId; for podcast episodes, we check later)
+        for (const auto& dl : allDownloads) {
+            if (dl.itemId == m_item.id && dl.state == DownloadState::COMPLETED) {
+                // For podcasts, we want the first episode's parent info or any episode
+                // For audiobooks, this matches directly
+                brls::Logger::info("MediaDetailView: Found offline metadata for {}", dl.title);
+
+                // Update title if not already set from m_item
+                if (m_titleLabel && !dl.title.empty() && m_item.title.empty()) {
+                    m_titleLabel->setText(dl.title);
+                    m_item.title = dl.title;
+                }
+
+                // Update author
+                if (!dl.authorName.empty() && m_item.authorName.empty()) {
+                    m_item.authorName = dl.authorName;
+                }
+
+                // Update description
+                if (m_summaryLabel && !dl.description.empty()) {
+                    m_summaryLabel->setText(dl.description);
+                    m_item.description = dl.description;
+                }
+
+                // Load chapters for audiobooks
+                if (!dl.chapters.empty() && m_item.chapters.empty()) {
+                    for (const auto& ch : dl.chapters) {
+                        ChapterInfo ci;
+                        ci.title = ch.title;
+                        ci.start = ch.start;
+                        ci.end = ch.end;
+                        m_item.chapters.push_back(ci);
+                    }
+                    brls::Logger::info("MediaDetailView: Loaded {} chapters from offline data", m_item.chapters.size());
+                }
+
+                // For audiobooks, we only need one match
+                if (dl.episodeId.empty()) {
+                    break;
+                }
+            }
+        }
+
+        // Create chapters container for audiobooks if we have chapters
+        if (m_item.mediaType == MediaType::BOOK && !m_chaptersBox && m_mainContent && !m_item.chapters.empty()) {
+            brls::Logger::debug("Creating chapters container for offline audiobook");
+
+            auto* chaptersLabel = new brls::Label();
+            chaptersLabel->setText("Chapters");
+            chaptersLabel->setFontSize(20);
+            chaptersLabel->setMarginBottom(10);
+            chaptersLabel->setMarginTop(10);
+            m_mainContent->addView(chaptersLabel);
+
+            m_chaptersScroll = new brls::ScrollingFrame();
+            m_chaptersScroll->setHeight(250);
+            m_chaptersScroll->setMarginBottom(20);
+
+            m_chaptersBox = new brls::Box();
+            m_chaptersBox->setAxis(brls::Axis::COLUMN);
+
+            m_chaptersScroll->setContentView(m_chaptersBox);
+            m_mainContent->addView(m_chaptersScroll);
+        }
     }
 
     // Load thumbnail - try local cover first if offline or for downloaded content
@@ -1784,10 +1854,11 @@ void MediaDetailView::batchDownloadEpisodes(const std::vector<MediaItem>& episod
             sceIoClose(fd);
 
             if (success) {
-                // Register the download
+                // Register the download - use podcast title as authorName for episodes
                 std::string coverUrl = client.getCoverUrl(itemId);
+                std::string podcastName = m_item.title;  // Store podcast name for offline display
                 downloadsMgr.registerCompletedDownload(
-                    itemId, episodeId, ep.title, "",
+                    itemId, episodeId, ep.title, podcastName,
                     destPath, totalDownloaded, ep.duration, "episode",
                     coverUrl, "", {}
                 );

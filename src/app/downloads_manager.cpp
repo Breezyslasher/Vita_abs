@@ -1445,6 +1445,11 @@ bool DownloadsManager::registerCompletedDownload(const std::string& itemId, cons
     item.chapters = chapters;
     item.numChapters = static_cast<int>(chapters.size());
 
+    // For podcast episodes, store authorName as parentTitle (podcast name)
+    if (mediaType == "episode" && !authorName.empty()) {
+        item.parentTitle = authorName;
+    }
+
     m_downloads.push_back(item);
     brls::Logger::info("DownloadsManager: Registered completed download: {} ({} bytes, cover: {})",
                        title, fileSize, !localCoverPath.empty() ? "yes" : "no");
