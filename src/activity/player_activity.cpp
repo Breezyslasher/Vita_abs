@@ -478,6 +478,89 @@ void PlayerActivity::loadMedia() {
         return;
     }
 
+    // Before attempting remote playback, check if content is downloaded
+    // This handles the case when coming from library view with a downloaded episode
+    {
+        DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
+        downloadsMgr.init();
+
+        // Check if this item (or episode) is downloaded
+        if (downloadsMgr.isDownloaded(m_itemId, m_episodeId)) {
+            brls::Logger::info("PlayerActivity: Item is downloaded, using local playback");
+
+            // Find the download info
+            auto allDownloads = downloadsMgr.getDownloads();
+            for (const auto& dl : allDownloads) {
+                if (dl.itemId == m_itemId && dl.state == DownloadState::COMPLETED) {
+                    if (m_episodeId.empty() || dl.episodeId == m_episodeId) {
+                        // Found the matching download - use local playback
+                        std::string playbackPath = dl.localPath;
+
+                        // Set metadata
+                        if (titleLabel && !dl.title.empty()) {
+                            titleLabel->setText(dl.title);
+                        }
+                        if (authorLabel && !dl.authorName.empty()) {
+                            authorLabel->setText(dl.authorName);
+                        }
+
+                        // Load cover (prefer local, fall back to URL)
+                        if (!dl.localCoverPath.empty()) {
+                            loadCoverArt(dl.localCoverPath);
+                        } else if (!dl.coverUrl.empty()) {
+                            loadCoverArt(dl.coverUrl);
+                        }
+
+                        // Initialize player
+                        MpvPlayer& player = MpvPlayer::getInstance();
+                        if (!player.isInitialized()) {
+                            if (!player.init()) {
+                                brls::Logger::error("Failed to initialize MPV player");
+                                m_loadingMedia = false;
+                                return;
+                            }
+                        }
+
+                        // Load local file
+                        brls::Logger::info("PlayerActivity: Loading downloaded file: {}", playbackPath);
+                        if (!player.loadUrl(playbackPath, dl.title)) {
+                            brls::Logger::error("Failed to load downloaded file: {}", playbackPath);
+                            m_loadingMedia = false;
+                            return;
+                        }
+
+                        // Apply saved playback speed
+                        AppSettings& dlSettings = Application::getInstance().getSettings();
+                        float dlSpeed = getSpeedValue(static_cast<int>(dlSettings.playbackSpeed));
+                        if (dlSpeed != 1.0f) {
+                            player.setSpeed(dlSpeed);
+                        }
+
+                        // Show video view
+                        if (videoView) {
+                            videoView->setVisibility(brls::Visibility::VISIBLE);
+                            videoView->setVideoVisible(true);
+                        }
+
+                        // Resume from saved position
+                        if (dl.currentTime > 0) {
+                            m_pendingSeek = dl.currentTime;
+                        } else if (dl.viewOffset > 0) {
+                            m_pendingSeek = dl.viewOffset / 1000.0;
+                        }
+
+                        // Mark as local file for progress saving
+                        m_isLocalFile = true;
+
+                        m_isPlaying = true;
+                        m_loadingMedia = false;
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     // Remote playback from Audiobookshelf server
     // Download to temp file first, then play locally (streaming doesn't work well on Vita)
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
