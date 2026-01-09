@@ -1956,53 +1956,125 @@ void MediaDetailView::batchDownloadEpisodes(const std::vector<MediaItem>& episod
 }
 
 void MediaDetailView::showDownloadOptions() {
-    auto* dialog = new brls::Dialog("Download Options");
+    // Count available episodes for the title
+    int episodeCount = static_cast<int>(m_children.size());
+    std::string title = "Download Episodes";
+    if (episodeCount > 0) {
+        title += " (" + std::to_string(episodeCount) + ")";
+    }
 
-    auto* optionsBox = new brls::Box();
-    optionsBox->setAxis(brls::Axis::COLUMN);
-    optionsBox->setPadding(20);
+    auto* dialog = new brls::Dialog(title);
+
+    // Register circle button to close dialog (same as Remove dialog)
+    dialog->registerAction("Back", brls::ControllerButton::BUTTON_B, [dialog](brls::View*) {
+        dialog->dismiss();
+        return true;
+    }, true);
+
+    // Create content box (same style as Remove dialog)
+    auto* content = new brls::Box();
+    content->setAxis(brls::Axis::COLUMN);
+    content->setPadding(20);
+    content->setWidth(700);
 
     if (m_item.mediaType == MediaType::PODCAST) {
+        // Download All button at top (same style as Delete All button)
         auto* downloadAllBtn = new brls::Button();
         downloadAllBtn->setText("Download All Episodes");
-        downloadAllBtn->setMarginBottom(10);
+        downloadAllBtn->setMarginBottom(15);
         downloadAllBtn->registerClickAction([this, dialog](brls::View*) {
             dialog->dismiss();
             downloadAll();
             return true;
         });
-        optionsBox->addView(downloadAllBtn);
+        content->addView(downloadAllBtn);
 
-        auto* downloadUnheardBtn = new brls::Button();
-        downloadUnheardBtn->setText("Download Unheard");
-        downloadUnheardBtn->setMarginBottom(10);
-        downloadUnheardBtn->registerClickAction([this, dialog](brls::View*) {
+        // Separator (same as Remove dialog)
+        auto* separator = new brls::Rectangle();
+        separator->setHeight(1);
+        separator->setColor(nvgRGB(80, 80, 80));
+        separator->setMarginBottom(15);
+        content->addView(separator);
+
+        // Instructions
+        auto* instructionsLabel = new brls::Label();
+        instructionsLabel->setText("Or choose a download option:");
+        instructionsLabel->setFontSize(14);
+        instructionsLabel->setTextColor(nvgRGB(180, 180, 180));
+        instructionsLabel->setMarginBottom(10);
+        content->addView(instructionsLabel);
+
+        // Other download options in styled rows (like episode rows in Remove dialog)
+        auto* unheardRow = new brls::Box();
+        unheardRow->setAxis(brls::Axis::ROW);
+        unheardRow->setAlignItems(brls::AlignItems::CENTER);
+        unheardRow->setPadding(12);
+        unheardRow->setMarginBottom(8);
+        unheardRow->setBackgroundColor(nvgRGBA(60, 60, 60, 255));
+        unheardRow->setCornerRadius(6);
+        unheardRow->setFocusable(true);
+
+        auto* unheardLabel = new brls::Label();
+        unheardLabel->setText("Download Unheard Episodes");
+        unheardLabel->setFontSize(15);
+        unheardLabel->setGrow(1.0f);
+        unheardRow->addView(unheardLabel);
+
+        auto* unheardIcon = new brls::Label();
+        unheardIcon->setText("[+]");
+        unheardIcon->setFontSize(14);
+        unheardIcon->setTextColor(nvgRGB(100, 180, 100));
+        unheardIcon->setWidth(40);
+        unheardRow->addView(unheardIcon);
+
+        unheardRow->registerClickAction([this, dialog](brls::View*) {
             dialog->dismiss();
             downloadUnwatched();
             return true;
         });
-        optionsBox->addView(downloadUnheardBtn);
+        content->addView(unheardRow);
 
-        auto* downloadNext5Btn = new brls::Button();
-        downloadNext5Btn->setText("Download Next 5 Unheard");
-        downloadNext5Btn->setMarginBottom(10);
-        downloadNext5Btn->registerClickAction([this, dialog](brls::View*) {
+        auto* next5Row = new brls::Box();
+        next5Row->setAxis(brls::Axis::ROW);
+        next5Row->setAlignItems(brls::AlignItems::CENTER);
+        next5Row->setPadding(12);
+        next5Row->setMarginBottom(8);
+        next5Row->setBackgroundColor(nvgRGBA(60, 60, 60, 255));
+        next5Row->setCornerRadius(6);
+        next5Row->setFocusable(true);
+
+        auto* next5Label = new brls::Label();
+        next5Label->setText("Download Next 5 Unheard");
+        next5Label->setFontSize(15);
+        next5Label->setGrow(1.0f);
+        next5Row->addView(next5Label);
+
+        auto* next5Icon = new brls::Label();
+        next5Icon->setText("[+]");
+        next5Icon->setFontSize(14);
+        next5Icon->setTextColor(nvgRGB(100, 180, 100));
+        next5Icon->setWidth(40);
+        next5Row->addView(next5Icon);
+
+        next5Row->registerClickAction([this, dialog](brls::View*) {
             dialog->dismiss();
             downloadUnwatched(5);
             return true;
         });
-        optionsBox->addView(downloadNext5Btn);
+        content->addView(next5Row);
     }
 
-    auto* cancelBtn = new brls::Button();
-    cancelBtn->setText("Cancel");
-    cancelBtn->registerClickAction([dialog](brls::View*) {
+    // Close button (same as Remove dialog)
+    auto* closeBtn = new brls::Button();
+    closeBtn->setText("Close");
+    closeBtn->setMarginTop(15);
+    closeBtn->registerClickAction([dialog](brls::View*) {
         dialog->dismiss();
         return true;
     });
-    optionsBox->addView(cancelBtn);
+    content->addView(closeBtn);
 
-    dialog->addView(optionsBox);
+    dialog->addView(content);
     brls::Application::pushActivity(new brls::Activity(dialog));
 }
 
