@@ -1921,30 +1921,13 @@ void MediaDetailView::batchDownloadEpisodes(const std::vector<MediaItem>& episod
         // Ensure state is saved
         downloadsMgr.saveState();
 
-        // Check if all episodes are now downloaded
-        bool allDownloaded = (completed == totalEpisodes && failed == 0);
-
-        // Show completion dialog and update button visibility
-        brls::sync([this, progressDialog, completed, failed, totalEpisodes, allDownloaded]() {
+        // Show completion dialog
+        brls::sync([progressDialog, completed, failed, totalEpisodes]() {
             char buf[128];
             snprintf(buf, sizeof(buf), "Downloaded %d of %d episodes\n(%d failed)",
                     completed, totalEpisodes, failed);
             progressDialog->setStatus(buf);
             progressDialog->setProgress(1.0f);
-
-            // Update Download/Remove button visibility
-            if (completed > 0) {
-                // Some episodes were downloaded - show Remove button
-                if (m_deleteButton) {
-                    m_deleteButton->setVisibility(brls::Visibility::VISIBLE);
-                }
-            }
-            if (allDownloaded) {
-                // All episodes downloaded - hide Download button
-                if (m_downloadButton) {
-                    m_downloadButton->setVisibility(brls::Visibility::GONE);
-                }
-            }
 
             brls::delay(2000, [progressDialog]() {
                 progressDialog->dismiss();
