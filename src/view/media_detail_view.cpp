@@ -1956,217 +1956,266 @@ void MediaDetailView::batchDownloadEpisodes(const std::vector<MediaItem>& episod
 }
 
 void MediaDetailView::showDownloadOptions() {
-    // Count available episodes for the title
-    int episodeCount = static_cast<int>(m_children.size());
-    std::string title = "Download Episodes";
-    if (episodeCount > 0) {
-        title += " (" + std::to_string(episodeCount) + ")";
+    if (m_item.mediaType != MediaType::PODCAST) {
+        return;
     }
+
+    // Count episodes and find undownloaded ones
+    DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
+    std::vector<MediaItem> undownloadedEpisodes;
+
+    for (const auto& ep : m_children) {
+        bool isDownloaded = downloadsMgr.isDownloaded(m_item.id, ep.episodeId);
+        if (!isDownloaded) {
+            undownloadedEpisodes.push_back(ep);
+        }
+    }
+
+    // If only 1 episode total OR only 1 undownloaded episode, download directly
+    if (m_children.size() == 1 || undownloadedEpisodes.size() == 1) {
+        if (undownloadedEpisodes.empty()) {
+            brls::Application::notify("All episodes already downloaded");
+            return;
+        }
+        // Download the single undownloaded episode directly
+        batchDownloadEpisodes(undownloadedEpisodes);
+        return;
+    }
+
+    // If no undownloaded episodes, notify and return
+    if (undownloadedEpisodes.empty()) {
+        brls::Application::notify("All episodes already downloaded");
+        return;
+    }
+
+    // Count unheard (not finished) episodes
+    int unheardCount = 0;
+    for (const auto& ep : m_children) {
+        bool isDownloaded = downloadsMgr.isDownloaded(m_item.id, ep.episodeId);
+        if (ep.progress < 1.0f && !isDownloaded) {
+            unheardCount++;
+        }
+    }
+
+    // Show full dialog for multiple episodes
+    int episodeCount = static_cast<int>(m_children.size());
+    std::string title = "Download Episodes (" + std::to_string(episodeCount) + ")";
 
     auto* dialog = new brls::Dialog(title);
 
-    // Register circle button to close dialog (same as Remove dialog)
+    // Register circle button to close dialog
     dialog->registerAction("Back", brls::ControllerButton::BUTTON_B, [dialog](brls::View*) {
         dialog->dismiss();
         return true;
     }, true);
 
-    // Create content box (same style as Remove dialog)
+    // Create content box
     auto* content = new brls::Box();
     content->setAxis(brls::Axis::COLUMN);
     content->setPadding(20);
     content->setWidth(700);
 
-    if (m_item.mediaType == MediaType::PODCAST) {
-        // Count unheard episodes to determine which options to show
-        DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
-        int unheardCount = 0;
-        for (const auto& ep : m_children) {
-            // Episode is unheard if progress < 100% and not downloaded
-            bool isDownloaded = downloadsMgr.isDownloaded(m_item.id, ep.episodeId);
-            if (ep.progress < 1.0f && !isDownloaded) {
-                unheardCount++;
-            }
-        }
+    // Horizontal row for the 3 download options
+    auto* optionsRow = new brls::Box();
+    optionsRow->setAxis(brls::Axis::ROW);
+    optionsRow->setJustifyContent(brls::JustifyContent::SPACE_BETWEEN);
+    optionsRow->setMarginBottom(15);
 
-        // Download All option box
-        auto* downloadAllRow = new brls::Box();
-        downloadAllRow->setAxis(brls::Axis::ROW);
-        downloadAllRow->setAlignItems(brls::AlignItems::CENTER);
-        downloadAllRow->setPadding(12);
-        downloadAllRow->setMarginBottom(8);
-        downloadAllRow->setBackgroundColor(nvgRGBA(60, 60, 60, 255));
-        downloadAllRow->setCornerRadius(6);
-        downloadAllRow->setFocusable(true);
+    // Download All option box
+    auto* downloadAllBox = new brls::Box();
+    downloadAllBox->setAxis(brls::Axis::COLUMN);
+    downloadAllBox->setAlignItems(brls::AlignItems::CENTER);
+    downloadAllBox->setJustifyContent(brls::JustifyContent::CENTER);
+    downloadAllBox->setPadding(12);
+    downloadAllBox->setWidth(210);
+    downloadAllBox->setHeight(60);
+    downloadAllBox->setBackgroundColor(nvgRGBA(60, 60, 60, 255));
+    downloadAllBox->setCornerRadius(6);
+    downloadAllBox->setFocusable(true);
 
-        auto* downloadAllLabel = new brls::Label();
-        downloadAllLabel->setText("Download All Episodes");
-        downloadAllLabel->setFontSize(15);
-        downloadAllLabel->setGrow(1.0f);
-        downloadAllRow->addView(downloadAllLabel);
+    auto* downloadAllLabel = new brls::Label();
+    downloadAllLabel->setText("Download All");
+    downloadAllLabel->setFontSize(14);
+    downloadAllBox->addView(downloadAllLabel);
 
-        auto* downloadAllIcon = new brls::Label();
-        downloadAllIcon->setText("[+]");
-        downloadAllIcon->setFontSize(14);
-        downloadAllIcon->setTextColor(nvgRGB(100, 180, 100));
-        downloadAllIcon->setWidth(40);
-        downloadAllRow->addView(downloadAllIcon);
+    auto* downloadAllCount = new brls::Label();
+    downloadAllCount->setText("(" + std::to_string(episodeCount) + ")");
+    downloadAllCount->setFontSize(12);
+    downloadAllCount->setTextColor(nvgRGB(150, 150, 150));
+    downloadAllBox->addView(downloadAllCount);
 
-        downloadAllRow->registerClickAction([this, dialog](brls::View*) {
+    downloadAllBox->registerClickAction([this, dialog](brls::View*) {
+        dialog->dismiss();
+        downloadAll();
+        return true;
+    });
+    optionsRow->addView(downloadAllBox);
+
+    // Download Unheard option box
+    auto* unheardBox = new brls::Box();
+    unheardBox->setAxis(brls::Axis::COLUMN);
+    unheardBox->setAlignItems(brls::AlignItems::CENTER);
+    unheardBox->setJustifyContent(brls::JustifyContent::CENTER);
+    unheardBox->setPadding(12);
+    unheardBox->setWidth(210);
+    unheardBox->setHeight(60);
+    unheardBox->setBackgroundColor(nvgRGBA(60, 60, 60, 255));
+    unheardBox->setCornerRadius(6);
+    unheardBox->setFocusable(true);
+
+    auto* unheardLabel = new brls::Label();
+    unheardLabel->setText("Unheard");
+    unheardLabel->setFontSize(14);
+    unheardBox->addView(unheardLabel);
+
+    auto* unheardCountLabel = new brls::Label();
+    unheardCountLabel->setText("(" + std::to_string(unheardCount) + ")");
+    unheardCountLabel->setFontSize(12);
+    unheardCountLabel->setTextColor(nvgRGB(150, 150, 150));
+    unheardBox->addView(unheardCountLabel);
+
+    unheardBox->registerClickAction([this, dialog](brls::View*) {
+        dialog->dismiss();
+        downloadUnwatched();
+        return true;
+    });
+    optionsRow->addView(unheardBox);
+
+    // Download Next 5 option box - only show if 5 or more unheard, otherwise show placeholder
+    auto* next5Box = new brls::Box();
+    next5Box->setAxis(brls::Axis::COLUMN);
+    next5Box->setAlignItems(brls::AlignItems::CENTER);
+    next5Box->setJustifyContent(brls::JustifyContent::CENTER);
+    next5Box->setPadding(12);
+    next5Box->setWidth(210);
+    next5Box->setHeight(60);
+    next5Box->setBackgroundColor(nvgRGBA(60, 60, 60, 255));
+    next5Box->setCornerRadius(6);
+
+    if (unheardCount >= 5) {
+        next5Box->setFocusable(true);
+
+        auto* next5Label = new brls::Label();
+        next5Label->setText("Next 5");
+        next5Label->setFontSize(14);
+        next5Box->addView(next5Label);
+
+        auto* next5SubLabel = new brls::Label();
+        next5SubLabel->setText("Unheard");
+        next5SubLabel->setFontSize(12);
+        next5SubLabel->setTextColor(nvgRGB(150, 150, 150));
+        next5Box->addView(next5SubLabel);
+
+        next5Box->registerClickAction([this, dialog](brls::View*) {
             dialog->dismiss();
-            downloadAll();
+            downloadUnwatched(5);
             return true;
         });
-        content->addView(downloadAllRow);
+    } else {
+        // Greyed out / disabled look
+        next5Box->setFocusable(false);
+        next5Box->setBackgroundColor(nvgRGBA(45, 45, 45, 255));
 
-        // Download Unheard option box
-        auto* unheardRow = new brls::Box();
-        unheardRow->setAxis(brls::Axis::ROW);
-        unheardRow->setAlignItems(brls::AlignItems::CENTER);
-        unheardRow->setPadding(12);
-        unheardRow->setMarginBottom(8);
-        unheardRow->setBackgroundColor(nvgRGBA(60, 60, 60, 255));
-        unheardRow->setCornerRadius(6);
-        unheardRow->setFocusable(true);
+        auto* next5Label = new brls::Label();
+        next5Label->setText("Next 5");
+        next5Label->setFontSize(14);
+        next5Label->setTextColor(nvgRGB(100, 100, 100));
+        next5Box->addView(next5Label);
 
-        auto* unheardLabel = new brls::Label();
-        unheardLabel->setText("Download Unheard (" + std::to_string(unheardCount) + ")");
-        unheardLabel->setFontSize(15);
-        unheardLabel->setGrow(1.0f);
-        unheardRow->addView(unheardLabel);
+        auto* next5SubLabel = new brls::Label();
+        next5SubLabel->setText("(< 5 unheard)");
+        next5SubLabel->setFontSize(12);
+        next5SubLabel->setTextColor(nvgRGB(80, 80, 80));
+        next5Box->addView(next5SubLabel);
+    }
+    optionsRow->addView(next5Box);
 
-        auto* unheardIcon = new brls::Label();
-        unheardIcon->setText("[+]");
-        unheardIcon->setFontSize(14);
-        unheardIcon->setTextColor(nvgRGB(100, 180, 100));
-        unheardIcon->setWidth(40);
-        unheardRow->addView(unheardIcon);
+    content->addView(optionsRow);
 
-        unheardRow->registerClickAction([this, dialog](brls::View*) {
-            dialog->dismiss();
-            downloadUnwatched();
-            return true;
-        });
-        content->addView(unheardRow);
+    // Separator
+    auto* separator = new brls::Rectangle();
+    separator->setHeight(1);
+    separator->setColor(nvgRGB(80, 80, 80));
+    separator->setMarginBottom(15);
+    content->addView(separator);
 
-        // Download Next 5 option box - only show if 5 or more unheard episodes
-        if (unheardCount >= 5) {
-            auto* next5Row = new brls::Box();
-            next5Row->setAxis(brls::Axis::ROW);
-            next5Row->setAlignItems(brls::AlignItems::CENTER);
-            next5Row->setPadding(12);
-            next5Row->setMarginBottom(8);
-            next5Row->setBackgroundColor(nvgRGBA(60, 60, 60, 255));
-            next5Row->setCornerRadius(6);
-            next5Row->setFocusable(true);
+    // Instructions
+    auto* instructionsLabel = new brls::Label();
+    instructionsLabel->setText("Or click an episode to download it:");
+    instructionsLabel->setFontSize(14);
+    instructionsLabel->setTextColor(nvgRGB(180, 180, 180));
+    instructionsLabel->setMarginBottom(10);
+    content->addView(instructionsLabel);
 
-            auto* next5Label = new brls::Label();
-            next5Label->setText("Download Next 5 Unheard");
-            next5Label->setFontSize(15);
-            next5Label->setGrow(1.0f);
-            next5Row->addView(next5Label);
+    // Create scrolling list of episodes
+    auto* scrollView = new brls::ScrollingFrame();
+    scrollView->setHeight(280);
 
-            auto* next5Icon = new brls::Label();
-            next5Icon->setText("[+]");
-            next5Icon->setFontSize(14);
-            next5Icon->setTextColor(nvgRGB(100, 180, 100));
-            next5Icon->setWidth(40);
-            next5Row->addView(next5Icon);
+    auto* listBox = new brls::Box();
+    listBox->setAxis(brls::Axis::COLUMN);
 
-            next5Row->registerClickAction([this, dialog](brls::View*) {
-                dialog->dismiss();
-                downloadUnwatched(5);
-                return true;
-            });
-            content->addView(next5Row);
+    for (const auto& ep : m_children) {
+        bool isDownloaded = downloadsMgr.isDownloaded(m_item.id, ep.episodeId);
+
+        auto* row = new brls::Box();
+        row->setAxis(brls::Axis::ROW);
+        row->setAlignItems(brls::AlignItems::CENTER);
+        row->setPadding(12);
+        row->setMarginBottom(8);
+        row->setBackgroundColor(nvgRGBA(60, 60, 60, 255));
+        row->setCornerRadius(6);
+        row->setFocusable(true);
+
+        // Episode title
+        auto* titleLabel = new brls::Label();
+        std::string epTitle = ep.title;
+        if (epTitle.length() > 45) {
+            epTitle = epTitle.substr(0, 42) + "...";
         }
+        titleLabel->setText(epTitle);
+        titleLabel->setFontSize(15);
+        titleLabel->setGrow(1.0f);
+        row->addView(titleLabel);
 
-        // Separator
-        auto* separator = new brls::Rectangle();
-        separator->setHeight(1);
-        separator->setColor(nvgRGB(80, 80, 80));
-        separator->setMarginTop(7);
-        separator->setMarginBottom(15);
-        content->addView(separator);
+        // Status indicator
+        auto* statusLabel = new brls::Label();
+        if (isDownloaded) {
+            statusLabel->setText("[OK]");
+            statusLabel->setTextColor(nvgRGB(100, 200, 100));
+        } else {
+            statusLabel->setText("[+]");
+            statusLabel->setTextColor(nvgRGB(100, 180, 100));
+        }
+        statusLabel->setFontSize(14);
+        statusLabel->setWidth(40);
+        row->addView(statusLabel);
 
-        // Instructions
-        auto* instructionsLabel = new brls::Label();
-        instructionsLabel->setText("Or click an episode to download it:");
-        instructionsLabel->setFontSize(14);
-        instructionsLabel->setTextColor(nvgRGB(180, 180, 180));
-        instructionsLabel->setMarginBottom(10);
-        content->addView(instructionsLabel);
-
-        // Create scrolling list of episodes
-        auto* scrollView = new brls::ScrollingFrame();
-        scrollView->setHeight(300);
-
-        auto* listBox = new brls::Box();
-        listBox->setAxis(brls::Axis::COLUMN);
-
-        for (const auto& ep : m_children) {
-            bool isDownloaded = downloadsMgr.isDownloaded(m_item.id, ep.episodeId);
-
-            auto* row = new brls::Box();
-            row->setAxis(brls::Axis::ROW);
-            row->setAlignItems(brls::AlignItems::CENTER);
-            row->setPadding(12);
-            row->setMarginBottom(8);
-            row->setBackgroundColor(nvgRGBA(60, 60, 60, 255));
-            row->setCornerRadius(6);
-            row->setFocusable(true);
-
-            // Episode title
-            auto* titleLabel = new brls::Label();
-            std::string epTitle = ep.title;
-            if (epTitle.length() > 45) {
-                epTitle = epTitle.substr(0, 42) + "...";
-            }
-            titleLabel->setText(epTitle);
-            titleLabel->setFontSize(15);
-            titleLabel->setGrow(1.0f);
-            row->addView(titleLabel);
-
-            // Status indicator
-            auto* statusLabel = new brls::Label();
+        // Click to download this episode (if not already downloaded)
+        std::string episodeId = ep.episodeId;
+        std::string episodeTitle = ep.title;
+        float episodeDuration = ep.duration;
+        row->registerClickAction([this, dialog, episodeId, episodeTitle, episodeDuration, isDownloaded](brls::View*) {
             if (isDownloaded) {
-                statusLabel->setText("[OK]");
-                statusLabel->setTextColor(nvgRGB(100, 200, 100));
+                brls::Application::notify("Already downloaded");
             } else {
-                statusLabel->setText("[+]");
-                statusLabel->setTextColor(nvgRGB(100, 180, 100));
+                dialog->dismiss();
+                // Download single episode
+                MediaItem singleEp;
+                singleEp.episodeId = episodeId;
+                singleEp.title = episodeTitle;
+                singleEp.duration = episodeDuration;
+                batchDownloadEpisodes({singleEp});
             }
-            statusLabel->setFontSize(14);
-            statusLabel->setWidth(40);
-            row->addView(statusLabel);
+            return true;
+        });
 
-            // Click to download this episode (if not already downloaded)
-            std::string episodeId = ep.episodeId;
-            std::string episodeTitle = ep.title;
-            float episodeDuration = ep.duration;
-            row->registerClickAction([this, dialog, episodeId, episodeTitle, episodeDuration, isDownloaded](brls::View*) {
-                if (isDownloaded) {
-                    brls::Application::notify("Already downloaded");
-                } else {
-                    dialog->dismiss();
-                    // Download single episode
-                    MediaItem singleEp;
-                    singleEp.episodeId = episodeId;
-                    singleEp.title = episodeTitle;
-                    singleEp.duration = episodeDuration;
-                    batchDownloadEpisodes({singleEp});
-                }
-                return true;
-            });
-
-            listBox->addView(row);
-        }
-
-        scrollView->setContentView(listBox);
-        content->addView(scrollView);
+        listBox->addView(row);
     }
 
-    // Close button (same as Remove dialog)
+    scrollView->setContentView(listBox);
+    content->addView(scrollView);
+
+    // Close button
     auto* closeBtn = new brls::Button();
     closeBtn->setText("Close");
     closeBtn->setMarginTop(15);
