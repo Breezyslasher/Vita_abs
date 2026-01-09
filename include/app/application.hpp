@@ -89,6 +89,7 @@ struct AppSettings {
     bool showSeries = true;
     bool showAuthors = true;
     bool showProgress = true;          // Show progress bars on items
+    bool showOnlyDownloaded = false;   // Show only downloaded items in library
 
     // Playback Settings
     bool autoPlayNext = false;         // Auto-play next chapter

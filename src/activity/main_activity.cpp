@@ -6,7 +6,6 @@
 #include "view/library_section_tab.hpp"
 #include "view/search_tab.hpp"
 #include "view/settings_tab.hpp"
-#include "view/downloads_tab.hpp"
 #include "app/downloads_manager.hpp"
 #include "app/application.hpp"
 #include "app/audiobookshelf_client.hpp"
@@ -46,49 +45,71 @@ void MainActivity::onContentAvailable() {
         bool isOnline = client.fetchLibraries(sections);
 
         if (!isOnline || sections.empty()) {
-            // Offline mode - show only Downloads and Settings
-            brls::Logger::info("MainActivity: Offline mode - showing Downloads and Settings only");
+            // Offline mode - show library tabs with downloaded content and Settings
+            brls::Logger::info("MainActivity: Offline mode - showing downloaded content");
 
-            // Set sidebar width for offline mode (wider to fit "Offline Mode" text)
+            // Set sidebar width for offline mode
             brls::View* sidebar = tabFrame->getView("brls/tab_frame/sidebar");
             if (sidebar) {
                 sidebar->setWidth(220);
             }
 
-            // Add offline notice tab
-            tabFrame->addTab("Offline", []() {
-                auto* box = new brls::Box();
-                box->setAxis(brls::Axis::COLUMN);
-                box->setPadding(40);
-                box->setJustifyContent(brls::JustifyContent::CENTER);
-                box->setAlignItems(brls::AlignItems::CENTER);
-                box->setGrow(1.0f);
+            // Check if we have any downloads
+            auto downloads = DownloadsManager::getInstance().getDownloads();
 
-                auto* title = new brls::Label();
-                title->setText("No Server Connection");
-                title->setFontSize(24);
-                title->setMarginBottom(20);
-                box->addView(title);
+            if (downloads.empty()) {
+                // No downloads - show offline notice
+                tabFrame->addTab("Offline", []() {
+                    auto* box = new brls::Box();
+                    box->setAxis(brls::Axis::COLUMN);
+                    box->setPadding(40);
+                    box->setJustifyContent(brls::JustifyContent::CENTER);
+                    box->setAlignItems(brls::AlignItems::CENTER);
+                    box->setGrow(1.0f);
 
-                auto* msg = new brls::Label();
-                msg->setText("Connect to WiFi and configure your\nAudiobookshelf server in Settings.\n\nYou can still access your downloaded\ncontent in the Downloads tab.");
-                msg->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-                msg->setFontSize(16);
-                box->addView(msg);
+                    auto* title = new brls::Label();
+                    title->setText("No Server Connection");
+                    title->setFontSize(24);
+                    title->setMarginBottom(20);
+                    box->addView(title);
 
-                return box;
-            });
+                    auto* msg = new brls::Label();
+                    msg->setText("Connect to WiFi and configure your\nAudiobookshelf server in Settings.\n\nNo downloaded content available.");
+                    msg->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+                    msg->setFontSize(16);
+                    box->addView(msg);
 
-            tabFrame->addTab("Downloads", []() { return new DownloadsTab(); });
+                    return box;
+                });
+            } else {
+                // Have downloads - create library tabs for downloaded content
+                // Check what types of content we have downloaded
+                bool hasBooks = false;
+                bool hasPodcasts = false;
+                for (const auto& dl : downloads) {
+                    if (dl.mediaType == "book" || dl.mediaType.empty()) hasBooks = true;
+                    if (dl.mediaType == "podcast" || dl.mediaType == "episode") hasPodcasts = true;
+                }
+
+                if (hasBooks) {
+                    tabFrame->addTab("Audiobooks", []() {
+                        auto* tab = new LibrarySectionTab("offline-books", "Audiobooks (Offline)", "book");
+                        return tab;
+                    });
+                }
+
+                if (hasPodcasts) {
+                    tabFrame->addTab("Podcasts", []() {
+                        auto* tab = new LibrarySectionTab("offline-podcasts", "Podcasts (Offline)", "podcast");
+                        return tab;
+                    });
+                }
+            }
+
             tabFrame->addTab("Settings", []() { return new SettingsTab(); });
 
-            // Focus Downloads if we have any, otherwise show offline message
-            auto downloads = DownloadsManager::getInstance().getDownloads();
-            if (!downloads.empty()) {
-                tabFrame->focusTab(1);  // Downloads tab
-            } else {
-                tabFrame->focusTab(0);  // Offline message
-            }
+            // Focus first content tab
+            tabFrame->focusTab(0);
             return;
         }
 
@@ -152,7 +173,6 @@ void MainActivity::onContentAvailable() {
 
         // Utility tabs (no separators)
         tabFrame->addTab("Search", []() { return new SearchTab(); });
-        tabFrame->addTab("Downloads", []() { return new DownloadsTab(); });
         tabFrame->addTab("Settings", []() { return new SettingsTab(); });
 
         // Focus first tab

@@ -210,6 +210,22 @@ void SettingsTab::createContentDisplaySection() {
         Application::getInstance().saveSettings();
     });
     m_contentBox->addView(progressToggle);
+
+    // Show only downloaded toggle
+    auto* downloadedOnlyToggle = new brls::BooleanCell();
+    downloadedOnlyToggle->init("Show Only Downloaded", settings.showOnlyDownloaded, [&settings](bool value) {
+        settings.showOnlyDownloaded = value;
+        Application::getInstance().saveSettings();
+    });
+    m_contentBox->addView(downloadedOnlyToggle);
+
+    // Info label for downloaded only
+    auto* downloadedInfoLabel = new brls::Label();
+    downloadedInfoLabel->setText("When enabled, library shows only downloaded content");
+    downloadedInfoLabel->setFontSize(14);
+    downloadedInfoLabel->setMarginLeft(16);
+    downloadedInfoLabel->setMarginTop(4);
+    m_contentBox->addView(downloadedInfoLabel);
 }
 
 void SettingsTab::createPlaybackSection() {
@@ -493,6 +509,17 @@ void SettingsTab::createDownloadsSection() {
         Application::getInstance().saveSettings();
     });
     m_contentBox->addView(m_syncProgressToggle);
+
+    // Sync progress now button
+    auto* syncNowCell = new brls::DetailCell();
+    syncNowCell->setText("Sync Progress Now");
+    syncNowCell->setDetailText("Upload offline progress to server");
+    syncNowCell->registerClickAction([](brls::View* view) {
+        DownloadsManager::getInstance().syncProgressToServer();
+        brls::Application::notify("Progress synced to server");
+        return true;
+    });
+    m_contentBox->addView(syncNowCell);
 
     // Clear all downloads
     m_clearDownloadsCell = new brls::DetailCell();

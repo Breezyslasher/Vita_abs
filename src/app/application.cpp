@@ -338,6 +338,7 @@ bool Application::loadSettings() {
     m_settings.showSeries = extractBool("showSeries", true);
     m_settings.showAuthors = extractBool("showAuthors", true);
     m_settings.showProgress = extractBool("showProgress", true);
+    m_settings.showOnlyDownloaded = extractBool("showOnlyDownloaded", false);
 
     // Load playback settings
     m_settings.autoPlayNext = extractBool("autoPlayNext", false);
@@ -426,6 +427,7 @@ bool Application::saveSettings() {
     json += "  \"showSeries\": " + std::string(m_settings.showSeries ? "true" : "false") + ",\n";
     json += "  \"showAuthors\": " + std::string(m_settings.showAuthors ? "true" : "false") + ",\n";
     json += "  \"showProgress\": " + std::string(m_settings.showProgress ? "true" : "false") + ",\n";
+    json += "  \"showOnlyDownloaded\": " + std::string(m_settings.showOnlyDownloaded ? "true" : "false") + ",\n";
 
     // Playback settings
     json += "  \"autoPlayNext\": " + std::string(m_settings.autoPlayNext ? "true" : "false") + ",\n";

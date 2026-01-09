@@ -124,6 +124,9 @@ struct MediaItem {
     std::string enclosureType;     // Audio MIME type (e.g., "audio/mpeg")
     std::string enclosureLength;   // File size from RSS
     std::string originalJson;      // Original JSON for download request
+
+    // Local state (not from server)
+    bool isDownloaded = false;     // Item is downloaded locally
 };
 
 // Library section info

@@ -88,16 +88,25 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
             leftBox->addView(m_resumeButton);
         }
 
-        // Download button for directly playable content
-        // Hide if saveToDownloads is enabled (files are auto-saved when played)
+        // Download/Delete button for directly playable content
         AppSettings& settings = Application::getInstance().getSettings();
-        if (!settings.saveToDownloads) {
+        bool isDownloaded = DownloadsManager::getInstance().isDownloaded(m_item.id);
+
+        if (isDownloaded) {
+            // Show Delete button for downloaded items
+            m_deleteButton = new brls::Button();
+            m_deleteButton->setText("Delete");
+            m_deleteButton->setWidth(200);
+            m_deleteButton->setMarginTop(10);
+            m_deleteButton->registerClickAction([this](brls::View* view) {
+                onDeleteDownload();
+                return true;
+            });
+            leftBox->addView(m_deleteButton);
+        } else if (!settings.saveToDownloads) {
+            // Show Download button only if not already downloaded and not auto-saving
             m_downloadButton = new brls::Button();
-            if (DownloadsManager::getInstance().isDownloaded(m_item.id)) {
-                m_downloadButton->setText("Downloaded");
-            } else {
-                m_downloadButton->setText("Download");
-            }
+            m_downloadButton->setText("Download");
             m_downloadButton->setWidth(200);
             m_downloadButton->setMarginTop(10);
             m_downloadButton->registerClickAction([this](brls::View* view) {
@@ -131,7 +140,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         });
         leftBox->addView(m_findEpisodesButton);
 
-        // Hide download button if saveToDownloads is enabled (files are auto-saved when played)
+        // Download button - will be hidden if all episodes are downloaded (checked in loadChildren)
         AppSettings& podcastSettings = Application::getInstance().getSettings();
         if (!podcastSettings.saveToDownloads) {
             m_downloadButton = new brls::Button();
@@ -144,6 +153,18 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
             });
             leftBox->addView(m_downloadButton);
         }
+
+        // Delete button for downloaded episodes - initially hidden, shown if any episodes downloaded
+        m_deleteButton = new brls::Button();
+        m_deleteButton->setText("Remove Downloads");
+        m_deleteButton->setWidth(200);
+        m_deleteButton->setMarginTop(10);
+        m_deleteButton->setVisibility(brls::Visibility::GONE);  // Hidden until we check downloads
+        m_deleteButton->registerClickAction([this](brls::View* view) {
+            deleteAllDownloadedEpisodes();
+            return true;
+        });
+        leftBox->addView(m_deleteButton);
     }
 
     topRow->addView(leftBox);
@@ -389,6 +410,30 @@ void MediaDetailView::loadChildren() {
             });
 
             m_childrenBox->addView(cell);
+        }
+
+        // Update podcast download/delete button visibility now that we know the episodes
+        if (m_item.mediaType == MediaType::PODCAST) {
+            bool allDownloaded = areAllEpisodesDownloaded();
+            bool anyDownloaded = hasAnyDownloadedEpisodes();
+
+            // Hide download button if all episodes are downloaded
+            if (m_downloadButton) {
+                if (allDownloaded) {
+                    m_downloadButton->setVisibility(brls::Visibility::GONE);
+                } else {
+                    m_downloadButton->setVisibility(brls::Visibility::VISIBLE);
+                }
+            }
+
+            // Show delete button only if any episodes are downloaded
+            if (m_deleteButton) {
+                if (anyDownloaded) {
+                    m_deleteButton->setVisibility(brls::Visibility::VISIBLE);
+                } else {
+                    m_deleteButton->setVisibility(brls::Visibility::GONE);
+                }
+            }
         }
     }
 }
@@ -1171,6 +1216,122 @@ void MediaDetailView::onDownload() {
     }
 
     startDownloadOnly(itemId, episodeId);
+}
+
+void MediaDetailView::onDeleteDownload() {
+    brls::Logger::info("onDeleteDownload called for item: {} ({})", m_item.title, m_item.id);
+
+    std::string itemId = (m_item.mediaType == MediaType::PODCAST_EPISODE) ? m_item.podcastId : m_item.id;
+    std::string title = m_item.title;
+
+    // Show confirmation dialog
+    brls::Dialog* dialog = new brls::Dialog("Delete downloaded content?\n\n\"" + title + "\"");
+
+    dialog->addButton("Cancel", [dialog]() {
+        dialog->close();
+    });
+
+    dialog->addButton("Delete", [dialog, itemId, this]() {
+        DownloadsManager::getInstance().deleteDownload(itemId);
+        brls::Application::notify("Download deleted");
+
+        // Update UI - hide delete button
+        if (m_deleteButton) {
+            m_deleteButton->setVisibility(brls::Visibility::GONE);
+        }
+
+        // Show download button if saveToDownloads is not enabled
+        AppSettings& settings = Application::getInstance().getSettings();
+        if (!settings.saveToDownloads) {
+            // Re-create the download button if it doesn't exist
+            if (!m_downloadButton) {
+                // Will be visible on next view load
+            }
+        }
+
+        dialog->close();
+    });
+
+    dialog->open();
+}
+
+bool MediaDetailView::areAllEpisodesDownloaded() {
+    if (m_item.mediaType != MediaType::PODCAST) return false;
+    if (m_children.empty()) return false;
+
+    DownloadsManager& mgr = DownloadsManager::getInstance();
+    for (const auto& ep : m_children) {
+        if (!mgr.isDownloaded(m_item.id, ep.episodeId)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool MediaDetailView::hasAnyDownloadedEpisodes() {
+    if (m_item.mediaType != MediaType::PODCAST) return false;
+
+    DownloadsManager& mgr = DownloadsManager::getInstance();
+
+    // Check children if available
+    if (!m_children.empty()) {
+        for (const auto& ep : m_children) {
+            if (mgr.isDownloaded(m_item.id, ep.episodeId)) {
+                return true;
+            }
+        }
+    }
+
+    // Also check downloads directly for this podcast
+    auto downloads = mgr.getDownloads();
+    for (const auto& dl : downloads) {
+        if (dl.itemId == m_item.id && dl.state == DownloadState::COMPLETED) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void MediaDetailView::deleteAllDownloadedEpisodes() {
+    brls::Logger::info("deleteAllDownloadedEpisodes called for podcast: {} ({})", m_item.title, m_item.id);
+
+    std::string podcastId = m_item.id;
+    std::string title = m_item.title;
+
+    // Show confirmation dialog
+    brls::Dialog* dialog = new brls::Dialog("Delete all downloaded episodes?\n\n\"" + title + "\"");
+
+    dialog->addButton("Cancel", [dialog]() {
+        dialog->close();
+    });
+
+    dialog->addButton("Delete All", [dialog, podcastId, this]() {
+        DownloadsManager& mgr = DownloadsManager::getInstance();
+        auto downloads = mgr.getDownloads();
+        int deleted = 0;
+
+        for (const auto& dl : downloads) {
+            if (dl.itemId == podcastId && dl.state == DownloadState::COMPLETED) {
+                mgr.deleteDownload(dl.itemId);
+                deleted++;
+            }
+        }
+
+        brls::Application::notify("Deleted " + std::to_string(deleted) + " episode(s)");
+
+        // Update UI
+        if (m_deleteButton) {
+            m_deleteButton->setVisibility(brls::Visibility::GONE);
+        }
+        if (m_downloadButton) {
+            m_downloadButton->setVisibility(brls::Visibility::VISIBLE);
+        }
+
+        dialog->close();
+    });
+
+    dialog->open();
 }
 
 void MediaDetailView::startDownloadOnly(const std::string& itemId, const std::string& episodeId) {
