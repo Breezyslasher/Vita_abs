@@ -6,8 +6,48 @@
 #include "app/downloads_manager.hpp"
 #include "activity/player_activity.hpp"
 #include "utils/image_loader.hpp"
+#include <fstream>
+
+#ifdef __vita__
+#include <psp2/io/fcntl.h>
+#endif
 
 namespace vitaabs {
+
+// Helper to load local cover image on Vita
+static void loadLocalCoverImage(brls::Image* image, const std::string& localPath) {
+    if (localPath.empty() || !image) return;
+
+#ifdef __vita__
+    SceUID fd = sceIoOpen(localPath.c_str(), SCE_O_RDONLY, 0);
+    if (fd >= 0) {
+        SceOff size = sceIoLseek(fd, 0, SCE_SEEK_END);
+        sceIoLseek(fd, 0, SCE_SEEK_SET);
+
+        if (size > 0 && size < 10 * 1024 * 1024) {  // Max 10MB
+            std::vector<uint8_t> data(size);
+            if (sceIoRead(fd, data.data(), size) == size) {
+                image->setImageFromMem(data.data(), data.size());
+            }
+        }
+        sceIoClose(fd);
+    }
+#else
+    std::ifstream file(localPath, std::ios::binary | std::ios::ate);
+    if (file.is_open()) {
+        std::streamsize size = file.tellg();
+        file.seekg(0, std::ios::beg);
+
+        if (size > 0 && size < 10 * 1024 * 1024) {
+            std::vector<uint8_t> data(size);
+            if (file.read(reinterpret_cast<char*>(data.data()), size)) {
+                image->setImageFromMem(data.data(), data.size());
+            }
+        }
+        file.close();
+    }
+#endif
+}
 
 DownloadsTab::DownloadsTab() {
     this->setAxis(brls::Axis::COLUMN);
@@ -92,7 +132,8 @@ void DownloadsTab::refresh() {
         row->addView(coverImage);
 
         if (!item.localCoverPath.empty()) {
-            coverImage->setImageFromFile(item.localCoverPath);
+            // Load local cover using Vita-compatible method
+            loadLocalCoverImage(coverImage, item.localCoverPath);
         } else if (!item.coverUrl.empty()) {
             // Load from remote URL
             ImageLoader::loadAsync(item.coverUrl, [coverImage](brls::Image* img) {
