@@ -421,17 +421,60 @@ bool DownloadsManager::deleteDownload(const std::string& itemId) {
 
     for (auto it = m_downloads.begin(); it != m_downloads.end(); ++it) {
         if (it->itemId == itemId) {
-            // Delete file
+            // Delete audio file
             if (!it->localPath.empty()) {
 #ifdef __vita__
                 sceIoRemove(it->localPath.c_str());
 #else
                 std::remove(it->localPath.c_str());
 #endif
+                brls::Logger::info("DownloadsManager: Deleted file {}", it->localPath);
+            }
+            // Delete cover image if exists
+            if (!it->localCoverPath.empty()) {
+#ifdef __vita__
+                sceIoRemove(it->localCoverPath.c_str());
+#else
+                std::remove(it->localCoverPath.c_str());
+#endif
+                brls::Logger::debug("DownloadsManager: Deleted cover {}", it->localCoverPath);
             }
             m_downloads.erase(it);
-            saveState();
+            saveStateUnlocked();
             brls::Logger::info("DownloadsManager: Deleted download {}", itemId);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool DownloadsManager::deleteDownloadByEpisodeId(const std::string& itemId, const std::string& episodeId) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    for (auto it = m_downloads.begin(); it != m_downloads.end(); ++it) {
+        if (it->itemId == itemId && it->episodeId == episodeId) {
+            // Delete audio file
+            if (!it->localPath.empty()) {
+#ifdef __vita__
+                sceIoRemove(it->localPath.c_str());
+#else
+                std::remove(it->localPath.c_str());
+#endif
+                brls::Logger::info("DownloadsManager: Deleted file {}", it->localPath);
+            }
+            // Delete cover image if exists
+            if (!it->localCoverPath.empty()) {
+#ifdef __vita__
+                sceIoRemove(it->localCoverPath.c_str());
+#else
+                std::remove(it->localCoverPath.c_str());
+#endif
+                brls::Logger::debug("DownloadsManager: Deleted cover {}", it->localCoverPath);
+            }
+            std::string title = it->title;
+            m_downloads.erase(it);
+            saveStateUnlocked();
+            brls::Logger::info("DownloadsManager: Deleted episode download {} ({})", title, episodeId);
             return true;
         }
     }

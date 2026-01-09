@@ -93,6 +93,9 @@ public:
     // Delete a downloaded item
     bool deleteDownload(const std::string& itemId);
 
+    // Delete a downloaded episode by episodeId (for podcasts where multiple episodes share same itemId)
+    bool deleteDownloadByEpisodeId(const std::string& itemId, const std::string& episodeId);
+
     // Get all download items
     std::vector<DownloadItem> getDownloads() const;
 
