@@ -67,33 +67,33 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
 
     // Play button - for books and podcast episodes
     if (m_item.mediaType == MediaType::BOOK || m_item.mediaType == MediaType::PODCAST_EPISODE) {
+        // Horizontal button row for all buttons
+        auto* buttonRow = new brls::Box();
+        buttonRow->setAxis(brls::Axis::ROW);
+        buttonRow->setMarginTop(20);
+        buttonRow->setJustifyContent(brls::JustifyContent::FLEX_START);
+
         m_playButton = new brls::Button();
         m_playButton->setText("Play");
-        m_playButton->setWidth(200);
-        m_playButton->setMarginTop(20);
+        m_playButton->setWidth(95);
+        m_playButton->setMarginRight(10);
         m_playButton->registerClickAction([this](brls::View* view) {
             onPlay(false);
             return true;
         });
-        leftBox->addView(m_playButton);
+        buttonRow->addView(m_playButton);
 
         if (m_item.currentTime > 0) {
             m_resumeButton = new brls::Button();
             m_resumeButton->setText("Resume");
-            m_resumeButton->setWidth(200);
-            m_resumeButton->setMarginTop(10);
+            m_resumeButton->setWidth(95);
+            m_resumeButton->setMarginRight(10);
             m_resumeButton->registerClickAction([this](brls::View* view) {
                 onPlay(true);
                 return true;
             });
-            leftBox->addView(m_resumeButton);
+            buttonRow->addView(m_resumeButton);
         }
-
-        // Horizontal button row for Download/Delete
-        auto* buttonRow = new brls::Box();
-        buttonRow->setAxis(brls::Axis::ROW);
-        buttonRow->setMarginTop(10);
-        buttonRow->setJustifyContent(brls::JustifyContent::FLEX_START);
 
         // Download/Delete button for directly playable content
         AppSettings& settings = Application::getInstance().getSettings();
@@ -102,8 +102,8 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         if (!settings.saveToDownloads && !isDownloaded) {
             // Show Download button only if not already downloaded and not auto-saving
             m_downloadButton = new brls::Button();
-            m_downloadButton->setText("Download");
-            m_downloadButton->setWidth(95);
+            m_downloadButton->setText("DL");
+            m_downloadButton->setWidth(50);
             m_downloadButton->setMarginRight(10);
             m_downloadButton->registerClickAction([this](brls::View* view) {
                 onDownload();
@@ -115,8 +115,8 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         if (isDownloaded) {
             // Show Delete button for downloaded items
             m_deleteButton = new brls::Button();
-            m_deleteButton->setText("Delete");
-            m_deleteButton->setWidth(95);
+            m_deleteButton->setText("Del");
+            m_deleteButton->setWidth(50);
             m_deleteButton->registerClickAction([this](brls::View* view) {
                 onDeleteDownload();
                 return true;
@@ -129,39 +129,38 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
 
     // For podcasts, show download options
     if (m_item.mediaType == MediaType::PODCAST) {
+        // Horizontal button row for all podcast buttons
+        auto* podcastButtonRow = new brls::Box();
+        podcastButtonRow->setAxis(brls::Axis::ROW);
+        podcastButtonRow->setMarginTop(20);
+        podcastButtonRow->setJustifyContent(brls::JustifyContent::FLEX_START);
+
         m_playButton = new brls::Button();
-        m_playButton->setText("Play Latest");
-        m_playButton->setWidth(200);
-        m_playButton->setMarginTop(20);
+        m_playButton->setText("Play");
+        m_playButton->setWidth(50);
+        m_playButton->setMarginRight(5);
         m_playButton->registerClickAction([this](brls::View* view) {
             onPlay(false);
             return true;
         });
-        leftBox->addView(m_playButton);
+        podcastButtonRow->addView(m_playButton);
 
         // Find New Episodes button - check RSS for new episodes
         m_findEpisodesButton = new brls::Button();
-        m_findEpisodesButton->setText("Find New Episodes");
-        m_findEpisodesButton->setWidth(200);
-        m_findEpisodesButton->setMarginTop(10);
+        m_findEpisodesButton->setText("New");
+        m_findEpisodesButton->setWidth(50);
+        m_findEpisodesButton->setMarginRight(5);
         m_findEpisodesButton->registerClickAction([this](brls::View* view) {
             findNewEpisodes();
             return true;
         });
-        leftBox->addView(m_findEpisodesButton);
-
-        // Horizontal button row for Download/Remove
-        auto* podcastButtonRow = new brls::Box();
-        podcastButtonRow->setAxis(brls::Axis::ROW);
-        podcastButtonRow->setMarginTop(10);
-        podcastButtonRow->setJustifyContent(brls::JustifyContent::FLEX_START);
+        podcastButtonRow->addView(m_findEpisodesButton);
 
         // Download button for podcasts - always show (will be hidden if all episodes are downloaded in loadChildren)
-        // Note: Unlike audiobooks, podcasts always show download button regardless of saveToDownloads setting
         m_downloadButton = new brls::Button();
-        m_downloadButton->setText("Download");
-        m_downloadButton->setWidth(95);
-        m_downloadButton->setMarginRight(10);
+        m_downloadButton->setText("DL");
+        m_downloadButton->setWidth(45);
+        m_downloadButton->setMarginRight(5);
         m_downloadButton->registerClickAction([this](brls::View* view) {
             showDownloadOptions();
             return true;
@@ -170,8 +169,8 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
 
         // Delete button for downloaded episodes - initially hidden, shown if any episodes downloaded
         m_deleteButton = new brls::Button();
-        m_deleteButton->setText("Remove");
-        m_deleteButton->setWidth(95);
+        m_deleteButton->setText("Del");
+        m_deleteButton->setWidth(45);
         m_deleteButton->setVisibility(brls::Visibility::GONE);  // Hidden until we check downloads
         m_deleteButton->registerClickAction([this](brls::View* view) {
             deleteAllDownloadedEpisodes();
