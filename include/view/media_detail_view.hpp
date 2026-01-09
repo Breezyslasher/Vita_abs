@@ -20,6 +20,7 @@ private:
     void loadDetails();
     void loadChildren();
     void loadMusicCategories();
+    void loadLocalCover(const std::string& localPath);
     void onPlay(bool resume = false);
     void startDownloadAndPlay(const std::string& itemId, const std::string& episodeId,
                               float startTime = -1.0f, bool downloadOnly = false);

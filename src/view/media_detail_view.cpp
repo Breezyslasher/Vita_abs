@@ -15,6 +15,7 @@
 #include "utils/async.hpp"
 #include <thread>
 #include <algorithm>
+#include <fstream>
 
 #ifdef __vita__
 #include <psp2/kernel/threadmgr.h>
@@ -339,7 +340,9 @@ void MediaDetailView::loadDetails() {
 
     // Load full details
     MediaItem fullItem;
-    if (client.fetchItem(m_item.id, fullItem)) {
+    bool loadedFromServer = client.fetchItem(m_item.id, fullItem);
+
+    if (loadedFromServer) {
         m_item = fullItem;
 
         // Update UI with full details
@@ -384,12 +387,24 @@ void MediaDetailView::loadDetails() {
         }
     }
 
-    // Load thumbnail - use item ID for cover URL
+    // Load thumbnail - try local cover first if offline or for downloaded content
     if (m_posterImage && !m_item.id.empty()) {
-        std::string url = client.getCoverUrl(m_item.id, 400, 400);
-        ImageLoader::loadAsync(url, [this](brls::Image* image) {
-            // Image loaded
-        }, m_posterImage);
+        // Check if we have a local cover from downloads
+        DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
+        std::string localCoverPath = downloadsMgr.getLocalCoverPath(m_item.id);
+
+        if (!localCoverPath.empty()) {
+            // Load local cover
+            brls::Logger::info("MediaDetailView: Loading local cover: {}", localCoverPath);
+            loadLocalCover(localCoverPath);
+        } else if (loadedFromServer) {
+            // Fetch from server
+            std::string url = client.getCoverUrl(m_item.id, 400, 400);
+            ImageLoader::loadAsync(url, [this](brls::Image* image) {
+                // Image loaded
+            }, m_posterImage);
+        }
+        // If offline and no local cover, leave poster empty
     }
 
     // Load children (podcast episodes)
@@ -409,7 +424,44 @@ void MediaDetailView::loadChildren() {
 
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
-    if (client.fetchPodcastEpisodes(m_item.id, m_children)) {
+    bool loadedFromServer = client.fetchPodcastEpisodes(m_item.id, m_children);
+
+    // If server fetch failed, try to load downloaded episodes from DownloadsManager
+    if (!loadedFromServer) {
+        brls::Logger::info("MediaDetailView: Server fetch failed, loading downloaded episodes");
+        DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
+        auto allDownloads = downloadsMgr.getDownloads();
+
+        m_children.clear();
+        for (const auto& dl : allDownloads) {
+            if (dl.itemId == m_item.id && dl.state == DownloadState::COMPLETED && !dl.episodeId.empty()) {
+                // Create a MediaItem from the download info
+                MediaItem episode;
+                episode.id = dl.episodeId;
+                episode.podcastId = dl.itemId;
+                episode.episodeId = dl.episodeId;
+                episode.title = dl.title;
+                episode.authorName = dl.authorName;
+                episode.duration = dl.duration;
+                episode.mediaType = MediaType::PODCAST_EPISODE;
+                episode.isDownloaded = true;
+                // Use local cover path if available
+                if (!dl.localCoverPath.empty()) {
+                    episode.coverPath = dl.localCoverPath;
+                } else {
+                    episode.coverPath = dl.coverUrl;
+                }
+                m_children.push_back(episode);
+                brls::Logger::debug("MediaDetailView: Added downloaded episode: {}", dl.title);
+            }
+        }
+
+        if (!m_children.empty()) {
+            brls::Logger::info("MediaDetailView: Found {} downloaded episodes for podcast", m_children.size());
+        }
+    }
+
+    if (!m_children.empty()) {
         m_childrenBox->clearViews();
 
         for (const auto& child : m_children) {
@@ -462,6 +514,45 @@ void MediaDetailView::loadChildren() {
 
 void MediaDetailView::loadMusicCategories() {
     // Not used for Audiobookshelf
+}
+
+void MediaDetailView::loadLocalCover(const std::string& localPath) {
+    if (localPath.empty() || !m_posterImage) return;
+
+#ifdef __vita__
+    SceUID fd = sceIoOpen(localPath.c_str(), SCE_O_RDONLY, 0);
+    if (fd >= 0) {
+        SceOff size = sceIoLseek(fd, 0, SCE_SEEK_END);
+        sceIoLseek(fd, 0, SCE_SEEK_SET);
+
+        if (size > 0 && size < 10 * 1024 * 1024) {  // Max 10MB
+            std::vector<uint8_t> data(size);
+            if (sceIoRead(fd, data.data(), size) == size) {
+                m_posterImage->setImageFromMem(data.data(), data.size());
+                brls::Logger::debug("MediaDetailView: Local cover loaded ({} bytes)", size);
+            }
+        }
+        sceIoClose(fd);
+    } else {
+        brls::Logger::warning("MediaDetailView: Failed to open local cover: {}", localPath);
+    }
+#else
+    // Non-Vita: use standard file I/O
+    std::ifstream file(localPath, std::ios::binary | std::ios::ate);
+    if (file.is_open()) {
+        std::streamsize size = file.tellg();
+        file.seekg(0, std::ios::beg);
+
+        if (size > 0 && size < 10 * 1024 * 1024) {
+            std::vector<uint8_t> data(size);
+            if (file.read(reinterpret_cast<char*>(data.data()), size)) {
+                m_posterImage->setImageFromMem(data.data(), data.size());
+                brls::Logger::debug("MediaDetailView: Local cover loaded ({} bytes)", size);
+            }
+        }
+        file.close();
+    }
+#endif
 }
 
 void MediaDetailView::populateChapters() {
