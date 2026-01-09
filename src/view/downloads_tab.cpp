@@ -5,6 +5,7 @@
 #include "view/downloads_tab.hpp"
 #include "app/downloads_manager.hpp"
 #include "activity/player_activity.hpp"
+#include "utils/image_loader.hpp"
 
 namespace vitaabs {
 
@@ -82,15 +83,21 @@ void DownloadsTab::refresh() {
         row->setBackgroundColor(nvgRGBA(40, 40, 40, 200));
         row->setCornerRadius(8);
 
-        // Cover image (if available)
+        // Cover image (try local first, then remote URL)
+        auto coverImage = new brls::Image();
+        coverImage->setWidth(60);
+        coverImage->setHeight(60);
+        coverImage->setCornerRadius(4);
+        coverImage->setMargins(0, 15, 0, 0);
+        row->addView(coverImage);
+
         if (!item.localCoverPath.empty()) {
-            auto coverImage = new brls::Image();
-            coverImage->setWidth(60);
-            coverImage->setHeight(60);
-            coverImage->setCornerRadius(4);
-            coverImage->setMargins(0, 15, 0, 0);
             coverImage->setImageFromFile(item.localCoverPath);
-            row->addView(coverImage);
+        } else if (!item.coverUrl.empty()) {
+            // Load from remote URL
+            ImageLoader::loadAsync(item.coverUrl, [coverImage](brls::Image* img) {
+                // Image loaded callback - image already set by ImageLoader
+            });
         }
 
         // Title and info
