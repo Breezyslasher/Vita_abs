@@ -918,6 +918,35 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
             int numTracks = static_cast<int>(session.audioTracks.size());
             std::vector<std::string> trackFiles;
 
+            // Check if combined file already exists on disk (from previous incomplete registration)
+            std::string combinedPath;
+            if (useDownloads) {
+                combinedPath = downloadsMgr.getDownloadsPath() + "/" + itemId + ".m4b";
+            } else {
+                combinedPath = tempMgr.getTempFilePath(itemId, episodeId, ".m4b");
+            }
+
+            SceIoStat existingStat;
+            if (sceIoGetstat(combinedPath.c_str(), &existingStat) >= 0 && existingStat.st_size > 0) {
+                brls::Logger::info("Found existing combined file: {} ({} bytes)", combinedPath, existingStat.st_size);
+
+                // Register it if not already registered
+                if (useDownloads) {
+                    downloadsMgr.registerCompletedDownload(itemId, episodeId, title, authorName,
+                        combinedPath, existingStat.st_size, duration, itemType, coverUrl, description, downloadChapters);
+                } else {
+                    tempMgr.registerTempFile(itemId, episodeId, combinedPath, title, existingStat.st_size);
+                }
+
+                // Play the existing file
+                float seekTime = (requestedStartTime >= 0) ? requestedStartTime : session.currentTime;
+                brls::sync([progressDialog, itemId, episodeId, combinedPath, seekTime]() {
+                    progressDialog->dismiss();
+                    Application::getInstance().pushPlayerActivityWithFile(itemId, episodeId, combinedPath, seekTime);
+                });
+                return;
+            }
+
             if (downloadOnly) {
                 // Download-only mode: download ALL tracks first, combine, register, no playback
                 brls::Logger::info("Download-only mode: Downloading all {} tracks for multi-file audiobook", numTracks);
