@@ -1039,7 +1039,14 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
 
                     brls::Logger::info("Combining {} tracks into {}", numTracks, destPath);
 
-                    if (concatenateAudioFiles(trackFiles, destPath)) {
+                    int totalTracks = numTracks;
+                    if (concatenateAudioFiles(trackFiles, destPath, [progressDialog, totalTracks](int current, int total) {
+                        brls::sync([progressDialog, current, totalTracks]() {
+                            char buf[64];
+                            snprintf(buf, sizeof(buf), "Combining file %d/%d...", current, totalTracks);
+                            progressDialog->setStatus(buf);
+                        });
+                    })) {
                         brls::Logger::info("Successfully combined {} tracks", numTracks);
 
                         // Get final file size
