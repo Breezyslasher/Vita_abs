@@ -105,7 +105,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
             // Show Download button only if not already downloaded and not auto-saving
             m_downloadButton = new brls::Button();
             m_downloadButton->setText("Download");
-            m_downloadButton->setWidth(120);
+            m_downloadButton->setWidth(115);
             m_downloadButton->setHeight(40);
             m_downloadButton->setMarginRight(10);
             m_downloadButton->registerClickAction([this](brls::View* view) {
