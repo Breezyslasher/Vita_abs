@@ -885,7 +885,12 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
             ext = ".ogg";
         }
 
-        std::string finalExt = isMultiFile ? ".m4b" : ext;
+        // For multi-file audiobooks, use mp4 container only for m4a sources
+        // For mp3/ogg/flac sources, keep the same format (Vita FFmpeg lacks mp4 muxer)
+        std::string finalExt = ext;
+        if (isMultiFile && ext == ".m4a") {
+            finalExt = ".m4b";  // Only use m4b for m4a sources
+        }
 
         // Determine destination path
         TempFileManager& tempMgr = TempFileManager::getInstance();
@@ -921,9 +926,9 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
             // Check if combined file already exists on disk (from previous incomplete registration)
             std::string combinedPath;
             if (useDownloads) {
-                combinedPath = downloadsMgr.getDownloadsPath() + "/" + itemId + ".m4b";
+                combinedPath = downloadsMgr.getDownloadsPath() + "/" + itemId + finalExt;
             } else {
-                combinedPath = tempMgr.getTempFilePath(itemId, episodeId, ".m4b");
+                combinedPath = tempMgr.getTempFilePath(itemId, episodeId, finalExt);
             }
 
             SceIoStat existingStat;
@@ -1151,9 +1156,10 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                     // Now download remaining tracks in background and combine when done
                     std::vector<AudioTrack> allTracks = session.audioTracks;
                     std::string baseExt = ext;
+                    std::string combinedExt = finalExt;  // Use the correct extension based on source format
                     std::string finalPath = useDownloads
-                        ? downloadsMgr.getDownloadsPath() + "/" + itemId + ".m4b"
-                        : tempMgr.getTempFilePath(itemId, episodeId, ".m4b");
+                        ? downloadsMgr.getDownloadsPath() + "/" + itemId + combinedExt
+                        : tempMgr.getTempFilePath(itemId, episodeId, combinedExt);
 
                     asyncRun([allTracks, currentTrackIdx, currentTrackPath, itemId, episodeId, baseExt, finalPath, title, authorName, duration, itemType, useDownloads, coverUrl, description, downloadChapters]() {
                         brls::Logger::info("Background: Downloading remaining tracks...");

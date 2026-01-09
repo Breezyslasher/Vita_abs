@@ -794,8 +794,26 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
                 filePaths.push_back(fi.localPath);
             }
 
+            // Determine output extension from source files (mp3 -> mp3, m4a -> m4b)
+            std::string outputExt = ".mp3";  // Default to mp3 since Vita lacks mp4 muxer
+            if (!item.files.empty()) {
+                const std::string& firstFile = item.files[0].localPath;
+                size_t dotPos = firstFile.rfind('.');
+                if (dotPos != std::string::npos) {
+                    std::string srcExt = firstFile.substr(dotPos);
+                    if (srcExt == ".m4a" || srcExt == ".m4b" || srcExt == ".mp4") {
+                        outputExt = ".m4b";
+                    } else if (srcExt == ".ogg") {
+                        outputExt = ".ogg";
+                    } else if (srcExt == ".flac") {
+                        outputExt = ".flac";
+                    }
+                    // else keep .mp3 for mp3 and other formats
+                }
+            }
+
             // Combined output file path
-            std::string combinedPath = m_downloadsPath + "/" + item.itemId + ".m4b";
+            std::string combinedPath = m_downloadsPath + "/" + item.itemId + outputExt;
 
             // Run FFmpeg concatenation
             bool concatSuccess = concatenateAudioFiles(filePaths, combinedPath,

@@ -625,8 +625,12 @@ void PlayerActivity::loadMedia() {
             ext = ".ogg";
         }
 
-        // For multi-file, we'll create a combined .m4b file
-        std::string finalExt = isMultiFile ? ".m4b" : ext;
+        // For multi-file, use mp4 container only for m4a sources
+        // For mp3/ogg/flac sources, keep the same format (Vita FFmpeg lacks mp4 muxer)
+        std::string finalExt = ext;
+        if (isMultiFile && ext == ".m4a") {
+            finalExt = ".m4b";  // Only use m4b for m4a sources
+        }
 
         // Get settings to check if we should save to downloads
         AppSettings& settings = Application::getInstance().getSettings();
