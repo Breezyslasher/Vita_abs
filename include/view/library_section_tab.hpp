@@ -43,6 +43,7 @@ private:
     void onGenreSelected(const GenreItem& genre);
     void updateViewModeButtons();
     void filterByDownloaded();
+    void hideNavigationButtons();  // Hide all nav buttons for offline/downloaded-only mode
 
     // Podcast management
     void openPodcastSearch();

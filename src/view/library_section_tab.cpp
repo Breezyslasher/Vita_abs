@@ -150,12 +150,13 @@ void LibrarySectionTab::loadContent() {
     // Always load downloaded items first (for filtering and offline mode)
     loadDownloadedItems();
 
-    // If showOnlyDownloaded is enabled, just show downloaded items
+    // If showOnlyDownloaded is enabled, just show downloaded items and hide navigation
     if (settings.showOnlyDownloaded) {
         brls::Logger::info("LibraryTab: Show only downloaded mode enabled");
         m_viewMode = LibraryViewMode::DOWNLOADED;
         m_loaded = true;
-        // Downloaded items will be displayed when loadDownloadedItems completes
+        // Hide all navigation buttons in downloaded-only mode
+        hideNavigationButtons();
         return;
     }
 
@@ -187,12 +188,11 @@ void LibrarySectionTab::loadContent() {
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) return;
 
-                // Offline - show downloaded items instead
-                if (!m_downloadedItems.empty()) {
-                    m_titleLabel->setText(m_title + " (Offline)");
-                    m_viewMode = LibraryViewMode::DOWNLOADED;
-                    m_contentGrid->setDataSource(m_downloadedItems);
-                }
+                // Offline - show downloaded items instead and hide navigation
+                m_titleLabel->setText(m_title + " (Offline)");
+                m_viewMode = LibraryViewMode::DOWNLOADED;
+                m_contentGrid->setDataSource(m_downloadedItems);
+                hideNavigationButtons();
                 m_loaded = true;
             });
         }
@@ -284,8 +284,10 @@ void LibrarySectionTab::loadDownloadedItems() {
     std::vector<MediaItem> downloadedItems;
 
     // For podcasts, group episodes by podcast
-    // Map: podcastId -> {podcastName, coverPath, episodeCount}
-    std::map<std::string, std::tuple<std::string, std::string, int>> podcastGroups;
+    // Map: podcastId -> vector of {episodeId, episodeTitle, coverPath}
+    std::map<std::string, std::vector<std::tuple<std::string, std::string, std::string, std::string>>> podcastEpisodes;
+    // Also track podcast name for each podcastId
+    std::map<std::string, std::string> podcastNames;
 
     for (const auto& dl : downloads) {
         // Filter by media type to match this library's type
@@ -301,14 +303,10 @@ void LibrarySectionTab::loadDownloadedItems() {
             if (sectionType == "podcast" && !dl.episodeId.empty()) {
                 // This is a podcast episode - group by podcastId
                 std::string podcastId = dl.itemId;
-                if (podcastGroups.find(podcastId) == podcastGroups.end()) {
-                    // First episode for this podcast
-                    std::string podcastName = dl.parentTitle.empty() ? dl.title : dl.parentTitle;
-                    podcastGroups[podcastId] = std::make_tuple(podcastName, dl.localCoverPath, 1);
-                } else {
-                    // Add to episode count
-                    std::get<2>(podcastGroups[podcastId])++;
-                }
+                std::string podcastName = dl.parentTitle.empty() ? "Unknown Podcast" : dl.parentTitle;
+                podcastNames[podcastId] = podcastName;
+                // Store: episodeId, episodeTitle, coverPath, podcastName
+                podcastEpisodes[podcastId].push_back(std::make_tuple(dl.episodeId, dl.title, dl.localCoverPath, podcastName));
             } else {
                 // Audiobook or standalone item
                 MediaItem item;
@@ -330,19 +328,37 @@ void LibrarySectionTab::loadDownloadedItems() {
         }
     }
 
-    // Convert grouped podcasts to MediaItems
-    for (const auto& [podcastId, podcastInfo] : podcastGroups) {
-        MediaItem item;
-        item.id = podcastId;
-        item.title = std::get<0>(podcastInfo);  // Podcast name
-        item.coverPath = std::get<1>(podcastInfo);  // Cover path
-        int episodeCount = std::get<2>(podcastInfo);
-        item.authorName = std::to_string(episodeCount) + " episode" + (episodeCount > 1 ? "s" : "") + " downloaded";
-        item.type = "podcast";
-        item.mediaType = MediaType::PODCAST;
-        item.isDownloaded = true;
+    // Convert podcast episodes to MediaItems
+    for (const auto& [podcastId, episodes] : podcastEpisodes) {
+        if (episodes.size() == 1) {
+            // Single episode - show as individual episode that plays directly
+            const auto& ep = episodes[0];
+            MediaItem item;
+            item.id = podcastId;  // Keep podcast ID for playback
+            item.podcastId = podcastId;
+            item.episodeId = std::get<0>(ep);  // Episode ID
+            item.title = std::get<1>(ep);  // Episode title
+            item.coverPath = std::get<2>(ep);  // Cover path
+            item.authorName = std::get<3>(ep);  // Podcast name as author
+            item.type = "episode";
+            item.mediaType = MediaType::PODCAST_EPISODE;
+            item.isDownloaded = true;
 
-        downloadedItems.push_back(item);
+            downloadedItems.push_back(item);
+        } else {
+            // Multiple episodes - show as grouped podcast
+            MediaItem item;
+            item.id = podcastId;
+            item.title = podcastNames[podcastId];  // Podcast name
+            item.coverPath = std::get<2>(episodes[0]);  // Cover path from first episode
+            int episodeCount = episodes.size();
+            item.authorName = std::to_string(episodeCount) + " episodes downloaded";
+            item.type = "podcast";
+            item.mediaType = MediaType::PODCAST;
+            item.isDownloaded = true;
+
+            downloadedItems.push_back(item);
+        }
     }
 
     brls::Logger::info("LibrarySectionTab: Found {} downloaded items for type {}", downloadedItems.size(), sectionType);
@@ -467,6 +483,31 @@ void LibrarySectionTab::updateViewModeButtons() {
     }
     if (m_downloadedBtn) {
         m_downloadedBtn->setVisibility(showModeButtons && !m_downloadedItems.empty() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+    }
+}
+
+void LibrarySectionTab::hideNavigationButtons() {
+    // Hide all navigation buttons for offline/downloaded-only mode
+    if (m_allBtn) {
+        m_allBtn->setVisibility(brls::Visibility::GONE);
+    }
+    if (m_collectionsBtn) {
+        m_collectionsBtn->setVisibility(brls::Visibility::GONE);
+    }
+    if (m_categoriesBtn) {
+        m_categoriesBtn->setVisibility(brls::Visibility::GONE);
+    }
+    if (m_downloadedBtn) {
+        m_downloadedBtn->setVisibility(brls::Visibility::GONE);
+    }
+    if (m_backBtn) {
+        m_backBtn->setVisibility(brls::Visibility::GONE);
+    }
+    if (m_findPodcastsBtn) {
+        m_findPodcastsBtn->setVisibility(brls::Visibility::GONE);
+    }
+    if (m_checkEpisodesBtn) {
+        m_checkEpisodesBtn->setVisibility(brls::Visibility::GONE);
     }
 }
 
