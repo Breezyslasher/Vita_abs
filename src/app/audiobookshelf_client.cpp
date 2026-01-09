@@ -199,7 +199,12 @@ MediaItem AudiobookshelfClient::parseMediaItem(const std::string& json) {
         item.title = extractJsonValue(metadataObj, "title");
         item.subtitle = extractJsonValue(metadataObj, "subtitle");
         item.description = extractJsonValue(metadataObj, "description");
+        // For audiobooks: authorName, for podcasts: author
         item.authorName = extractJsonValue(metadataObj, "authorName");
+        if (item.authorName.empty()) {
+            // Podcasts use "author" field for the creator/feed owner
+            item.authorName = extractJsonValue(metadataObj, "author");
+        }
         item.narratorName = extractJsonValue(metadataObj, "narratorName");
         item.publishedYear = extractJsonValue(metadataObj, "publishedYear");
         item.publisher = extractJsonValue(metadataObj, "publisher");
