@@ -299,6 +299,9 @@ void LibrarySectionTab::loadDownloadedItems() {
         }
 
         if (matchesType && dl.state == DownloadState::COMPLETED) {
+            brls::Logger::debug("LibrarySectionTab: Downloaded item '{}' - localCoverPath='{}'",
+                               dl.title, dl.localCoverPath);
+
             // For podcast episodes, group by podcast
             if (sectionType == "podcast" && !dl.episodeId.empty()) {
                 // This is a podcast episode - group by podcastId
