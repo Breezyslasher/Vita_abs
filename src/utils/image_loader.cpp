@@ -31,6 +31,7 @@ void ImageLoader::loadAsync(const std::string& url, LoadCallback callback, brls:
         HttpResponse resp = client.get(url);
 
         if (resp.success && !resp.body.empty()) {
+            brls::Logger::debug("ImageLoader: Successfully loaded {} bytes from {}", resp.body.size(), url);
             // Cache the image data
             std::vector<uint8_t> imageData(resp.body.begin(), resp.body.end());
 
@@ -48,6 +49,9 @@ void ImageLoader::loadAsync(const std::string& url, LoadCallback callback, brls:
                 target->setImageFromMem(imageData.data(), imageData.size());
                 if (callback) callback(target);
             });
+        } else {
+            brls::Logger::error("ImageLoader: Failed to load {}: status={} error={}",
+                url, resp.statusCode, resp.error.empty() ? "empty response" : resp.error);
         }
     });
 }

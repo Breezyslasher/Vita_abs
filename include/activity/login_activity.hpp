@@ -22,6 +22,7 @@ public:
 private:
     void onLoginPressed();
     void onTestConnectionPressed();
+    void onOfflinePressed();
 
     BRLS_BIND(brls::Label, titleLabel, "login/title");
     BRLS_BIND(brls::Box, inputContainer, "login/input_container");
@@ -30,6 +31,7 @@ private:
     BRLS_BIND(brls::Label, passwordLabel, "login/password_label");
     BRLS_BIND(brls::Button, loginButton, "login/login_button");
     BRLS_BIND(brls::Button, pinButton, "login/pin_button");
+    BRLS_BIND(brls::Button, offlineButton, "login/offline_button");
     BRLS_BIND(brls::Label, statusLabel, "login/status");
     BRLS_BIND(brls::Label, pinCodeLabel, "login/pin_code");
 

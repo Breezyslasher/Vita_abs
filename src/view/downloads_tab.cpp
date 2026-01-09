@@ -58,7 +58,12 @@ void DownloadsTab::refresh() {
         m_listContainer->removeView(m_listContainer->getChildren()[0]);
     }
 
-    auto downloads = DownloadsManager::getInstance().getDownloads();
+    // Ensure manager is initialized and state is loaded
+    DownloadsManager& mgr = DownloadsManager::getInstance();
+    mgr.init();
+
+    auto downloads = mgr.getDownloads();
+    brls::Logger::info("DownloadsTab: Found {} downloads", downloads.size());
 
     if (downloads.empty()) {
         m_emptyLabel->setVisibility(brls::Visibility::VISIBLE);
@@ -77,6 +82,17 @@ void DownloadsTab::refresh() {
         row->setBackgroundColor(nvgRGBA(40, 40, 40, 200));
         row->setCornerRadius(8);
 
+        // Cover image (if available)
+        if (!item.localCoverPath.empty()) {
+            auto coverImage = new brls::Image();
+            coverImage->setWidth(60);
+            coverImage->setHeight(60);
+            coverImage->setCornerRadius(4);
+            coverImage->setMargins(0, 15, 0, 0);
+            coverImage->setImageFromFile(item.localCoverPath);
+            row->addView(coverImage);
+        }
+
         // Title and info
         auto infoBox = new brls::Box();
         infoBox->setAxis(brls::Axis::COLUMN);
@@ -90,6 +106,15 @@ void DownloadsTab::refresh() {
         titleLabel->setText(displayTitle);
         titleLabel->setFontSize(18);
         infoBox->addView(titleLabel);
+
+        // Author name (if available)
+        if (!item.authorName.empty()) {
+            auto authorLabel = new brls::Label();
+            authorLabel->setText(item.authorName);
+            authorLabel->setFontSize(14);
+            authorLabel->setTextColor(nvgRGBA(180, 180, 180, 255));
+            infoBox->addView(authorLabel);
+        }
 
         // Status/progress
         auto statusLabel = new brls::Label();
@@ -113,8 +138,8 @@ void DownloadsTab::refresh() {
                 break;
             case DownloadState::COMPLETED:
                 statusText = "Ready to play";
-                if (item.viewOffset > 0) {
-                    int minutes = (int)(item.viewOffset / 60000);
+                if (item.currentTime > 0) {
+                    int minutes = (int)(item.currentTime / 60.0f);  // currentTime is in seconds
                     statusText += " (" + std::to_string(minutes) + " min watched)";
                 }
                 break;
@@ -133,7 +158,7 @@ void DownloadsTab::refresh() {
             playBtn->setText("Play");
             playBtn->setMargins(0, 0, 0, 10);
 
-            std::string ratingKey = item.ratingKey;
+            std::string ratingKey = item.itemId;
             std::string localPath = item.localPath;
             playBtn->registerClickAction([ratingKey, localPath](brls::View*) {
                 // Play local file
@@ -144,7 +169,7 @@ void DownloadsTab::refresh() {
 
             auto deleteBtn = new brls::Button();
             deleteBtn->setText("Delete");
-            std::string key = item.ratingKey;
+            std::string key = item.itemId;
             deleteBtn->registerClickAction([key](brls::View*) {
                 DownloadsManager::getInstance().deleteDownload(key);
                 brls::Application::notify("Download deleted");
@@ -154,7 +179,7 @@ void DownloadsTab::refresh() {
         } else if (item.state == DownloadState::DOWNLOADING || item.state == DownloadState::QUEUED) {
             auto cancelBtn = new brls::Button();
             cancelBtn->setText("Cancel");
-            std::string key = item.ratingKey;
+            std::string key = item.itemId;
             cancelBtn->registerClickAction([key](brls::View*) {
                 DownloadsManager::getInstance().cancelDownload(key);
                 brls::Application::notify("Download cancelled");

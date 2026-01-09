@@ -4,6 +4,7 @@
 
 #include "app/application.hpp"
 #include "app/audiobookshelf_client.hpp"
+#include "app/downloads_manager.hpp"
 #include "activity/login_activity.hpp"
 #include "activity/main_activity.hpp"
 #include "activity/player_activity.hpp"
@@ -54,6 +55,9 @@ void Application::run() {
     brls::Logger::info("Application::run - isLoggedIn={}, serverUrl={}",
                        isLoggedIn(), m_serverUrl.empty() ? "(empty)" : m_serverUrl);
 
+    // Initialize downloads manager to check for offline content
+    DownloadsManager::getInstance().init();
+
     // Check if we have saved login credentials
     if (isLoggedIn() && !m_serverUrl.empty()) {
         brls::Logger::info("Restoring saved session...");
@@ -66,13 +70,27 @@ void Application::run() {
             brls::Logger::info("Restored session, token valid");
             pushMainActivity();
         } else {
-            brls::Logger::error("Saved token invalid, showing login");
-            pushLoginActivity();
+            // Token validation failed - could be offline
+            // Check if we have downloads, if so go to main activity (offline mode)
+            auto downloads = DownloadsManager::getInstance().getDownloads();
+            if (!downloads.empty()) {
+                brls::Logger::info("Offline with {} downloads, going to main activity", downloads.size());
+                pushMainActivity();
+            } else {
+                brls::Logger::error("Saved token invalid and no downloads, showing login");
+                pushLoginActivity();
+            }
         }
     } else {
-        brls::Logger::info("No saved session, showing login screen");
-        // Show login screen
-        pushLoginActivity();
+        // No saved session - check if we have downloads for offline mode
+        auto downloads = DownloadsManager::getInstance().getDownloads();
+        if (!downloads.empty()) {
+            brls::Logger::info("No session but {} downloads exist, going to main activity", downloads.size());
+            pushMainActivity();
+        } else {
+            brls::Logger::info("No saved session, showing login screen");
+            pushLoginActivity();
+        }
     }
 
     // Main loop handled by Borealis
@@ -95,8 +113,14 @@ void Application::pushMainActivity() {
     brls::Application::pushActivity(new MainActivity());
 }
 
-void Application::pushPlayerActivity(const std::string& itemId, const std::string& episodeId) {
-    brls::Application::pushActivity(new PlayerActivity(itemId, episodeId));
+void Application::pushPlayerActivity(const std::string& itemId, const std::string& episodeId,
+                                      float startTime) {
+    brls::Application::pushActivity(new PlayerActivity(itemId, episodeId, startTime));
+}
+
+void Application::pushPlayerActivityWithFile(const std::string& itemId, const std::string& episodeId,
+                                              const std::string& preDownloadedPath, float startTime) {
+    brls::Application::pushActivity(new PlayerActivity(itemId, episodeId, preDownloadedPath, startTime));
 }
 
 void Application::applyTheme() {
@@ -306,7 +330,6 @@ bool Application::loadSettings() {
     m_settings.debugLogging = extractBool("debugLogging", true);
 
     // Load layout settings
-    m_settings.showLibrariesInSidebar = extractBool("showLibrariesInSidebar", false);
     m_settings.collapseSidebar = extractBool("collapseSidebar", false);
     m_settings.hiddenLibraries = extractString("hiddenLibraries");
 
@@ -350,6 +373,16 @@ bool Application::loadSettings() {
     m_settings.deleteAfterFinish = extractBool("deleteAfterFinish", false);
     m_settings.syncProgressOnConnect = extractBool("syncProgressOnConnect", true);
 
+    // Load streaming/temp file settings
+    m_settings.saveToDownloads = extractBool("saveToDownloads", false);
+    m_settings.maxTempFiles = extractInt("maxTempFiles");
+    if (m_settings.maxTempFiles <= 0) m_settings.maxTempFiles = 5;
+    m_settings.maxTempSizeMB = extractInt("maxTempSizeMB");
+    if (m_settings.maxTempSizeMB <= 0) m_settings.maxTempSizeMB = 500;
+
+    // Load player UI settings
+    m_settings.showDownloadProgress = extractBool("showDownloadProgress", true);
+
     // Load sleep/power settings
     m_settings.preventSleep = extractBool("preventSleep", true);
     m_settings.pauseOnHeadphoneDisconnect = extractBool("pauseOnHeadphoneDisconnect", true);
@@ -385,7 +418,6 @@ bool Application::saveSettings() {
     json += "  \"debugLogging\": " + std::string(m_settings.debugLogging ? "true" : "false") + ",\n";
 
     // Layout settings
-    json += "  \"showLibrariesInSidebar\": " + std::string(m_settings.showLibrariesInSidebar ? "true" : "false") + ",\n";
     json += "  \"collapseSidebar\": " + std::string(m_settings.collapseSidebar ? "true" : "false") + ",\n";
     json += "  \"hiddenLibraries\": \"" + m_settings.hiddenLibraries + "\",\n";
 
@@ -425,6 +457,14 @@ bool Application::saveSettings() {
     json += "  \"deleteAfterFinish\": " + std::string(m_settings.deleteAfterFinish ? "true" : "false") + ",\n";
     json += "  \"syncProgressOnConnect\": " + std::string(m_settings.syncProgressOnConnect ? "true" : "false") + ",\n";
 
+    // Streaming/temp file settings
+    json += "  \"saveToDownloads\": " + std::string(m_settings.saveToDownloads ? "true" : "false") + ",\n";
+    json += "  \"maxTempFiles\": " + std::to_string(m_settings.maxTempFiles) + ",\n";
+    json += "  \"maxTempSizeMB\": " + std::to_string(m_settings.maxTempSizeMB) + ",\n";
+
+    // Player UI settings
+    json += "  \"showDownloadProgress\": " + std::string(m_settings.showDownloadProgress ? "true" : "false") + ",\n";
+
     // Sleep/power settings
     json += "  \"preventSleep\": " + std::string(m_settings.preventSleep ? "true" : "false") + ",\n";
     json += "  \"pauseOnHeadphoneDisconnect\": " + std::string(m_settings.pauseOnHeadphoneDisconnect ? "true" : "false") + "\n";
@@ -450,6 +490,21 @@ bool Application::saveSettings() {
 #else
     return false;
 #endif
+}
+
+void Application::setBackgroundDownloadProgress(const BackgroundDownloadProgress& progress) {
+    std::lock_guard<std::mutex> lock(m_bgDownloadMutex);
+    m_bgDownloadProgress = progress;
+}
+
+BackgroundDownloadProgress Application::getBackgroundDownloadProgress() const {
+    std::lock_guard<std::mutex> lock(m_bgDownloadMutex);
+    return m_bgDownloadProgress;
+}
+
+void Application::clearBackgroundDownloadProgress() {
+    std::lock_guard<std::mutex> lock(m_bgDownloadMutex);
+    m_bgDownloadProgress = BackgroundDownloadProgress();
 }
 
 } // namespace vitaabs

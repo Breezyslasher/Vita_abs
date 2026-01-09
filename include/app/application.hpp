@@ -7,6 +7,7 @@
 
 #include <string>
 #include <functional>
+#include <mutex>
 
 // Application version
 #define VITA_ABS_VERSION "1.0.0"
@@ -60,6 +61,17 @@ enum class SleepTimer {
     END_OF_CHAPTER = 7
 };
 
+// Background download progress tracking
+struct BackgroundDownloadProgress {
+    bool active = false;          // Whether a background download is in progress
+    std::string itemId;           // Item being downloaded
+    int currentTrack = 0;         // Current track number (1-based)
+    int totalTracks = 0;          // Total number of tracks
+    int64_t downloadedBytes = 0;  // Total bytes downloaded so far
+    int64_t totalBytes = 0;       // Total bytes to download
+    std::string status;           // Current status message
+};
+
 // Application settings structure
 struct AppSettings {
     // UI Settings
@@ -69,7 +81,6 @@ struct AppSettings {
     bool debugLogging = true;
 
     // Layout Settings
-    bool showLibrariesInSidebar = false;
     bool collapseSidebar = false;
     std::string hiddenLibraries;       // Comma-separated list of library IDs to hide
 
@@ -109,6 +120,14 @@ struct AppSettings {
     bool deleteAfterFinish = false;    // Delete downloaded book after finishing
     bool syncProgressOnConnect = true;
 
+    // Streaming/Temp File Settings
+    bool saveToDownloads = false;      // Save streamed files to downloads folder instead of temp
+    int maxTempFiles = 5;              // Maximum number of temp files to keep
+    int64_t maxTempSizeMB = 500;       // Maximum total temp size in MB (0 = unlimited)
+
+    // Player UI Settings
+    bool showDownloadProgress = true;  // Show background download progress in player for multi-file books
+
     // Sleep/Power Settings
     bool preventSleep = true;          // Prevent screen sleep during playback
     bool pauseOnHeadphoneDisconnect = true;
@@ -129,7 +148,11 @@ public:
     // Navigation
     void pushLoginActivity();
     void pushMainActivity();
-    void pushPlayerActivity(const std::string& itemId, const std::string& episodeId = "");
+    void pushPlayerActivity(const std::string& itemId, const std::string& episodeId = "",
+                            float startTime = -1.0f);
+    // Push player with pre-downloaded file (downloaded before player push)
+    void pushPlayerActivityWithFile(const std::string& itemId, const std::string& episodeId,
+                                    const std::string& preDownloadedPath, float startTime = -1.0f);
 
     // Authentication state
     bool isLoggedIn() const { return !m_authToken.empty(); }
@@ -171,6 +194,11 @@ public:
     static std::string formatTime(float seconds);
     static std::string formatDuration(float seconds);
 
+    // Background download progress tracking (for multi-file audiobooks)
+    void setBackgroundDownloadProgress(const BackgroundDownloadProgress& progress);
+    BackgroundDownloadProgress getBackgroundDownloadProgress() const;
+    void clearBackgroundDownloadProgress();
+
 private:
     Application() = default;
     ~Application() = default;
@@ -183,6 +211,10 @@ private:
     std::string m_username;
     std::string m_currentLibraryId;
     AppSettings m_settings;
+
+    // Background download progress tracking
+    mutable std::mutex m_bgDownloadMutex;
+    BackgroundDownloadProgress m_bgDownloadProgress;
 };
 
 } // namespace vitaabs

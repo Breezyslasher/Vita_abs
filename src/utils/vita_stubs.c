@@ -4,6 +4,8 @@
  */
 
 #include <stdio.h>
+#include <stdint.h>
+#include <stddef.h>
 
 /* Thread-safe stdio locking stubs - Vita is single-threaded for stdio anyway */
 void flockfile(FILE *filehandle) {

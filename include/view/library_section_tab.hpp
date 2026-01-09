@@ -40,6 +40,10 @@ private:
     void onGenreSelected(const GenreItem& genre);
     void updateViewModeButtons();
 
+    // Podcast management
+    void openPodcastSearch();
+    void checkAllNewEpisodes();
+
     // Check if this tab is still valid (not destroyed)
     bool isValid() const { return m_alive && *m_alive; }
 
@@ -55,6 +59,10 @@ private:
     brls::Button* m_collectionsBtn = nullptr;
     brls::Button* m_categoriesBtn = nullptr;
     brls::Button* m_backBtn = nullptr;  // Back button when in filtered view
+
+    // Podcast management buttons
+    brls::Button* m_findPodcastsBtn = nullptr;
+    brls::Button* m_checkEpisodesBtn = nullptr;
 
     // Main content grid
     RecyclingGrid* m_contentGrid = nullptr;

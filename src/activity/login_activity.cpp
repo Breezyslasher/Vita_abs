@@ -85,11 +85,20 @@ void LoginActivity::onContentAvailable() {
         });
     }
 
-    // Test connection button (repurpose PIN button)
+    // Test connection button
     if (pinButton) {
-        pinButton->setText("Test Connection");
+        pinButton->setText("Test");
         pinButton->registerClickAction([this](brls::View* view) {
             onTestConnectionPressed();
+            return true;
+        });
+    }
+
+    // Offline mode button
+    if (offlineButton) {
+        offlineButton->setText("Offline");
+        offlineButton->registerClickAction([this](brls::View* view) {
+            onOfflinePressed();
             return true;
         });
     }
@@ -153,6 +162,17 @@ void LoginActivity::onLoginPressed() {
     } else {
         if (statusLabel) statusLabel->setText("Login failed - check credentials");
     }
+}
+
+void LoginActivity::onOfflinePressed() {
+    // Go to main activity in offline mode
+    brls::Logger::info("User selected offline mode");
+
+    if (statusLabel) statusLabel->setText("Entering offline mode...");
+
+    brls::sync([this]() {
+        Application::getInstance().pushMainActivity();
+    });
 }
 
 } // namespace vitaabs

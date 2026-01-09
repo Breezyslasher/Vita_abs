@@ -1,6 +1,6 @@
 /**
  * VitaABS - Main Activity
- * Main navigation with tabs for Home, Library, Search, Settings
+ * Main navigation with direct library tabs (Audiobooks, Podcasts), Search, Downloads, Settings
  */
 
 #pragma once
@@ -18,8 +18,6 @@ public:
     void onContentAvailable() override;
 
 private:
-    void loadLibrariesToSidebar();
-
     BRLS_BIND(brls::TabFrame, tabFrame, "main/tab_frame");
 };
 
