@@ -2282,35 +2282,42 @@ bool AudiobookshelfClient::addPodcastToLibrary(const std::string& libraryId, con
                                                 const std::string& folderId) {
     brls::Logger::debug("Adding podcast '{}' to library {} from feed: {}", podcast.title, libraryId, podcast.feedUrl);
 
-    // Get folder ID and path if not provided - fetch from library
+    // Always fetch library to get folder path (needed to create podcast subfolder)
     std::string folder = folderId;
     std::string folderPath;
-    if (folder.empty()) {
-        // Fetch library to get first folder
-        HttpClient libClient;
-        HttpRequest libReq;
-        libReq.url = buildApiUrl("/api/libraries/" + libraryId);
-        libReq.method = "GET";
-        libReq.headers["Accept"] = "application/json";
-        libReq.headers["Authorization"] = "Bearer " + m_authToken;
 
-        HttpResponse libResp = libClient.request(libReq);
-        if (libResp.statusCode == 200) {
-            // Extract first folder ID and path
-            std::string foldersArray = extractJsonArray(libResp.body, "folders");
-            if (!foldersArray.empty()) {
+    HttpClient libClient;
+    HttpRequest libReq;
+    libReq.url = buildApiUrl("/api/libraries/" + libraryId);
+    libReq.method = "GET";
+    libReq.headers["Accept"] = "application/json";
+    libReq.headers["Authorization"] = "Bearer " + m_authToken;
+
+    HttpResponse libResp = libClient.request(libReq);
+    if (libResp.statusCode == 200) {
+        // Extract folder info from library
+        std::string foldersArray = extractJsonArray(libResp.body, "folders");
+        if (!foldersArray.empty()) {
+            // If no folder ID provided, use the first one
+            if (folder.empty()) {
                 folder = extractJsonValue(foldersArray, "id");
-                folderPath = extractJsonValue(foldersArray, "fullPath");
-                if (folderPath.empty()) {
-                    folderPath = extractJsonValue(foldersArray, "path");
-                }
-                brls::Logger::debug("Using folder ID: {} path: {}", folder, folderPath);
             }
+            // Always get the folder path for creating podcast subfolder
+            folderPath = extractJsonValue(foldersArray, "fullPath");
+            if (folderPath.empty()) {
+                folderPath = extractJsonValue(foldersArray, "path");
+            }
+            brls::Logger::debug("Using folder ID: {} path: {}", folder, folderPath);
         }
     }
 
     if (folder.empty()) {
         brls::Logger::error("No folder ID available for library {}", libraryId);
+        return false;
+    }
+
+    if (folderPath.empty()) {
+        brls::Logger::error("No folder path available for library {}", libraryId);
         return false;
     }
 
