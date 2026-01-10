@@ -27,6 +27,39 @@
 
 namespace vitaabs {
 
+// Helper function to check if content should be marked as finished based on settings
+static bool shouldMarkAsFinished(float currentTime, float totalDuration, bool isPodcast) {
+    if (totalDuration <= 0) return false;
+
+    // For podcasts, use the podcast auto-complete setting
+    if (isPodcast) {
+        AppSettings& settings = Application::getInstance().getSettings();
+        AutoCompleteThreshold threshold = settings.podcastAutoComplete;
+
+        switch (threshold) {
+            case AutoCompleteThreshold::DISABLED:
+                return false;
+            case AutoCompleteThreshold::LAST_10_SEC:
+                return (totalDuration - currentTime) <= 10.0f;
+            case AutoCompleteThreshold::LAST_30_SEC:
+                return (totalDuration - currentTime) <= 30.0f;
+            case AutoCompleteThreshold::LAST_60_SEC:
+                return (totalDuration - currentTime) <= 60.0f;
+            case AutoCompleteThreshold::PERCENT_90:
+                return currentTime >= totalDuration * 0.90f;
+            case AutoCompleteThreshold::PERCENT_95:
+                return currentTime >= totalDuration * 0.95f;
+            case AutoCompleteThreshold::PERCENT_99:
+                return currentTime >= totalDuration * 0.99f;
+            default:
+                return currentTime >= totalDuration * 0.95f;
+        }
+    }
+
+    // For audiobooks, use default 95% threshold
+    return currentTime >= totalDuration * 0.95f;
+}
+
 PlayerActivity::PlayerActivity(const std::string& itemId)
     : m_itemId(itemId), m_isLocalFile(false) {
     brls::Logger::debug("PlayerActivity created for item: {}", itemId);
@@ -204,7 +237,8 @@ void PlayerActivity::willDisappear(bool resetState) {
                 // Also sync to server if online
                 AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
                 if (client.isAuthenticated()) {
-                    bool isFinished = (totalDuration > 0 && currentTime >= totalDuration * 0.95f);
+                    bool isPodcast = !m_episodeId.empty();
+                    bool isFinished = shouldMarkAsFinished(currentTime, totalDuration, isPodcast);
                     client.updateProgress(m_itemId, currentTime, totalDuration, isFinished, m_episodeId);
                     brls::Logger::info("PlayerActivity: Synced local progress to server");
                 }
@@ -1064,7 +1098,8 @@ void PlayerActivity::updateProgress() {
                     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
                     if (client.isAuthenticated()) {
                         float totalDuration = static_cast<float>(duration);
-                        bool isFinished = (totalDuration > 0 && currentPos >= totalDuration * 0.95f);
+                        bool isPodcast = !m_episodeId.empty();
+                        bool isFinished = shouldMarkAsFinished(currentPos, totalDuration, isPodcast);
                         client.updateProgress(m_itemId, currentPos, totalDuration, isFinished, m_episodeId);
                     }
                     m_lastSyncedTime = currentPos;

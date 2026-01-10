@@ -205,6 +205,40 @@ MediaItem AudiobookshelfClient::parseMediaItem(const std::string& json) {
             // Podcasts use "author" field for the creator/feed owner
             item.authorName = extractJsonValue(metadataObj, "author");
         }
+        // If still empty, try parsing the authors array (expanded format)
+        if (item.authorName.empty()) {
+            std::string authorsArray = extractJsonArray(metadataObj, "authors");
+            if (!authorsArray.empty() && authorsArray != "[]") {
+                // Extract author names from array and join them
+                std::vector<std::string> authorNames;
+                size_t pos = 0;
+                while ((pos = authorsArray.find("\"name\"", pos)) != std::string::npos) {
+                    size_t colonPos = authorsArray.find(':', pos);
+                    if (colonPos != std::string::npos) {
+                        size_t nameStart = authorsArray.find('"', colonPos + 1);
+                        if (nameStart != std::string::npos) {
+                            size_t nameEnd = authorsArray.find('"', nameStart + 1);
+                            if (nameEnd != std::string::npos) {
+                                std::string name = authorsArray.substr(nameStart + 1, nameEnd - nameStart - 1);
+                                if (!name.empty()) {
+                                    authorNames.push_back(name);
+                                }
+                                pos = nameEnd;
+                            }
+                        }
+                    }
+                    pos++;
+                }
+                // Join author names with ", "
+                for (size_t i = 0; i < authorNames.size(); ++i) {
+                    if (i > 0) item.authorName += ", ";
+                    item.authorName += authorNames[i];
+                }
+                if (!item.authorName.empty()) {
+                    brls::Logger::debug("Parsed authors from array: {}", item.authorName);
+                }
+            }
+        }
         item.narratorName = extractJsonValue(metadataObj, "narratorName");
         item.publishedYear = extractJsonValue(metadataObj, "publishedYear");
         item.publisher = extractJsonValue(metadataObj, "publisher");
@@ -1095,47 +1129,16 @@ bool AudiobookshelfClient::fetchItem(const std::string& itemId, MediaItem& item)
         brls::Logger::debug("Media object preview: {}", mediaObj.substr(0, 300));
     }
 
-    // Parse chapters from media.chapters (like Kodi addon does)
-    std::string chaptersArray;
-    if (!mediaObj.empty()) {
-        // Search for "chapters" in the media object
-        size_t chaptersPos = mediaObj.find("\"chapters\"");
-        if (chaptersPos != std::string::npos) {
-            brls::Logger::debug("Found 'chapters' key in media object at position {}", chaptersPos);
-
-            // Find the colon after chapters
-            size_t colonPos = mediaObj.find(':', chaptersPos);
-            if (colonPos != std::string::npos) {
-                // Find the opening bracket
-                size_t arrStart = mediaObj.find('[', colonPos);
-                if (arrStart != std::string::npos) {
-                    // Find matching closing bracket
-                    int bracketCount = 1;
-                    size_t arrEnd = arrStart + 1;
-                    while (bracketCount > 0 && arrEnd < mediaObj.length()) {
-                        char c = mediaObj[arrEnd];
-                        if (c == '[') bracketCount++;
-                        else if (c == ']') bracketCount--;
-                        arrEnd++;
-                    }
-                    chaptersArray = mediaObj.substr(arrStart, arrEnd - arrStart);
-                    brls::Logger::info("Chapters array extracted: {} chars", chaptersArray.length());
-
-                    // Show preview of chapters
-                    if (chaptersArray.length() > 10) {
-                        brls::Logger::debug("Chapters preview: {}",
-                            chaptersArray.substr(0, std::min((size_t)200, chaptersArray.length())));
-                    }
-                }
-            }
-        } else {
-            brls::Logger::warning("'chapters' key NOT found in media object");
-        }
+    // Parse chapters from media.chapters using extractJsonArray (like Kodi addon does)
+    std::string chaptersArray = extractJsonArray(mediaObj, "chapters");
+    brls::Logger::info("Chapters array: {} chars", chaptersArray.length());
+    if (!chaptersArray.empty() && chaptersArray.length() > 10) {
+        brls::Logger::debug("Chapters preview: {}", chaptersArray.substr(0, std::min((size_t)200, chaptersArray.length())));
     }
 
-    // Parse individual chapters
+    // Parse individual chapters from media.chapters
     if (!chaptersArray.empty() && chaptersArray != "[]") {
-        brls::Logger::debug("Parsing chapters array...");
+        brls::Logger::debug("Parsing chapters array from media.chapters...");
         size_t pos = 0;
 
         // Look for chapter objects - they have "start" field
@@ -1168,9 +1171,61 @@ bool AudiobookshelfClient::fetchItem(const std::string& itemId, MediaItem& item)
 
             pos = objEnd;
         }
-        brls::Logger::info("Parsed {} chapters from array", item.chapters.size());
+        brls::Logger::info("Parsed {} chapters from media.chapters", item.chapters.size());
     } else {
-        brls::Logger::warning("No chapters array found or array is empty");
+        brls::Logger::debug("No chapters in media.chapters, will check audioFiles");
+    }
+
+    // If no chapters found in media.chapters, check audioFiles[0].chapters (M4B files)
+    if (item.chapters.empty() && !mediaObj.empty()) {
+        std::string audioFilesArray = extractJsonArray(mediaObj, "audioFiles");
+        if (!audioFilesArray.empty()) {
+            // Get first audio file object
+            size_t firstObjStart = audioFilesArray.find('{');
+            if (firstObjStart != std::string::npos) {
+                int braceCount = 1;
+                size_t firstObjEnd = firstObjStart + 1;
+                while (braceCount > 0 && firstObjEnd < audioFilesArray.length()) {
+                    if (audioFilesArray[firstObjEnd] == '{') braceCount++;
+                    else if (audioFilesArray[firstObjEnd] == '}') braceCount--;
+                    firstObjEnd++;
+                }
+                std::string firstAudioFile = audioFilesArray.substr(firstObjStart, firstObjEnd - firstObjStart);
+
+                // Try to get chapters from this audio file using extractJsonArray
+                std::string afChaptersArray = extractJsonArray(firstAudioFile, "chapters");
+                if (!afChaptersArray.empty() && afChaptersArray != "[]") {
+                    brls::Logger::debug("Found chapters in audioFiles[0]: {} chars", afChaptersArray.length());
+                    size_t pos = 0;
+                    while ((pos = afChaptersArray.find("\"start\"", pos)) != std::string::npos) {
+                        size_t objStart = afChaptersArray.rfind('{', pos);
+                        if (objStart == std::string::npos) { pos++; continue; }
+
+                        int bCount = 1;
+                        size_t objEnd = objStart + 1;
+                        while (bCount > 0 && objEnd < afChaptersArray.length()) {
+                            if (afChaptersArray[objEnd] == '{') bCount++;
+                            else if (afChaptersArray[objEnd] == '}') bCount--;
+                            objEnd++;
+                        }
+
+                        std::string chObj = afChaptersArray.substr(objStart, objEnd - objStart);
+                        Chapter ch = parseChapter(chObj);
+                        if (ch.end > ch.start) {
+                            item.chapters.push_back(ch);
+                            brls::Logger::debug("Added chapter from audioFile: '{}' ({:.1f}s - {:.1f}s)",
+                                ch.title, ch.start, ch.end);
+                        }
+                        pos = objEnd;
+                    }
+                    brls::Logger::info("Parsed {} chapters from audioFiles[0].chapters", item.chapters.size());
+                }
+            }
+        }
+    }
+
+    if (item.chapters.empty()) {
+        brls::Logger::warning("No chapters found in media.chapters or audioFiles");
     }
 
     // Parse audio tracks
@@ -1199,20 +1254,62 @@ bool AudiobookshelfClient::fetchItem(const std::string& itemId, MediaItem& item)
             std::string trackObj = tracksArray.substr(objStart, objEnd - objStart);
             AudioTrack track;
             track.index = trackIdx++;
+            std::string metaObj = extractJsonObject(trackObj, "metadata");
             track.title = extractJsonValue(trackObj, "metadata");
-            if (track.title.empty()) {
-                // Try getting filename
-                std::string metaObj = extractJsonObject(trackObj, "metadata");
-                if (!metaObj.empty()) {
-                    track.title = extractJsonValue(metaObj, "filename");
-                }
+            if (track.title.empty() && !metaObj.empty()) {
+                // Try getting filename from metadata object
+                track.title = extractJsonValue(metaObj, "filename");
             }
             track.duration = extractJsonFloat(trackObj, "duration");
             track.mimeType = extractJsonValue(trackObj, "mimeType");
+
+            // Parse startOffset for multi-file audiobooks (used for chapter generation)
+            if (!metaObj.empty()) {
+                // Try different field names for start offset
+                float offset = extractJsonFloat(metaObj, "startOffset");
+                if (offset == 0.0f && trackIdx > 1) {
+                    // Calculate from previous tracks if not explicitly set
+                    float accumulatedDuration = 0.0f;
+                    for (const auto& prevTrack : item.audioTracks) {
+                        accumulatedDuration += prevTrack.duration;
+                    }
+                    track.startOffset = accumulatedDuration;
+                } else {
+                    track.startOffset = offset;
+                }
+            }
+
             item.audioTracks.push_back(track);
 
             pos = objEnd;
         }
+    }
+
+    // If still no chapters and we have multiple audio files, create chapters from files
+    if (item.chapters.empty() && item.audioTracks.size() > 1) {
+        brls::Logger::info("Creating chapters from {} audio files", item.audioTracks.size());
+        float currentOffset = 0.0f;
+        for (size_t i = 0; i < item.audioTracks.size(); ++i) {
+            const auto& track = item.audioTracks[i];
+            Chapter ch;
+            ch.id = static_cast<int>(i);
+            ch.title = track.title;
+            // Clean up filename-based titles (remove extension)
+            size_t dotPos = ch.title.rfind('.');
+            if (dotPos != std::string::npos && dotPos > ch.title.length() - 6) {
+                ch.title = ch.title.substr(0, dotPos);
+            }
+            ch.start = (track.startOffset > 0) ? track.startOffset : currentOffset;
+            ch.end = ch.start + track.duration;
+            currentOffset = ch.end;
+
+            if (ch.end > ch.start) {
+                item.chapters.push_back(ch);
+                brls::Logger::debug("Created chapter from file: '{}' ({:.1f}s - {:.1f}s)",
+                    ch.title, ch.start, ch.end);
+            }
+        }
+        brls::Logger::info("Created {} chapters from audio files", item.chapters.size());
     }
 
     brls::Logger::info("Fetched item: {} ({} chapters, {} tracks)",
@@ -1239,48 +1336,73 @@ bool AudiobookshelfClient::fetchItemWithProgress(const std::string& itemId, Medi
 
     item = parseMediaItem(resp.body);
 
-    // Extract chapters from the expanded response (same as fetchItem)
+    // Extract chapters from media.chapters using extractJsonArray (same as fetchItem)
     std::string mediaObj = extractJsonObject(resp.body, "media");
     if (!mediaObj.empty()) {
-        size_t chaptersPos = mediaObj.find("\"chapters\"");
-        if (chaptersPos != std::string::npos) {
-            size_t colonPos = mediaObj.find(':', chaptersPos);
-            if (colonPos != std::string::npos) {
-                size_t arrStart = mediaObj.find('[', colonPos);
-                if (arrStart != std::string::npos) {
-                    int bracketCount = 1;
-                    size_t arrEnd = arrStart + 1;
-                    while (bracketCount > 0 && arrEnd < mediaObj.length()) {
-                        char c = mediaObj[arrEnd];
-                        if (c == '[') bracketCount++;
-                        else if (c == ']') bracketCount--;
-                        arrEnd++;
-                    }
-                    std::string chaptersArray = mediaObj.substr(arrStart, arrEnd - arrStart);
+        // First try media.chapters
+        std::string chaptersArray = extractJsonArray(mediaObj, "chapters");
+        if (!chaptersArray.empty() && chaptersArray != "[]") {
+            size_t pos = 0;
+            while ((pos = chaptersArray.find("\"start\"", pos)) != std::string::npos) {
+                size_t objStart = chaptersArray.rfind('{', pos);
+                if (objStart == std::string::npos) { pos++; continue; }
 
-                    // Parse individual chapters
-                    if (!chaptersArray.empty() && chaptersArray != "[]") {
+                int braceCount = 1;
+                size_t objEnd = objStart + 1;
+                while (braceCount > 0 && objEnd < chaptersArray.length()) {
+                    if (chaptersArray[objEnd] == '{') braceCount++;
+                    else if (chaptersArray[objEnd] == '}') braceCount--;
+                    objEnd++;
+                }
+
+                std::string chObj = chaptersArray.substr(objStart, objEnd - objStart);
+                Chapter ch = parseChapter(chObj);
+                if (ch.end > ch.start) {
+                    item.chapters.push_back(ch);
+                }
+                pos = objEnd;
+            }
+            brls::Logger::debug("Parsed {} chapters from media.chapters", item.chapters.size());
+        }
+
+        // If no chapters found, check audioFiles[0].chapters (M4B files)
+        if (item.chapters.empty()) {
+            std::string audioFilesArray = extractJsonArray(mediaObj, "audioFiles");
+            if (!audioFilesArray.empty()) {
+                size_t firstObjStart = audioFilesArray.find('{');
+                if (firstObjStart != std::string::npos) {
+                    int braceCount = 1;
+                    size_t firstObjEnd = firstObjStart + 1;
+                    while (braceCount > 0 && firstObjEnd < audioFilesArray.length()) {
+                        if (audioFilesArray[firstObjEnd] == '{') braceCount++;
+                        else if (audioFilesArray[firstObjEnd] == '}') braceCount--;
+                        firstObjEnd++;
+                    }
+                    std::string firstAudioFile = audioFilesArray.substr(firstObjStart, firstObjEnd - firstObjStart);
+
+                    std::string afChaptersArray = extractJsonArray(firstAudioFile, "chapters");
+                    if (!afChaptersArray.empty() && afChaptersArray != "[]") {
                         size_t pos = 0;
-                        while ((pos = chaptersArray.find("\"start\"", pos)) != std::string::npos) {
-                            size_t objStart = chaptersArray.rfind('{', pos);
+                        while ((pos = afChaptersArray.find("\"start\"", pos)) != std::string::npos) {
+                            size_t objStart = afChaptersArray.rfind('{', pos);
                             if (objStart == std::string::npos) { pos++; continue; }
 
-                            int braceCount = 1;
+                            int bCount = 1;
                             size_t objEnd = objStart + 1;
-                            while (braceCount > 0 && objEnd < chaptersArray.length()) {
-                                if (chaptersArray[objEnd] == '{') braceCount++;
-                                else if (chaptersArray[objEnd] == '}') braceCount--;
+                            while (bCount > 0 && objEnd < afChaptersArray.length()) {
+                                if (afChaptersArray[objEnd] == '{') bCount++;
+                                else if (afChaptersArray[objEnd] == '}') bCount--;
                                 objEnd++;
                             }
 
-                            std::string chObj = chaptersArray.substr(objStart, objEnd - objStart);
+                            std::string chObj = afChaptersArray.substr(objStart, objEnd - objStart);
                             Chapter ch = parseChapter(chObj);
                             if (ch.end > ch.start) {
                                 item.chapters.push_back(ch);
                             }
                             pos = objEnd;
                         }
-                        brls::Logger::debug("Parsed {} chapters", item.chapters.size());
+                        brls::Logger::debug("Parsed {} chapters from audioFiles[0].chapters", item.chapters.size());
                     }
                 }
             }

@@ -238,6 +238,17 @@ void SettingsTab::createPlaybackSection() {
         });
     m_contentBox->addView(speedSelector);
 
+    // Podcast auto-complete threshold selector
+    auto* podcastCompleteSelector = new brls::SelectorCell();
+    podcastCompleteSelector->init("Podcast Auto-Complete",
+        {"Disabled", "Last 10 sec", "Last 30 sec", "Last 60 sec", "90%", "95%", "99%"},
+        static_cast<int>(settings.podcastAutoComplete),
+        [&settings](int index) {
+            settings.podcastAutoComplete = static_cast<AutoCompleteThreshold>(index);
+            Application::getInstance().saveSettings();
+        });
+    m_contentBox->addView(podcastCompleteSelector);
+
     // Prevent sleep toggle
     auto* sleepToggle = new brls::BooleanCell();
     sleepToggle->init("Prevent Screen Sleep", settings.preventSleep, [&settings](bool value) {

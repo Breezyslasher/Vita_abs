@@ -82,23 +82,10 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         m_playButton->setHeight(40);
         m_playButton->setMarginRight(10);
         m_playButton->registerClickAction([this](brls::View* view) {
-            onPlay(false);
+            onPlay(true);  // Always auto-resume from last position
             return true;
         });
         buttonRow->addView(m_playButton);
-
-        if (m_item.currentTime > 0) {
-            m_resumeButton = new brls::Button();
-            m_resumeButton->setText("Resume");
-            m_resumeButton->setWidth(100);
-            m_resumeButton->setHeight(40);
-            m_resumeButton->setMarginRight(10);
-            m_resumeButton->registerClickAction([this](brls::View* view) {
-                onPlay(true);
-                return true;
-            });
-            buttonRow->addView(m_resumeButton);
-        }
 
         // Download/Delete button for directly playable content
         AppSettings& settings = Application::getInstance().getSettings();
@@ -1931,11 +1918,12 @@ void MediaDetailView::batchDownloadEpisodes(const std::vector<MediaItem>& episod
             sceIoClose(fd);
 
             if (success) {
-                // Register the download - use podcast title as authorName for episodes
+                // Register the download - use podcast author for episodes
                 std::string coverUrl = client.getCoverUrl(itemId);
-                std::string podcastName = m_item.title;  // Store podcast name for offline display
+                // Use the actual podcast author, fall back to podcast title if no author
+                std::string podcastAuthor = m_item.authorName.empty() ? m_item.title : m_item.authorName;
                 downloadsMgr.registerCompletedDownload(
-                    itemId, episodeId, ep.title, podcastName,
+                    itemId, episodeId, ep.title, podcastAuthor,
                     destPath, totalDownloaded, ep.duration, "episode",
                     coverUrl, "", {}
                 );

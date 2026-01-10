@@ -61,6 +61,17 @@ enum class SleepTimer {
     END_OF_CHAPTER = 7
 };
 
+// Auto-complete threshold for podcasts (when to mark as finished)
+enum class AutoCompleteThreshold {
+    DISABLED = 0,       // Never auto-complete
+    LAST_10_SEC = 1,    // Last 10 seconds
+    LAST_30_SEC = 2,    // Last 30 seconds
+    LAST_60_SEC = 3,    // Last 60 seconds
+    PERCENT_90 = 4,     // 90% complete
+    PERCENT_95 = 5,     // 95% complete
+    PERCENT_99 = 6      // 99% complete
+};
+
 // Background download progress tracking
 struct BackgroundDownloadProgress {
     bool active = false;          // Whether a background download is in progress
@@ -94,6 +105,9 @@ struct AppSettings {
     SleepTimer sleepTimer = SleepTimer::OFF;
     int seekInterval = 30;             // Skip forward/back interval in seconds
     int longSeekInterval = 300;        // Long skip interval (5 minutes)
+
+    // Podcast Settings
+    AutoCompleteThreshold podcastAutoComplete = AutoCompleteThreshold::LAST_30_SEC;  // When to mark podcasts as complete
 
     // Audio Settings
     AudioQuality audioQuality = AudioQuality::ORIGINAL;
