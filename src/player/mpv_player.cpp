@@ -303,6 +303,8 @@ void MpvPlayer::seekTo(double seconds) {
         return;
     }
 
+    brls::Logger::info("MpvPlayer: Seeking to {}s (state={})", seconds, (int)m_state);
+
     char timeStr[32];
     snprintf(timeStr, sizeof(timeStr), "%.2f", seconds);
 

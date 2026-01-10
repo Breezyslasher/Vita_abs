@@ -999,17 +999,25 @@ void PlayerActivity::updateProgress() {
     }
 
     // Handle pending seek when playback becomes ready
+    static bool justSeeked = false;
     if (m_pendingSeek > 0.0) {
         // Try to seek once player is ready (playing or paused with valid duration)
         if (player.isPlaying() || (player.isPaused() && player.getDuration() > 0)) {
             brls::Logger::info("PlayerActivity: Seeking to resume position {}s", m_pendingSeek);
             player.seekTo(m_pendingSeek);
             m_pendingSeek = 0.0;
+            justSeeked = true;
         }
     }
 
     double position = player.getPosition();
     double duration = player.getDuration();
+
+    // Log position after seek to verify it worked
+    if (justSeeked && position > 0) {
+        brls::Logger::info("PlayerActivity: Position after seek: {}s", position);
+        justSeeked = false;
+    }
 
     // Store duration for later use
     if (duration > 0) {
