@@ -71,8 +71,9 @@ HomeTab::HomeTab() {
     m_scrollView->setContentView(m_contentBox);
     this->addView(m_scrollView);
 
-    // Load content
-    brls::Logger::debug("HomeTab: Created");
+    // Load content immediately (since Home is the first tab)
+    brls::Logger::debug("HomeTab: Created, loading content...");
+    loadContent();
 }
 
 HomeTab::~HomeTab() {
@@ -101,44 +102,51 @@ void HomeTab::loadContent() {
     asyncRun([this, aliveWeak]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
-        // Get all libraries
-        std::vector<Library> libraries;
-        if (!client.fetchLibraries(libraries)) {
-            brls::Logger::error("HomeTab: Failed to fetch libraries");
-            return;
-        }
-
         std::vector<MediaItem> continueItems;
         std::vector<MediaItem> recentEpisodes;
 
-        // Fetch personalized content from all libraries
-        for (const auto& lib : libraries) {
-            std::vector<PersonalizedShelf> shelves;
-            if (client.fetchLibraryPersonalized(lib.id, shelves)) {
-                for (const auto& shelf : shelves) {
-                    std::string key = shelf.labelStringKey;
-                    std::string label = shelf.label;
+        // Get Continue Listening items using the direct API endpoint
+        brls::Logger::info("HomeTab: Fetching items in progress...");
+        if (client.fetchItemsInProgress(continueItems)) {
+            brls::Logger::info("HomeTab: Got {} items in progress", continueItems.size());
+        } else {
+            brls::Logger::error("HomeTab: Failed to fetch items in progress");
+        }
 
-                    // Check for Continue Listening shelf
-                    if (key == "continue-listening" || key == "continueListening" ||
-                        label.find("Continue") != std::string::npos) {
-                        for (const auto& item : shelf.entities) {
-                            continueItems.push_back(item);
-                        }
-                    }
+        // Get all libraries to fetch recent episodes from podcast libraries
+        std::vector<Library> libraries;
+        if (!client.fetchLibraries(libraries)) {
+            brls::Logger::error("HomeTab: Failed to fetch libraries");
+        } else {
+            // Fetch recently added from podcast libraries for Recent Episodes
+            for (const auto& lib : libraries) {
+                if (lib.mediaType == "podcast") {
+                    brls::Logger::debug("HomeTab: Fetching recent episodes from podcast library '{}'", lib.name);
+                    std::vector<PersonalizedShelf> shelves;
+                    if (client.fetchLibraryPersonalized(lib.id, shelves)) {
+                        brls::Logger::debug("HomeTab: Got {} shelves from library '{}'", shelves.size(), lib.name);
+                        for (const auto& shelf : shelves) {
+                            std::string shelfId = shelf.id;
+                            std::string label = shelf.label;
 
-                    // Check for Recently Added Episodes (podcasts)
-                    if (key == "recent-episodes" || key == "recentEpisodes" ||
-                        key == "newest-episodes" || key == "newestEpisodes" ||
-                        (lib.mediaType == "podcast" &&
-                         (key == "recently-added" || key == "recentlyAdded" ||
-                          label.find("Recent") != std::string::npos))) {
-                        for (const auto& item : shelf.entities) {
-                            if (item.mediaType == MediaType::PODCAST_EPISODE ||
-                                item.type == "podcastEpisode" || item.type == "episode") {
-                                recentEpisodes.push_back(item);
+                            brls::Logger::debug("HomeTab: Checking shelf id='{}' label='{}' entities={}",
+                                               shelfId, label, shelf.entities.size());
+
+                            // Check for Recently Added Episodes - use shelf.id
+                            if (shelfId == "recent-episodes" ||
+                                shelfId == "newest-episodes" ||
+                                shelfId == "episodes-recently-added" ||
+                                shelfId == "recently-added" ||
+                                label.find("Recent") != std::string::npos) {
+                                brls::Logger::info("HomeTab: Found Recent Episodes shelf '{}' with {} items",
+                                                  label, shelf.entities.size());
+                                for (const auto& item : shelf.entities) {
+                                    recentEpisodes.push_back(item);
+                                }
                             }
                         }
+                    } else {
+                        brls::Logger::error("HomeTab: Failed to fetch personalized content for library '{}'", lib.name);
                     }
                 }
             }

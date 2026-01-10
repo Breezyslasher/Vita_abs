@@ -809,6 +809,8 @@ bool AudiobookshelfClient::fetchLibraryPersonalized(const std::string& libraryId
         }
 
         if (!shelf.label.empty() || !shelf.labelStringKey.empty()) {
+            brls::Logger::debug("fetchLibraryPersonalized: Found shelf id='{}' label='{}' labelStringKey='{}' type='{}' entities={}",
+                               shelf.id, shelf.label, shelf.labelStringKey, shelf.type, shelf.entities.size());
             shelves.push_back(shelf);
         }
 
