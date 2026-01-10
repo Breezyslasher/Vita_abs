@@ -321,7 +321,11 @@ void PlayerActivity::loadMedia() {
         }
 
         std::string title = titleLabel ? titleLabel->getFullText() : m_itemId;
-        if (!player.loadUrl(m_tempFilePath, title)) {
+        // Pass start time directly to loadUrl for more reliable seeking
+        double startTime = m_pendingSeek;
+        m_pendingSeek = 0.0;  // Clear pending seek since we're handling it via loadUrl
+        brls::Logger::info("PlayerActivity: Loading pre-downloaded file with startTime={}s", startTime);
+        if (!player.loadUrl(m_tempFilePath, title, startTime)) {
             brls::Logger::error("Failed to load pre-downloaded file: {}", m_tempFilePath);
             m_loadingMedia = false;
             return;
@@ -337,11 +341,6 @@ void PlayerActivity::loadMedia() {
         if (videoView) {
             videoView->setVisibility(brls::Visibility::VISIBLE);
             videoView->setVideoVisible(true);
-        }
-
-        // Log pending seek for debugging
-        if (m_pendingSeek > 0.0) {
-            brls::Logger::info("PlayerActivity: Pending seek to {}s will be applied when playback starts", m_pendingSeek);
         }
 
         m_isPlaying = true;
@@ -455,8 +454,12 @@ void PlayerActivity::loadMedia() {
             }
         }
 
+        // Calculate start time from saved viewOffset
+        double startTime = (download->viewOffset > 0) ? download->viewOffset / 1000.0 : -1.0;
+        brls::Logger::info("PlayerActivity: Loading local file with startTime={}s", startTime);
+
         // Load local file (using playback path for multi-file support)
-        if (!player.loadUrl(playbackPath, download->title)) {
+        if (!player.loadUrl(playbackPath, download->title, startTime)) {
             brls::Logger::error("Failed to load local file: {}", playbackPath);
             m_loadingMedia = false;
             return;
@@ -473,11 +476,6 @@ void PlayerActivity::loadMedia() {
         if (videoView) {
             videoView->setVisibility(brls::Visibility::VISIBLE);
             videoView->setVideoVisible(true);
-        }
-
-        // Resume from saved viewOffset
-        if (download->viewOffset > 0) {
-            m_pendingSeek = download->viewOffset / 1000.0;
         }
 
         m_isPlaying = true;
@@ -535,9 +533,17 @@ void PlayerActivity::loadMedia() {
                             }
                         }
 
-                        // Load local file
-                        brls::Logger::info("PlayerActivity: Loading downloaded file: {}", playbackPath);
-                        if (!player.loadUrl(playbackPath, dl.title)) {
+                        // Calculate start time from saved position
+                        double startTime = -1.0;
+                        if (dl.currentTime > 0) {
+                            startTime = dl.currentTime;
+                        } else if (dl.viewOffset > 0) {
+                            startTime = dl.viewOffset / 1000.0;
+                        }
+
+                        // Load local file with start time
+                        brls::Logger::info("PlayerActivity: Loading downloaded file: {} (startTime={}s)", playbackPath, startTime);
+                        if (!player.loadUrl(playbackPath, dl.title, startTime)) {
                             brls::Logger::error("Failed to load downloaded file: {}", playbackPath);
                             m_loadingMedia = false;
                             return;
@@ -554,13 +560,6 @@ void PlayerActivity::loadMedia() {
                         if (videoView) {
                             videoView->setVisibility(brls::Visibility::VISIBLE);
                             videoView->setVideoVisible(true);
-                        }
-
-                        // Resume from saved position
-                        if (dl.currentTime > 0) {
-                            m_pendingSeek = dl.currentTime;
-                        } else if (dl.viewOffset > 0) {
-                            m_pendingSeek = dl.viewOffset / 1000.0;
                         }
 
                         // Mark as local file for progress saving
@@ -943,8 +942,9 @@ void PlayerActivity::loadMedia() {
             brls::Logger::info("PlayerActivity: MPV player initialized successfully");
         }
 
-        brls::Logger::info("PlayerActivity: Loading temp file: {}", m_tempFilePath);
-        if (!player.loadUrl(m_tempFilePath, item.title)) {
+        brls::Logger::info("PlayerActivity: Loading temp file: {} (startTime={}s)", m_tempFilePath, startTime);
+        // Pass start time directly for more reliable seeking
+        if (!player.loadUrl(m_tempFilePath, item.title, startTime > 0 ? static_cast<double>(startTime) : -1.0)) {
             brls::Logger::error("Failed to load temp file: {}", m_tempFilePath);
             tempMgr.deleteTempFile(m_itemId, m_episodeId);
             m_tempFilePath.clear();
@@ -964,11 +964,6 @@ void PlayerActivity::loadMedia() {
         if (videoView) {
             videoView->setVisibility(brls::Visibility::VISIBLE);
             videoView->setVideoVisible(true);
-        }
-
-        // Resume from saved position if available
-        if (startTime > 0) {
-            m_pendingSeek = startTime;
         }
 
         m_isPlaying = true;
