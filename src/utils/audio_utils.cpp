@@ -59,9 +59,6 @@ bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
 
     brls::Logger::info("concatenateAudioFiles: Combining {} files into {}", inputFiles.size(), outputPath);
 
-    // Create output format context
-    AVFormatContext* outputFmtCtx = nullptr;
-
     // Determine output format based on extension
     std::string outputExt = ".m4b";
     size_t dotPos = outputPath.rfind('.');
@@ -69,14 +66,128 @@ bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
         outputExt = outputPath.substr(dotPos);
     }
 
-    const char* outputFormat = "ipod";  // For m4b/m4a
+    // For MP3 files, use simple binary concatenation (MP3 frames are self-contained)
     if (outputExt == ".mp3") {
-        outputFormat = "mp3";
-    } else if (outputExt == ".ogg") {
-        outputFormat = "ogg";
+        brls::Logger::info("concatenateAudioFiles: Using binary concatenation for MP3");
+
+        // Use heap allocation to avoid stack overflow on Vita
+        const size_t BUFFER_SIZE = 8192;
+        char* buffer = new char[BUFFER_SIZE];
+        if (!buffer) {
+            brls::Logger::error("concatenateAudioFiles: Failed to allocate buffer");
+            return false;
+        }
+
+#ifdef __vita__
+        SceUID outFd = sceIoOpen(outputPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+        if (outFd < 0) {
+            brls::Logger::error("concatenateAudioFiles: Could not create output file");
+            delete[] buffer;
+            return false;
+        }
+
+        int filesProcessed = 0;
+
+        for (size_t fileIdx = 0; fileIdx < inputFiles.size(); fileIdx++) {
+            const std::string& inputFile = inputFiles[fileIdx];
+            brls::Logger::info("concatenateAudioFiles: Appending file {}/{}: {}",
+                              fileIdx + 1, inputFiles.size(), inputFile);
+
+            SceUID inFd = sceIoOpen(inputFile.c_str(), SCE_O_RDONLY, 0);
+            if (inFd < 0) {
+                brls::Logger::warning("concatenateAudioFiles: Could not open {}", inputFile);
+                continue;
+            }
+
+            int bytesRead;
+            while ((bytesRead = sceIoRead(inFd, buffer, BUFFER_SIZE)) > 0) {
+                sceIoWrite(outFd, buffer, bytesRead);
+            }
+
+            sceIoClose(inFd);
+            filesProcessed++;
+
+            if (progressCallback) {
+                progressCallback(filesProcessed, static_cast<int>(inputFiles.size()));
+            }
+        }
+
+        sceIoClose(outFd);
+        delete[] buffer;
+        brls::Logger::info("concatenateAudioFiles: Successfully concatenated {} MP3 files", filesProcessed);
+        return filesProcessed > 0;
+#else
+        std::ofstream outFile(outputPath, std::ios::binary);
+        if (!outFile) {
+            brls::Logger::error("concatenateAudioFiles: Could not create output file");
+            delete[] buffer;
+            return false;
+        }
+
+        int filesProcessed = 0;
+
+        for (size_t fileIdx = 0; fileIdx < inputFiles.size(); fileIdx++) {
+            const std::string& inputFile = inputFiles[fileIdx];
+            brls::Logger::info("concatenateAudioFiles: Appending file {}/{}: {}",
+                              fileIdx + 1, inputFiles.size(), inputFile);
+
+            std::ifstream inFile(inputFile, std::ios::binary);
+            if (!inFile) {
+                brls::Logger::warning("concatenateAudioFiles: Could not open {}", inputFile);
+                continue;
+            }
+
+            while (inFile.read(buffer, BUFFER_SIZE) || inFile.gcount() > 0) {
+                outFile.write(buffer, inFile.gcount());
+            }
+
+            filesProcessed++;
+
+            if (progressCallback) {
+                progressCallback(filesProcessed, static_cast<int>(inputFiles.size()));
+            }
+        }
+
+        delete[] buffer;
+        brls::Logger::info("concatenateAudioFiles: Successfully concatenated {} MP3 files", filesProcessed);
+        return filesProcessed > 0;
+#endif
     }
 
-    int ret = avformat_alloc_output_context2(&outputFmtCtx, nullptr, outputFormat, outputPath.c_str());
+    // Create output format context for non-MP3 formats
+    AVFormatContext* outputFmtCtx = nullptr;
+
+    // Try multiple formats in order of preference
+    // Note: "ipod" format may not be available on all platforms (like Vita)
+    const char* formatOptions[] = { nullptr, nullptr, nullptr };
+    int numFormats = 0;
+
+    if (outputExt == ".ogg") {
+        formatOptions[0] = "ogg";
+        numFormats = 1;
+    } else {
+        // For m4b/m4a, try mp4 first (more compatible), then ipod, then mov
+        formatOptions[0] = "mp4";
+        formatOptions[1] = "ipod";
+        formatOptions[2] = "mov";
+        numFormats = 3;
+    }
+
+    int ret = -1;
+    const char* usedFormat = nullptr;
+    for (int i = 0; i < numFormats; i++) {
+        ret = avformat_alloc_output_context2(&outputFmtCtx, nullptr, formatOptions[i], outputPath.c_str());
+        if (ret >= 0 && outputFmtCtx) {
+            usedFormat = formatOptions[i];
+            brls::Logger::info("concatenateAudioFiles: Using output format '{}'", usedFormat);
+            break;
+        }
+        if (outputFmtCtx) {
+            avformat_free_context(outputFmtCtx);
+            outputFmtCtx = nullptr;
+        }
+    }
+
     if (ret < 0 || !outputFmtCtx) {
         brls::Logger::error("concatenateAudioFiles: Could not create output context");
         return false;

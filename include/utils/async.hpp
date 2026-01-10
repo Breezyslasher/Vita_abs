@@ -9,7 +9,53 @@
 #include <thread>
 #include <borealis.hpp>
 
+#ifdef __vita__
+#include <psp2/kernel/threadmgr.h>
+#endif
+
 namespace vitaabs {
+
+#ifdef __vita__
+// Vita-specific thread wrapper with configurable stack size
+struct VitaThreadData {
+    std::function<void()> task;
+};
+
+inline int vitaThreadEntry(SceSize args, void* argp) {
+    (void)args;
+    VitaThreadData* data = *static_cast<VitaThreadData**>(argp);
+    if (data && data->task) {
+        data->task();
+    }
+    delete data;
+    return sceKernelExitDeleteThread(0);
+}
+
+// Run task with larger stack size (256KB) - needed for file operations
+inline void asyncRunLargeStack(std::function<void()> task) {
+    VitaThreadData* data = new VitaThreadData();
+    data->task = std::move(task);
+
+    SceUID thid = sceKernelCreateThread("asyncLargeStack", vitaThreadEntry,
+                                         0x10000100, 0x40000, 0, 0, NULL);  // 256KB stack
+    if (thid >= 0) {
+        VitaThreadData* dataPtr = data;
+        sceKernelStartThread(thid, sizeof(dataPtr), &dataPtr);
+    } else {
+        // Fallback to regular thread if creation fails
+        delete data;
+        std::thread([task]() {
+            task();
+        }).detach();
+    }
+}
+#else
+inline void asyncRunLargeStack(std::function<void()> task) {
+    std::thread([task]() {
+        task();
+    }).detach();
+}
+#endif
 
 /**
  * Execute a task asynchronously and call a callback on the UI thread when done.

@@ -20,15 +20,23 @@ private:
     void loadDetails();
     void loadChildren();
     void loadMusicCategories();
+    void loadLocalCover(const std::string& localPath);
     void onPlay(bool resume = false);
     void startDownloadAndPlay(const std::string& itemId, const std::string& episodeId,
                               float startTime = -1.0f, bool downloadOnly = false);
     void startDownloadOnly(const std::string& itemId, const std::string& episodeId);
     void batchDownloadEpisodes(const std::vector<MediaItem>& episodes);
     void onDownload();
+    void onDeleteDownload();
     void showDownloadOptions();
     void downloadAll();
     void downloadUnwatched(int maxCount = -1);
+    void deleteAllDownloadedEpisodes();
+    void showDeleteEpisodesDialog(const std::vector<std::pair<std::string, std::string>>& episodes,
+                                   const std::string& podcastId,
+                                   const std::string& podcastTitle);
+    bool areAllEpisodesDownloaded();
+    bool hasAnyDownloadedEpisodes();
 
     // Podcast episode management
     void findNewEpisodes();
@@ -59,6 +67,7 @@ private:
     brls::Button* m_playButton = nullptr;
     brls::Button* m_resumeButton = nullptr;
     brls::Button* m_downloadButton = nullptr;
+    brls::Button* m_deleteButton = nullptr;        // Delete download button
     brls::Button* m_findEpisodesButton = nullptr;  // Find New Episodes button for podcasts
     brls::Box* m_childrenBox = nullptr;
 

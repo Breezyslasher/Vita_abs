@@ -5,8 +5,49 @@
 #include "view/downloads_tab.hpp"
 #include "app/downloads_manager.hpp"
 #include "activity/player_activity.hpp"
+#include "utils/image_loader.hpp"
+#include <fstream>
+
+#ifdef __vita__
+#include <psp2/io/fcntl.h>
+#endif
 
 namespace vitaabs {
+
+// Helper to load local cover image on Vita
+static void loadLocalCoverImage(brls::Image* image, const std::string& localPath) {
+    if (localPath.empty() || !image) return;
+
+#ifdef __vita__
+    SceUID fd = sceIoOpen(localPath.c_str(), SCE_O_RDONLY, 0);
+    if (fd >= 0) {
+        SceOff size = sceIoLseek(fd, 0, SCE_SEEK_END);
+        sceIoLseek(fd, 0, SCE_SEEK_SET);
+
+        if (size > 0 && size < 10 * 1024 * 1024) {  // Max 10MB
+            std::vector<uint8_t> data(size);
+            if (sceIoRead(fd, data.data(), size) == size) {
+                image->setImageFromMem(data.data(), data.size());
+            }
+        }
+        sceIoClose(fd);
+    }
+#else
+    std::ifstream file(localPath, std::ios::binary | std::ios::ate);
+    if (file.is_open()) {
+        std::streamsize size = file.tellg();
+        file.seekg(0, std::ios::beg);
+
+        if (size > 0 && size < 10 * 1024 * 1024) {
+            std::vector<uint8_t> data(size);
+            if (file.read(reinterpret_cast<char*>(data.data()), size)) {
+                image->setImageFromMem(data.data(), data.size());
+            }
+        }
+        file.close();
+    }
+#endif
+}
 
 DownloadsTab::DownloadsTab() {
     this->setAxis(brls::Axis::COLUMN);
@@ -82,15 +123,29 @@ void DownloadsTab::refresh() {
         row->setBackgroundColor(nvgRGBA(40, 40, 40, 200));
         row->setCornerRadius(8);
 
-        // Cover image (if available)
+        // Cover image (try local first, then remote URL)
+        auto coverImage = new brls::Image();
+        coverImage->setWidth(60);
+        coverImage->setHeight(60);
+        coverImage->setCornerRadius(4);
+        coverImage->setMargins(0, 15, 0, 0);
+        row->addView(coverImage);
+
+        brls::Logger::debug("DownloadsTab: Item '{}' - localCoverPath='{}', coverUrl empty={}",
+                           item.title, item.localCoverPath, item.coverUrl.empty() ? "yes" : "no");
+
         if (!item.localCoverPath.empty()) {
-            auto coverImage = new brls::Image();
-            coverImage->setWidth(60);
-            coverImage->setHeight(60);
-            coverImage->setCornerRadius(4);
-            coverImage->setMargins(0, 15, 0, 0);
-            coverImage->setImageFromFile(item.localCoverPath);
-            row->addView(coverImage);
+            // Load local cover using Vita-compatible method
+            brls::Logger::debug("DownloadsTab: Loading local cover for '{}'", item.title);
+            loadLocalCoverImage(coverImage, item.localCoverPath);
+        } else if (!item.coverUrl.empty()) {
+            // Load from remote URL
+            brls::Logger::debug("DownloadsTab: Loading remote cover for '{}'", item.title);
+            ImageLoader::loadAsync(item.coverUrl, [](brls::Image* img) {
+                // Image loaded callback
+            }, coverImage);
+        } else {
+            brls::Logger::debug("DownloadsTab: No cover available for '{}'", item.title);
         }
 
         // Title and info

@@ -67,8 +67,8 @@ public:
     bool isInitialized() const { return m_mpv != nullptr; }
 
     // Playback control
-    bool loadUrl(const std::string& url, const std::string& title = "");
-    bool loadFile(const std::string& path);
+    bool loadUrl(const std::string& url, const std::string& title = "", double startTime = -1.0);
+    bool loadFile(const std::string& path, double startTime = -1.0);
     void play();
     void pause();
     void togglePause();

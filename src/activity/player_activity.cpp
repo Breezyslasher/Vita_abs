@@ -18,6 +18,7 @@
 #include <cmath>
 #include <iomanip>
 #include <sstream>
+#include <fstream>
 
 #ifdef __vita__
 #include <psp2/io/fcntl.h>
@@ -54,6 +55,7 @@ PlayerActivity::PlayerActivity(const std::string& itemId, const std::string& epi
     m_tempFilePath = preDownloadedPath;
     if (startTime >= 0) {
         m_pendingSeek = static_cast<double>(startTime);
+        brls::Logger::info("PlayerActivity: Will resume from {}s", startTime);
     }
     brls::Logger::debug("PlayerActivity created with pre-downloaded file: {}", preDownloadedPath);
 }
@@ -194,9 +196,10 @@ void PlayerActivity::willDisappear(bool resetState) {
 
             if (m_isLocalFile) {
                 // Save progress for downloaded media (in seconds)
-                DownloadsManager::getInstance().updateProgress(m_itemId, currentTime);
+                DownloadsManager::getInstance().updateProgress(m_itemId, currentTime, m_episodeId);
                 DownloadsManager::getInstance().saveState();
-                brls::Logger::info("PlayerActivity: Saved local progress {}s for {}", currentTime, m_itemId);
+                brls::Logger::info("PlayerActivity: Saved local progress {}s for {} (episode: {})",
+                                  currentTime, m_itemId, m_episodeId.empty() ? "none" : m_episodeId);
 
                 // Also sync to server if online
                 AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
@@ -251,15 +254,60 @@ void PlayerActivity::loadMedia() {
     if (m_isPreDownloaded && !m_tempFilePath.empty()) {
         brls::Logger::info("PlayerActivity: Playing pre-downloaded file: {}", m_tempFilePath);
 
-        // Fetch item details for metadata
-        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-        MediaItem item;
-        if (client.fetchItem(m_itemId, item)) {
-            if (titleLabel) titleLabel->setText(item.title);
-            if (authorLabel && !item.authorName.empty()) authorLabel->setText(item.authorName);
-            if (!item.coverPath.empty()) {
-                std::string fullCoverUrl = client.getCoverUrl(m_itemId);
-                loadCoverArt(fullCoverUrl);
+        // First try to get metadata from downloads manager (works offline)
+        DownloadsManager& downloads = DownloadsManager::getInstance();
+
+        // Find the matching download item (works for both books and podcast episodes)
+        std::string offlineTitle, offlineAuthor, offlineCoverPath, offlineCoverUrl;
+        bool foundInDownloads = false;
+
+        auto allDownloads = downloads.getDownloads();
+        for (const auto& dl : allDownloads) {
+            if (dl.itemId == m_itemId && dl.state == DownloadState::COMPLETED) {
+                // For episodes, also match episodeId
+                if (m_episodeId.empty() || dl.episodeId == m_episodeId) {
+                    offlineTitle = dl.title;
+                    offlineAuthor = dl.authorName;
+                    offlineCoverPath = dl.localCoverPath;
+                    offlineCoverUrl = dl.coverUrl;
+                    foundInDownloads = true;
+                    break;
+                }
+            }
+        }
+
+        bool metadataLoaded = false;
+        if (foundInDownloads) {
+            brls::Logger::info("PlayerActivity: Using offline metadata from downloads manager");
+            if (titleLabel && !offlineTitle.empty()) {
+                titleLabel->setText(offlineTitle);
+                metadataLoaded = true;
+            }
+            if (authorLabel && !offlineAuthor.empty()) {
+                authorLabel->setText(offlineAuthor);
+            }
+            // Load local cover if available, otherwise try server
+            if (!offlineCoverPath.empty()) {
+                brls::Logger::info("PlayerActivity: Loading local cover: {}", offlineCoverPath);
+                loadCoverArt(offlineCoverPath);
+            } else if (!offlineCoverUrl.empty()) {
+                loadCoverArt(offlineCoverUrl);
+            }
+        }
+
+        // If no metadata from downloads, try server (when online)
+        if (!metadataLoaded) {
+            AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+            MediaItem item;
+            if (client.fetchItem(m_itemId, item)) {
+                if (titleLabel) titleLabel->setText(item.title);
+                if (authorLabel && !item.authorName.empty()) authorLabel->setText(item.authorName);
+                if (!item.coverPath.empty()) {
+                    std::string fullCoverUrl = client.getCoverUrl(m_itemId);
+                    loadCoverArt(fullCoverUrl);
+                }
+            } else {
+                brls::Logger::warning("PlayerActivity: Could not fetch metadata (offline or error)");
             }
         }
 
@@ -274,7 +322,11 @@ void PlayerActivity::loadMedia() {
         }
 
         std::string title = titleLabel ? titleLabel->getFullText() : m_itemId;
-        if (!player.loadUrl(m_tempFilePath, title)) {
+        // Pass start time directly to loadUrl for more reliable seeking
+        double startTime = m_pendingSeek;
+        m_pendingSeek = 0.0;  // Clear pending seek since we're handling it via loadUrl
+        brls::Logger::info("PlayerActivity: Loading pre-downloaded file with startTime={}s", startTime);
+        if (!player.loadUrl(m_tempFilePath, title, startTime)) {
             brls::Logger::error("Failed to load pre-downloaded file: {}", m_tempFilePath);
             m_loadingMedia = false;
             return;
@@ -355,7 +407,8 @@ void PlayerActivity::loadMedia() {
             downloads.fetchProgressFromServer(m_itemId, m_episodeId);
         }
 
-        DownloadItem* download = downloads.getDownload(m_itemId);
+        // Get download item (using episodeId for podcast episodes)
+        DownloadItem* download = downloads.getDownload(m_itemId, m_episodeId);
 
         if (!download || download->state != DownloadState::COMPLETED) {
             brls::Logger::error("PlayerActivity: Downloaded media not found or incomplete");
@@ -402,8 +455,12 @@ void PlayerActivity::loadMedia() {
             }
         }
 
+        // Calculate start time from saved viewOffset
+        double startTime = (download->viewOffset > 0) ? download->viewOffset / 1000.0 : -1.0;
+        brls::Logger::info("PlayerActivity: Loading local file with startTime={}s", startTime);
+
         // Load local file (using playback path for multi-file support)
-        if (!player.loadUrl(playbackPath, download->title)) {
+        if (!player.loadUrl(playbackPath, download->title, startTime)) {
             brls::Logger::error("Failed to load local file: {}", playbackPath);
             m_loadingMedia = false;
             return;
@@ -422,14 +479,100 @@ void PlayerActivity::loadMedia() {
             videoView->setVideoVisible(true);
         }
 
-        // Resume from saved viewOffset
-        if (download->viewOffset > 0) {
-            m_pendingSeek = download->viewOffset / 1000.0;
-        }
-
         m_isPlaying = true;
         m_loadingMedia = false;
         return;
+    }
+
+    // Before attempting remote playback, check if content is downloaded
+    // This handles the case when coming from library view with a downloaded episode
+    {
+        DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
+        downloadsMgr.init();
+
+        // Check if this item (or episode) is downloaded
+        if (downloadsMgr.isDownloaded(m_itemId, m_episodeId)) {
+            brls::Logger::info("PlayerActivity: Item is downloaded, using local playback");
+
+            // Try to fetch latest progress from server before playing (if online)
+            AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+            if (client.isAuthenticated()) {
+                brls::Logger::info("PlayerActivity: Fetching latest progress from server for downloaded item");
+                downloadsMgr.fetchProgressFromServer(m_itemId, m_episodeId);
+            }
+
+            // Find the download info (after potential server update)
+            auto allDownloads = downloadsMgr.getDownloads();
+            for (const auto& dl : allDownloads) {
+                if (dl.itemId == m_itemId && dl.state == DownloadState::COMPLETED) {
+                    if (m_episodeId.empty() || dl.episodeId == m_episodeId) {
+                        // Found the matching download - use local playback
+                        std::string playbackPath = dl.localPath;
+
+                        // Set metadata
+                        if (titleLabel && !dl.title.empty()) {
+                            titleLabel->setText(dl.title);
+                        }
+                        if (authorLabel && !dl.authorName.empty()) {
+                            authorLabel->setText(dl.authorName);
+                        }
+
+                        // Load cover (prefer local, fall back to URL)
+                        if (!dl.localCoverPath.empty()) {
+                            loadCoverArt(dl.localCoverPath);
+                        } else if (!dl.coverUrl.empty()) {
+                            loadCoverArt(dl.coverUrl);
+                        }
+
+                        // Initialize player
+                        MpvPlayer& player = MpvPlayer::getInstance();
+                        if (!player.isInitialized()) {
+                            if (!player.init()) {
+                                brls::Logger::error("Failed to initialize MPV player");
+                                m_loadingMedia = false;
+                                return;
+                            }
+                        }
+
+                        // Calculate start time from saved position
+                        double startTime = -1.0;
+                        if (dl.currentTime > 0) {
+                            startTime = dl.currentTime;
+                        } else if (dl.viewOffset > 0) {
+                            startTime = dl.viewOffset / 1000.0;
+                        }
+
+                        // Load local file with start time
+                        brls::Logger::info("PlayerActivity: Loading downloaded file: {} (startTime={}s)", playbackPath, startTime);
+                        if (!player.loadUrl(playbackPath, dl.title, startTime)) {
+                            brls::Logger::error("Failed to load downloaded file: {}", playbackPath);
+                            m_loadingMedia = false;
+                            return;
+                        }
+
+                        // Apply saved playback speed
+                        AppSettings& dlSettings = Application::getInstance().getSettings();
+                        float dlSpeed = getSpeedValue(static_cast<int>(dlSettings.playbackSpeed));
+                        if (dlSpeed != 1.0f) {
+                            player.setSpeed(dlSpeed);
+                        }
+
+                        // Show video view
+                        if (videoView) {
+                            videoView->setVisibility(brls::Visibility::VISIBLE);
+                            videoView->setVideoVisible(true);
+                        }
+
+                        // Mark as local file for progress saving
+                        m_isLocalFile = true;
+
+                        m_isPlaying = true;
+                        m_loadingMedia = false;
+                        return;
+                    }
+                }
+            }
+        }
     }
 
     // Remote playback from Audiobookshelf server
@@ -496,8 +639,12 @@ void PlayerActivity::loadMedia() {
             ext = ".ogg";
         }
 
-        // For multi-file, we'll create a combined .m4b file
-        std::string finalExt = isMultiFile ? ".m4b" : ext;
+        // For multi-file, use mp4 container only for m4a sources
+        // For mp3/ogg/flac sources, keep the same format (Vita FFmpeg lacks mp4 muxer)
+        std::string finalExt = ext;
+        if (isMultiFile && ext == ".m4a") {
+            finalExt = ".m4b";  // Only use m4b for m4a sources
+        }
 
         // Get settings to check if we should save to downloads
         AppSettings& settings = Application::getInstance().getSettings();
@@ -796,8 +943,9 @@ void PlayerActivity::loadMedia() {
             brls::Logger::info("PlayerActivity: MPV player initialized successfully");
         }
 
-        brls::Logger::info("PlayerActivity: Loading temp file: {}", m_tempFilePath);
-        if (!player.loadUrl(m_tempFilePath, item.title)) {
+        brls::Logger::info("PlayerActivity: Loading temp file: {} (startTime={}s)", m_tempFilePath, startTime);
+        // Pass start time directly for more reliable seeking
+        if (!player.loadUrl(m_tempFilePath, item.title, startTime > 0 ? static_cast<double>(startTime) : -1.0)) {
             brls::Logger::error("Failed to load temp file: {}", m_tempFilePath);
             tempMgr.deleteTempFile(m_itemId, m_episodeId);
             m_tempFilePath.clear();
@@ -817,11 +965,6 @@ void PlayerActivity::loadMedia() {
         if (videoView) {
             videoView->setVisibility(brls::Visibility::VISIBLE);
             videoView->setVideoVisible(true);
-        }
-
-        // Resume from saved position if available
-        if (startTime > 0) {
-            m_pendingSeek = startTime;
         }
 
         m_isPlaying = true;
@@ -852,13 +995,25 @@ void PlayerActivity::updateProgress() {
     }
 
     // Handle pending seek when playback becomes ready
-    if (m_pendingSeek > 0.0 && player.isPlaying()) {
-        player.seekTo(m_pendingSeek);
-        m_pendingSeek = 0.0;
+    static bool justSeeked = false;
+    if (m_pendingSeek > 0.0) {
+        // Try to seek once player is ready (playing or paused with valid duration)
+        if (player.isPlaying() || (player.isPaused() && player.getDuration() > 0)) {
+            brls::Logger::info("PlayerActivity: Seeking to resume position {}s", m_pendingSeek);
+            player.seekTo(m_pendingSeek);
+            m_pendingSeek = 0.0;
+            justSeeked = true;
+        }
     }
 
     double position = player.getPosition();
     double duration = player.getDuration();
+
+    // Log position after seek to verify it worked
+    if (justSeeked && position > 0) {
+        brls::Logger::info("PlayerActivity: Position after seek: {}s", position);
+        justSeeked = false;
+    }
 
     // Store duration for later use
     if (duration > 0) {
@@ -891,15 +1046,32 @@ void PlayerActivity::updateProgress() {
         }
     }
 
-    // Periodic progress sync to server (every 30 seconds while playing)
-    if (m_isPlaying && !m_isLocalFile && !m_isDirectFile) {
+    // Periodic progress sync (every 30 seconds while playing)
+    if (m_isPlaying && !m_isDirectFile) {
         m_syncCounter++;
         if (m_syncCounter >= 30) {  // Every 30 updates (30 seconds)
             m_syncCounter = 0;
             float currentPos = static_cast<float>(position);
-            // Only sync if position changed significantly (more than 5 seconds)
+            // Only sync/save if position changed significantly (more than 5 seconds)
             if (std::abs(currentPos - m_lastSyncedTime) > 5.0f) {
-                syncProgressToServer();
+                if (m_isLocalFile) {
+                    // Save progress for downloaded media locally
+                    DownloadsManager::getInstance().updateProgress(m_itemId, currentPos, m_episodeId);
+                    DownloadsManager::getInstance().saveState();
+                    brls::Logger::debug("PlayerActivity: Auto-saved local progress {}s", currentPos);
+
+                    // Also sync to server if online
+                    AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+                    if (client.isAuthenticated()) {
+                        float totalDuration = static_cast<float>(duration);
+                        bool isFinished = (totalDuration > 0 && currentPos >= totalDuration * 0.95f);
+                        client.updateProgress(m_itemId, currentPos, totalDuration, isFinished, m_episodeId);
+                    }
+                    m_lastSyncedTime = currentPos;
+                } else {
+                    // Remote playback - sync to server
+                    syncProgressToServer();
+                }
             }
         }
     }
@@ -933,8 +1105,16 @@ void PlayerActivity::updateProgress() {
     // Check if playback ended (only if we were actually playing)
     if (m_isPlaying && player.hasEnded()) {
         m_isPlaying = false;  // Prevent multiple triggers
-        // Mark as finished with Audiobookshelf (set isFinished=true)
         float totalDuration = (float)player.getDuration();
+
+        if (m_isLocalFile) {
+            // Save completed progress for downloaded media
+            DownloadsManager::getInstance().updateProgress(m_itemId, totalDuration, m_episodeId);
+            DownloadsManager::getInstance().saveState();
+            brls::Logger::info("PlayerActivity: Saved completed progress for local file");
+        }
+
+        // Mark as finished with Audiobookshelf (set isFinished=true)
         AudiobookshelfClient::getInstance().updateProgress(m_itemId, totalDuration, totalDuration, true, m_episodeId);
         brls::Application::popActivity();
     }
@@ -1011,11 +1191,56 @@ void PlayerActivity::loadCoverArt(const std::string& coverUrl) {
 
     brls::Logger::debug("Loading cover art: {}", coverUrl);
 
-    // Use the image loader to load the cover asynchronously
-    ImageLoader::loadAsync(coverUrl, [this](brls::Image* img) {
-        // Image is loaded into the target automatically
-        brls::Logger::debug("Cover art loaded");
-    }, coverImage);
+    // Check if this is a local file path (starts with ux0: or / or doesn't start with http)
+    bool isLocalPath = (coverUrl.find("ux0:") == 0 ||
+                        coverUrl.find("/") == 0 ||
+                        coverUrl.find("http") != 0);
+
+    if (isLocalPath) {
+        // Load local file directly
+        brls::Logger::info("Loading local cover image: {}", coverUrl);
+#ifdef __vita__
+        SceUID fd = sceIoOpen(coverUrl.c_str(), SCE_O_RDONLY, 0);
+        if (fd >= 0) {
+            // Get file size
+            SceOff size = sceIoLseek(fd, 0, SCE_SEEK_END);
+            sceIoLseek(fd, 0, SCE_SEEK_SET);
+
+            if (size > 0 && size < 10 * 1024 * 1024) {  // Max 10MB for cover
+                std::vector<uint8_t> data(size);
+                if (sceIoRead(fd, data.data(), size) == size) {
+                    coverImage->setImageFromMem(data.data(), data.size());
+                    brls::Logger::debug("Local cover art loaded ({} bytes)", size);
+                }
+            }
+            sceIoClose(fd);
+        } else {
+            brls::Logger::warning("Failed to open local cover: {}", coverUrl);
+        }
+#else
+        // Non-Vita: use standard file I/O
+        std::ifstream file(coverUrl, std::ios::binary | std::ios::ate);
+        if (file.is_open()) {
+            std::streamsize size = file.tellg();
+            file.seekg(0, std::ios::beg);
+
+            if (size > 0 && size < 10 * 1024 * 1024) {
+                std::vector<uint8_t> data(size);
+                if (file.read(reinterpret_cast<char*>(data.data()), size)) {
+                    coverImage->setImageFromMem(data.data(), data.size());
+                    brls::Logger::debug("Local cover art loaded ({} bytes)", size);
+                }
+            }
+            file.close();
+        }
+#endif
+    } else {
+        // Use the image loader to load the cover asynchronously (HTTP)
+        ImageLoader::loadAsync(coverUrl, [this](brls::Image* img) {
+            // Image is loaded into the target automatically
+            brls::Logger::debug("Cover art loaded");
+        }, coverImage);
+    }
 }
 
 float PlayerActivity::getSpeedValue(int index) {

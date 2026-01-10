@@ -208,7 +208,7 @@ void MpvPlayer::shutdown() {
     m_commandPending = false;
 }
 
-bool MpvPlayer::loadUrl(const std::string& url, const std::string& title) {
+bool MpvPlayer::loadUrl(const std::string& url, const std::string& title, double startTime) {
     if (!m_mpv) {
         if (!init()) {
             return false;
@@ -231,7 +231,7 @@ bool MpvPlayer::loadUrl(const std::string& url, const std::string& title) {
         }
     }
 
-    brls::Logger::info("MpvPlayer: Loading URL: {}", normalizedUrl);
+    brls::Logger::info("MpvPlayer: Loading URL: {} (startTime={}s)", normalizedUrl, startTime);
 
     // Store in member variable BEFORE passing to async command
     // This ensures the string stays valid until playback completes
@@ -242,9 +242,20 @@ bool MpvPlayer::loadUrl(const std::string& url, const std::string& title) {
     // Mark command as pending
     m_commandPending = true;
 
-    // Use simple loadfile command - use m_currentUrl.c_str() to ensure string lifetime
-    const char* cmd[] = {"loadfile", m_currentUrl.c_str(), "replace", nullptr};
-    int result = mpv_command_async(m_mpv, CMD_LOADFILE, cmd);
+    int result;
+    if (startTime > 0) {
+        // Build start option string for resuming at specific position
+        char startOpt[64];
+        snprintf(startOpt, sizeof(startOpt), "start=%.2f", startTime);
+        brls::Logger::info("MpvPlayer: Using start option: {}", startOpt);
+        const char* cmd[] = {"loadfile", m_currentUrl.c_str(), "replace", startOpt, nullptr};
+        result = mpv_command_async(m_mpv, CMD_LOADFILE, cmd);
+    } else {
+        // No start time - load from beginning
+        const char* cmd[] = {"loadfile", m_currentUrl.c_str(), "replace", nullptr};
+        result = mpv_command_async(m_mpv, CMD_LOADFILE, cmd);
+    }
+
     if (result < 0) {
         m_errorMessage = std::string("Failed to queue load command: ") + mpv_error_string(result);
         brls::Logger::error("MpvPlayer: {}", m_errorMessage);
@@ -257,8 +268,8 @@ bool MpvPlayer::loadUrl(const std::string& url, const std::string& title) {
     return true;
 }
 
-bool MpvPlayer::loadFile(const std::string& path) {
-    return loadUrl(path, "");
+bool MpvPlayer::loadFile(const std::string& path, double startTime) {
+    return loadUrl(path, "", startTime);
 }
 
 void MpvPlayer::play() {
@@ -303,11 +314,20 @@ void MpvPlayer::seekTo(double seconds) {
         return;
     }
 
-    char timeStr[32];
-    snprintf(timeStr, sizeof(timeStr), "%.2f", seconds);
+    brls::Logger::info("MpvPlayer: Seeking to {}s (state={})", seconds, (int)m_state);
 
-    const char* cmd[] = {"seek", timeStr, "absolute", NULL};
-    mpv_command_async(m_mpv, CMD_SEEK, cmd);
+    // Use time-pos property for more reliable seeking
+    int result = mpv_set_property(m_mpv, "time-pos", MPV_FORMAT_DOUBLE, &seconds);
+    if (result < 0) {
+        brls::Logger::warning("MpvPlayer: time-pos seek failed ({}), trying seek command", result);
+        // Fall back to seek command
+        char timeStr[32];
+        snprintf(timeStr, sizeof(timeStr), "%.2f", seconds);
+        const char* cmd[] = {"seek", timeStr, "absolute", NULL};
+        mpv_command_async(m_mpv, CMD_SEEK, cmd);
+    } else {
+        brls::Logger::info("MpvPlayer: time-pos set to {}s successfully", seconds);
+    }
 }
 
 void MpvPlayer::seekRelative(double seconds) {

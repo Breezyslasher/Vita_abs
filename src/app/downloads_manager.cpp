@@ -44,6 +44,98 @@ static bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
 
     brls::Logger::info("concatenateAudioFiles: Combining {} files into {}", inputFiles.size(), outputPath);
 
+    // Determine output format based on extension
+    std::string outputExt = ".m4b";
+    size_t dotPos = outputPath.rfind('.');
+    if (dotPos != std::string::npos) {
+        outputExt = outputPath.substr(dotPos);
+    }
+
+    // For MP3 files, use simple binary concatenation (MP3 frames are self-contained)
+    if (outputExt == ".mp3") {
+        brls::Logger::info("concatenateAudioFiles: Using binary concatenation for MP3");
+
+        // Use heap allocation to avoid stack overflow on Vita
+        const size_t BUFFER_SIZE = 8192;
+        char* buffer = new char[BUFFER_SIZE];
+        if (!buffer) {
+            brls::Logger::error("concatenateAudioFiles: Failed to allocate buffer");
+            return false;
+        }
+
+#ifdef __vita__
+        SceUID outFd = sceIoOpen(outputPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+        if (outFd < 0) {
+            brls::Logger::error("concatenateAudioFiles: Could not create output file");
+            delete[] buffer;
+            return false;
+        }
+
+        int filesProcessed = 0;
+
+        for (size_t fileIdx = 0; fileIdx < inputFiles.size(); fileIdx++) {
+            const std::string& inputFile = inputFiles[fileIdx];
+
+            SceUID inFd = sceIoOpen(inputFile.c_str(), SCE_O_RDONLY, 0);
+            if (inFd < 0) {
+                brls::Logger::warning("concatenateAudioFiles: Could not open {}", inputFile);
+                continue;
+            }
+
+            int bytesRead;
+            while ((bytesRead = sceIoRead(inFd, buffer, BUFFER_SIZE)) > 0) {
+                sceIoWrite(outFd, buffer, bytesRead);
+            }
+
+            sceIoClose(inFd);
+            filesProcessed++;
+
+            if (progressCallback) {
+                progressCallback(filesProcessed, static_cast<int>(inputFiles.size()));
+            }
+        }
+
+        sceIoClose(outFd);
+        delete[] buffer;
+        brls::Logger::info("concatenateAudioFiles: Successfully concatenated {} MP3 files", filesProcessed);
+        return filesProcessed > 0;
+#else
+        std::ofstream outFile(outputPath, std::ios::binary);
+        if (!outFile) {
+            brls::Logger::error("concatenateAudioFiles: Could not create output file");
+            delete[] buffer;
+            return false;
+        }
+
+        int filesProcessed = 0;
+
+        for (size_t fileIdx = 0; fileIdx < inputFiles.size(); fileIdx++) {
+            const std::string& inputFile = inputFiles[fileIdx];
+
+            std::ifstream inFile(inputFile, std::ios::binary);
+            if (!inFile) {
+                brls::Logger::warning("concatenateAudioFiles: Could not open {}", inputFile);
+                continue;
+            }
+
+            while (inFile.read(buffer, BUFFER_SIZE) || inFile.gcount() > 0) {
+                outFile.write(buffer, inFile.gcount());
+            }
+
+            filesProcessed++;
+
+            if (progressCallback) {
+                progressCallback(filesProcessed, static_cast<int>(inputFiles.size()));
+            }
+        }
+
+        delete[] buffer;
+        brls::Logger::info("concatenateAudioFiles: Successfully concatenated {} MP3 files", filesProcessed);
+        return filesProcessed > 0;
+#endif
+    }
+
+    // For non-MP3, use FFmpeg concat demuxer
     // Create a concat file list for the concat demuxer
     std::string concatListPath = outputPath + ".concat.txt";
 
@@ -106,24 +198,40 @@ static bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
         return false;
     }
 
-    // Create output format context
+    // Create output format context (for non-MP3 formats)
     AVFormatContext* outputFmtCtx = nullptr;
 
-    // Determine output format based on extension
-    std::string outputExt = ".m4b";
-    size_t dotPos = outputPath.rfind('.');
-    if (dotPos != std::string::npos) {
-        outputExt = outputPath.substr(dotPos);
+    // Try multiple formats in order of preference
+    // Note: "ipod" format may not be available on all platforms (like Vita)
+    // MP3 is handled above via binary concatenation
+    const char* formatOptions[] = { nullptr, nullptr, nullptr };
+    int numFormats = 0;
+
+    if (outputExt == ".ogg") {
+        formatOptions[0] = "ogg";
+        numFormats = 1;
+    } else {
+        // For m4b/m4a, try mp4 first (more compatible), then ipod, then mov
+        formatOptions[0] = "mp4";
+        formatOptions[1] = "ipod";
+        formatOptions[2] = "mov";
+        numFormats = 3;
     }
 
-    const char* outputFormat = "ipod";  // For m4b/m4a
-    if (outputExt == ".mp3") {
-        outputFormat = "mp3";
-    } else if (outputExt == ".ogg") {
-        outputFormat = "ogg";
+    const char* usedFormat = nullptr;
+    for (int i = 0; i < numFormats; i++) {
+        ret = avformat_alloc_output_context2(&outputFmtCtx, nullptr, formatOptions[i], outputPath.c_str());
+        if (ret >= 0 && outputFmtCtx) {
+            usedFormat = formatOptions[i];
+            brls::Logger::info("concatenateAudioFiles: Using output format '{}'", usedFormat);
+            break;
+        }
+        if (outputFmtCtx) {
+            avformat_free_context(outputFmtCtx);
+            outputFmtCtx = nullptr;
+        }
     }
 
-    ret = avformat_alloc_output_context2(&outputFmtCtx, nullptr, outputFormat, outputPath.c_str());
     if (ret < 0 || !outputFmtCtx) {
         brls::Logger::error("concatenateAudioFiles: Could not create output context");
         avformat_close_input(&inputFmtCtx);
@@ -421,17 +529,60 @@ bool DownloadsManager::deleteDownload(const std::string& itemId) {
 
     for (auto it = m_downloads.begin(); it != m_downloads.end(); ++it) {
         if (it->itemId == itemId) {
-            // Delete file
+            // Delete audio file
             if (!it->localPath.empty()) {
 #ifdef __vita__
                 sceIoRemove(it->localPath.c_str());
 #else
                 std::remove(it->localPath.c_str());
 #endif
+                brls::Logger::info("DownloadsManager: Deleted file {}", it->localPath);
+            }
+            // Delete cover image if exists
+            if (!it->localCoverPath.empty()) {
+#ifdef __vita__
+                sceIoRemove(it->localCoverPath.c_str());
+#else
+                std::remove(it->localCoverPath.c_str());
+#endif
+                brls::Logger::debug("DownloadsManager: Deleted cover {}", it->localCoverPath);
             }
             m_downloads.erase(it);
-            saveState();
+            saveStateUnlocked();
             brls::Logger::info("DownloadsManager: Deleted download {}", itemId);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool DownloadsManager::deleteDownloadByEpisodeId(const std::string& itemId, const std::string& episodeId) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    for (auto it = m_downloads.begin(); it != m_downloads.end(); ++it) {
+        if (it->itemId == itemId && it->episodeId == episodeId) {
+            // Delete audio file
+            if (!it->localPath.empty()) {
+#ifdef __vita__
+                sceIoRemove(it->localPath.c_str());
+#else
+                std::remove(it->localPath.c_str());
+#endif
+                brls::Logger::info("DownloadsManager: Deleted file {}", it->localPath);
+            }
+            // Delete cover image if exists
+            if (!it->localCoverPath.empty()) {
+#ifdef __vita__
+                sceIoRemove(it->localCoverPath.c_str());
+#else
+                std::remove(it->localCoverPath.c_str());
+#endif
+                brls::Logger::debug("DownloadsManager: Deleted cover {}", it->localCoverPath);
+            }
+            std::string title = it->title;
+            m_downloads.erase(it);
+            saveStateUnlocked();
+            brls::Logger::info("DownloadsManager: Deleted episode download {} ({})", title, episodeId);
             return true;
         }
     }
@@ -448,6 +599,19 @@ DownloadItem* DownloadsManager::getDownload(const std::string& itemId) {
     for (auto& item : m_downloads) {
         if (item.itemId == itemId) {
             return &item;
+        }
+    }
+    return nullptr;
+}
+
+DownloadItem* DownloadsManager::getDownload(const std::string& itemId, const std::string& episodeId) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (auto& item : m_downloads) {
+        if (item.itemId == itemId) {
+            // For episodes, also check episodeId
+            if (episodeId.empty() || item.episodeId == episodeId) {
+                return &item;
+            }
         }
     }
     return nullptr;
@@ -493,13 +657,14 @@ std::string DownloadsManager::getPlaybackPath(const std::string& itemId) const {
     return "";
 }
 
-void DownloadsManager::updateProgress(const std::string& itemId, float currentTime) {
+void DownloadsManager::updateProgress(const std::string& itemId, float currentTime, const std::string& episodeId) {
     std::lock_guard<std::mutex> lock(m_mutex);
     for (auto& item : m_downloads) {
-        if (item.itemId == itemId) {
+        // Match by itemId and episodeId (episodeId is empty for books, non-empty for podcasts)
+        if (item.itemId == itemId && (episodeId.empty() || item.episodeId == episodeId)) {
             item.currentTime = currentTime;
             item.viewOffset = static_cast<int64_t>(currentTime * 1000.0f);  // Convert to milliseconds
-            brls::Logger::debug("DownloadsManager: Updated progress for {} to {}s",
+            brls::Logger::debug("DownloadsManager: Updated progress for '{}' to {}s",
                                item.title, currentTime);
             break;
         }
@@ -570,6 +735,9 @@ void DownloadsManager::syncProgressFromServer() {
 }
 
 bool DownloadsManager::fetchProgressFromServer(const std::string& itemId, const std::string& episodeId) {
+    brls::Logger::info("DownloadsManager::fetchProgressFromServer itemId={} episodeId={}",
+                      itemId, episodeId.empty() ? "(none)" : episodeId);
+
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
     float serverTime = 0.0f;
@@ -577,27 +745,34 @@ bool DownloadsManager::fetchProgressFromServer(const std::string& itemId, const 
     bool serverFinished = false;
 
     if (!client.getProgress(itemId, serverTime, serverProgress, serverFinished, episodeId)) {
-        brls::Logger::debug("DownloadsManager: Could not fetch progress for {}", itemId);
+        brls::Logger::warning("DownloadsManager: Could not fetch progress for {} from server", itemId);
         return false;
     }
 
+    brls::Logger::info("DownloadsManager: Server returned progress {}s for {}", serverTime, itemId);
+
     std::lock_guard<std::mutex> lock(m_mutex);
     for (auto& item : m_downloads) {
+        brls::Logger::debug("DownloadsManager: Checking download item '{}' itemId={} episodeId={}",
+                           item.title, item.itemId, item.episodeId.empty() ? "(none)" : item.episodeId);
+
         if (item.itemId == itemId && item.episodeId == episodeId) {
             // Only update if server progress is ahead of local progress
             if (serverTime > item.currentTime) {
-                brls::Logger::info("DownloadsManager: Updating {} from {}s to {}s (from server)",
+                brls::Logger::info("DownloadsManager: Updating '{}' from {}s to {}s (from server)",
                                   item.title, item.currentTime, serverTime);
                 item.currentTime = serverTime;
                 item.viewOffset = static_cast<int64_t>(serverTime * 1000.0f);
             } else {
-                brls::Logger::debug("DownloadsManager: Local progress {}s is ahead of server {}s for {}",
+                brls::Logger::info("DownloadsManager: Local progress {}s >= server {}s for '{}', keeping local",
                                    item.currentTime, serverTime, item.title);
             }
             return true;
         }
     }
 
+    brls::Logger::warning("DownloadsManager: No matching download found for itemId={} episodeId={}",
+                         itemId, episodeId.empty() ? "(none)" : episodeId);
     return false;
 }
 
@@ -726,8 +901,26 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
                 filePaths.push_back(fi.localPath);
             }
 
+            // Determine output extension from source files (mp3 -> mp3, m4a -> m4b)
+            std::string outputExt = ".mp3";  // Default to mp3 since Vita lacks mp4 muxer
+            if (!item.files.empty()) {
+                const std::string& firstFile = item.files[0].localPath;
+                size_t dotPos = firstFile.rfind('.');
+                if (dotPos != std::string::npos) {
+                    std::string srcExt = firstFile.substr(dotPos);
+                    if (srcExt == ".m4a" || srcExt == ".m4b" || srcExt == ".mp4") {
+                        outputExt = ".m4b";
+                    } else if (srcExt == ".ogg") {
+                        outputExt = ".ogg";
+                    } else if (srcExt == ".flac") {
+                        outputExt = ".flac";
+                    }
+                    // else keep .mp3 for mp3 and other formats
+                }
+            }
+
             // Combined output file path
-            std::string combinedPath = m_downloadsPath + "/" + item.itemId + ".m4b";
+            std::string combinedPath = m_downloadsPath + "/" + item.itemId + outputExt;
 
             // Run FFmpeg concatenation
             bool concatSuccess = concatenateAudioFiles(filePaths, combinedPath,
@@ -1401,6 +1594,11 @@ bool DownloadsManager::registerCompletedDownload(const std::string& itemId, cons
     item.description = description;
     item.chapters = chapters;
     item.numChapters = static_cast<int>(chapters.size());
+
+    // For podcast episodes, store authorName as parentTitle (podcast name)
+    if (mediaType == "episode" && !authorName.empty()) {
+        item.parentTitle = authorName;
+    }
 
     m_downloads.push_back(item);
     brls::Logger::info("DownloadsManager: Registered completed download: {} ({} bytes, cover: {})",

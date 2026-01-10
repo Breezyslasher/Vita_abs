@@ -5,10 +5,13 @@
 #include "view/library_section_tab.hpp"
 #include "view/podcast_search_tab.hpp"
 #include "app/audiobookshelf_client.hpp"
+#include "app/downloads_manager.hpp"
 #include "view/media_item_cell.hpp"
 #include "view/media_detail_view.hpp"
 #include "app/application.hpp"
 #include "utils/async.hpp"
+#include <map>
+#include <tuple>
 
 namespace vitaabs {
 
@@ -61,6 +64,16 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
         });
         m_viewModeBox->addView(m_collectionsBtn);
     }
+
+    // Downloaded button - always show
+    m_downloadedBtn = new brls::Button();
+    m_downloadedBtn->setText("Downloaded");
+    m_downloadedBtn->setMarginRight(10);
+    m_downloadedBtn->registerClickAction([this](brls::View* view) {
+        showDownloaded();
+        return true;
+    });
+    m_viewModeBox->addView(m_downloadedBtn);
 
     // Note: Categories/Genres button removed - Audiobookshelf doesn't have a genre browsing API
 
@@ -130,8 +143,22 @@ void LibrarySectionTab::onFocusGained() {
 void LibrarySectionTab::loadContent() {
     brls::Logger::debug("LibrarySectionTab::loadContent - section: {} (async)", m_sectionKey);
 
+    const auto& settings = Application::getInstance().getSettings();
     std::string key = m_sectionKey;
     std::weak_ptr<bool> aliveWeak = m_alive;  // Capture weak_ptr for async safety
+
+    // Always load downloaded items first (for filtering and offline mode)
+    loadDownloadedItems();
+
+    // If showOnlyDownloaded is enabled, just show downloaded items and hide navigation
+    if (settings.showOnlyDownloaded) {
+        brls::Logger::info("LibraryTab: Show only downloaded mode enabled");
+        m_viewMode = LibraryViewMode::DOWNLOADED;
+        m_loaded = true;
+        // Hide all navigation buttons in downloaded-only mode
+        hideNavigationButtons();
+        return;
+    }
 
     asyncRun([this, key, aliveWeak]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
@@ -149,21 +176,32 @@ void LibrarySectionTab::loadContent() {
                 }
 
                 m_items = items;
-                m_contentGrid->setDataSource(m_items);
+                // Only update grid if we're in ALL_ITEMS mode
+                if (m_viewMode == LibraryViewMode::ALL_ITEMS) {
+                    m_contentGrid->setDataSource(m_items);
+                }
                 m_loaded = true;
             });
         } else {
-            brls::Logger::error("LibraryTab: Failed to load content for section {}", key);
+            brls::Logger::error("LibraryTab: Failed to load content for section {} - showing downloaded items", key);
             brls::sync([this, aliveWeak]() {
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) return;
+
+                // Offline - show downloaded items instead and hide navigation
+                // Only add "(Offline)" if not already in title (e.g. offline-mode tabs)
+                if (m_title.find("(Offline)") == std::string::npos) {
+                    m_titleLabel->setText(m_title + " (Offline)");
+                }
+                m_viewMode = LibraryViewMode::DOWNLOADED;
+                m_contentGrid->setDataSource(m_downloadedItems);
+                hideNavigationButtons();
                 m_loaded = true;
             });
         }
     });
 
     // Preload collections for quick switching
-    const auto& settings = Application::getInstance().getSettings();
     if (settings.showCollections) {
         loadCollections();
     }
@@ -233,6 +271,151 @@ void LibrarySectionTab::loadGenres() {
     if (m_categoriesBtn) {
         m_categoriesBtn->setVisibility(brls::Visibility::GONE);
     }
+}
+
+void LibrarySectionTab::loadDownloadedItems() {
+    brls::Logger::debug("LibrarySectionTab::loadDownloadedItems - section: {}", m_sectionKey);
+
+    std::weak_ptr<bool> aliveWeak = m_alive;
+    std::string sectionType = m_sectionType;
+
+    // Load downloaded items synchronously (they're already local)
+    DownloadsManager& mgr = DownloadsManager::getInstance();
+    mgr.init();
+
+    auto downloads = mgr.getDownloads();
+    std::vector<MediaItem> downloadedItems;
+
+    // For podcasts, group episodes by podcast
+    // Map: podcastId -> vector of {episodeId, episodeTitle, coverPath}
+    std::map<std::string, std::vector<std::tuple<std::string, std::string, std::string, std::string>>> podcastEpisodes;
+    // Also track podcast name for each podcastId
+    std::map<std::string, std::string> podcastNames;
+
+    for (const auto& dl : downloads) {
+        // Filter by media type to match this library's type
+        bool matchesType = false;
+        if (sectionType == "book" && (dl.mediaType == "book" || dl.mediaType.empty())) {
+            matchesType = true;
+        } else if (sectionType == "podcast" && (dl.mediaType == "podcast" || dl.mediaType == "episode")) {
+            matchesType = true;
+        }
+
+        if (matchesType && dl.state == DownloadState::COMPLETED) {
+            brls::Logger::debug("LibrarySectionTab: Downloaded item '{}' - localCoverPath='{}'",
+                               dl.title, dl.localCoverPath);
+
+            // For podcast episodes, group by podcast
+            if (sectionType == "podcast" && !dl.episodeId.empty()) {
+                // This is a podcast episode - group by podcastId
+                std::string podcastId = dl.itemId;
+                // Use parentTitle first, fall back to authorName, then "Unknown Podcast"
+                std::string podcastName = !dl.parentTitle.empty() ? dl.parentTitle :
+                                          (!dl.authorName.empty() ? dl.authorName : "Unknown Podcast");
+                podcastNames[podcastId] = podcastName;
+                // Store: episodeId, episodeTitle, coverPath, podcastName
+                podcastEpisodes[podcastId].push_back(std::make_tuple(dl.episodeId, dl.title, dl.localCoverPath, podcastName));
+            } else {
+                // Audiobook or standalone item
+                MediaItem item;
+                item.id = dl.itemId;
+                item.title = dl.title;
+                item.authorName = dl.authorName;
+                item.description = dl.description;
+                item.duration = dl.duration;
+                item.currentTime = dl.currentTime;
+                item.coverPath = dl.localCoverPath;
+                item.type = dl.mediaType;
+                item.mediaType = MediaType::BOOK;
+
+                // Mark as downloaded for UI purposes
+                item.isDownloaded = true;
+
+                downloadedItems.push_back(item);
+            }
+        }
+    }
+
+    // Convert podcast episodes to MediaItems
+    for (const auto& [podcastId, episodes] : podcastEpisodes) {
+        if (episodes.size() == 1) {
+            // Single episode - show as individual episode that plays directly
+            const auto& ep = episodes[0];
+            MediaItem item;
+            item.id = podcastId;  // Keep podcast ID for playback
+            item.podcastId = podcastId;
+            item.episodeId = std::get<0>(ep);  // Episode ID
+            item.title = std::get<1>(ep);  // Episode title
+            item.coverPath = std::get<2>(ep);  // Cover path
+            item.authorName = std::get<3>(ep);  // Podcast name as author
+            item.type = "episode";
+            item.mediaType = MediaType::PODCAST_EPISODE;
+            item.isDownloaded = true;
+
+            downloadedItems.push_back(item);
+        } else {
+            // Multiple episodes - show as grouped podcast
+            MediaItem item;
+            item.id = podcastId;
+            item.title = podcastNames[podcastId];  // Podcast name
+            item.coverPath = std::get<2>(episodes[0]);  // Cover path from first episode
+            int episodeCount = episodes.size();
+            item.authorName = std::to_string(episodeCount) + " episodes downloaded";
+            item.type = "podcast";
+            item.mediaType = MediaType::PODCAST;
+            item.isDownloaded = true;
+
+            downloadedItems.push_back(item);
+        }
+    }
+
+    brls::Logger::info("LibrarySectionTab: Found {} downloaded items for type {}", downloadedItems.size(), sectionType);
+
+    m_downloadedItems = downloadedItems;
+    m_downloadedLoaded = true;
+
+    // If in DOWNLOADED view mode, update the grid
+    if (m_viewMode == LibraryViewMode::DOWNLOADED) {
+        m_titleLabel->setText(m_title + " - Downloaded");
+        m_contentGrid->setDataSource(m_downloadedItems);
+        updateViewModeButtons();
+    }
+
+    // Hide Downloaded button if no downloads
+    if (m_downloadedBtn) {
+        if (m_downloadedItems.empty()) {
+            m_downloadedBtn->setVisibility(brls::Visibility::GONE);
+        } else {
+            m_downloadedBtn->setVisibility(brls::Visibility::VISIBLE);
+        }
+    }
+}
+
+void LibrarySectionTab::showDownloaded() {
+    if (!m_downloadedLoaded) {
+        loadDownloadedItems();
+    }
+
+    m_viewMode = LibraryViewMode::DOWNLOADED;
+    m_titleLabel->setText(m_title + " - Downloaded");
+    m_contentGrid->setDataSource(m_downloadedItems);
+    updateViewModeButtons();
+}
+
+void LibrarySectionTab::filterByDownloaded() {
+    // Filter the current items list to show only downloaded items
+    if (m_items.empty()) return;
+
+    DownloadsManager& mgr = DownloadsManager::getInstance();
+    std::vector<MediaItem> filtered;
+
+    for (const auto& item : m_items) {
+        if (mgr.isDownloaded(item.id)) {
+            filtered.push_back(item);
+        }
+    }
+
+    m_contentGrid->setDataSource(filtered);
 }
 
 void LibrarySectionTab::showAllItems() {
@@ -305,6 +488,34 @@ void LibrarySectionTab::updateViewModeButtons() {
     }
     if (m_categoriesBtn) {
         m_categoriesBtn->setVisibility(showModeButtons && !m_genres.empty() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+    }
+    if (m_downloadedBtn) {
+        m_downloadedBtn->setVisibility(showModeButtons && !m_downloadedItems.empty() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+    }
+}
+
+void LibrarySectionTab::hideNavigationButtons() {
+    // Hide all navigation buttons for offline/downloaded-only mode
+    if (m_allBtn) {
+        m_allBtn->setVisibility(brls::Visibility::GONE);
+    }
+    if (m_collectionsBtn) {
+        m_collectionsBtn->setVisibility(brls::Visibility::GONE);
+    }
+    if (m_categoriesBtn) {
+        m_categoriesBtn->setVisibility(brls::Visibility::GONE);
+    }
+    if (m_downloadedBtn) {
+        m_downloadedBtn->setVisibility(brls::Visibility::GONE);
+    }
+    if (m_backBtn) {
+        m_backBtn->setVisibility(brls::Visibility::GONE);
+    }
+    if (m_findPodcastsBtn) {
+        m_findPodcastsBtn->setVisibility(brls::Visibility::GONE);
+    }
+    if (m_checkEpisodesBtn) {
+        m_checkEpisodesBtn->setVisibility(brls::Visibility::GONE);
     }
 }
 

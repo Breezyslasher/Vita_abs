@@ -93,11 +93,17 @@ public:
     // Delete a downloaded item
     bool deleteDownload(const std::string& itemId);
 
+    // Delete a downloaded episode by episodeId (for podcasts where multiple episodes share same itemId)
+    bool deleteDownloadByEpisodeId(const std::string& itemId, const std::string& episodeId);
+
     // Get all download items
     std::vector<DownloadItem> getDownloads() const;
 
     // Get a specific download by item ID
     DownloadItem* getDownload(const std::string& itemId);
+
+    // Get a specific download by item ID and episode ID (for podcasts)
+    DownloadItem* getDownload(const std::string& itemId, const std::string& episodeId);
 
     // Check if media is downloaded (checks both itemId and episodeId for episodes)
     bool isDownloaded(const std::string& itemId, const std::string& episodeId = "") const;
@@ -109,7 +115,7 @@ public:
     std::string getPlaybackPath(const std::string& itemId) const;
 
     // Update watch progress for downloaded media
-    void updateProgress(const std::string& itemId, float currentTime);
+    void updateProgress(const std::string& itemId, float currentTime, const std::string& episodeId = "");
 
     // Sync all offline progress to server (call when online)
     void syncProgressToServer();
