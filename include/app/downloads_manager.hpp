@@ -115,7 +115,7 @@ public:
     std::string getPlaybackPath(const std::string& itemId) const;
 
     // Update watch progress for downloaded media
-    void updateProgress(const std::string& itemId, float currentTime);
+    void updateProgress(const std::string& itemId, float currentTime, const std::string& episodeId = "");
 
     // Sync all offline progress to server (call when online)
     void syncProgressToServer();

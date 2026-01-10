@@ -196,9 +196,10 @@ void PlayerActivity::willDisappear(bool resetState) {
 
             if (m_isLocalFile) {
                 // Save progress for downloaded media (in seconds)
-                DownloadsManager::getInstance().updateProgress(m_itemId, currentTime);
+                DownloadsManager::getInstance().updateProgress(m_itemId, currentTime, m_episodeId);
                 DownloadsManager::getInstance().saveState();
-                brls::Logger::info("PlayerActivity: Saved local progress {}s for {}", currentTime, m_itemId);
+                brls::Logger::info("PlayerActivity: Saved local progress {}s for {} (episode: {})",
+                                  currentTime, m_itemId, m_episodeId.empty() ? "none" : m_episodeId);
 
                 // Also sync to server if online
                 AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
@@ -1045,15 +1046,32 @@ void PlayerActivity::updateProgress() {
         }
     }
 
-    // Periodic progress sync to server (every 30 seconds while playing)
-    if (m_isPlaying && !m_isLocalFile && !m_isDirectFile) {
+    // Periodic progress sync (every 30 seconds while playing)
+    if (m_isPlaying && !m_isDirectFile) {
         m_syncCounter++;
         if (m_syncCounter >= 30) {  // Every 30 updates (30 seconds)
             m_syncCounter = 0;
             float currentPos = static_cast<float>(position);
-            // Only sync if position changed significantly (more than 5 seconds)
+            // Only sync/save if position changed significantly (more than 5 seconds)
             if (std::abs(currentPos - m_lastSyncedTime) > 5.0f) {
-                syncProgressToServer();
+                if (m_isLocalFile) {
+                    // Save progress for downloaded media locally
+                    DownloadsManager::getInstance().updateProgress(m_itemId, currentPos, m_episodeId);
+                    DownloadsManager::getInstance().saveState();
+                    brls::Logger::debug("PlayerActivity: Auto-saved local progress {}s", currentPos);
+
+                    // Also sync to server if online
+                    AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+                    if (client.isAuthenticated()) {
+                        float totalDuration = static_cast<float>(duration);
+                        bool isFinished = (totalDuration > 0 && currentPos >= totalDuration * 0.95f);
+                        client.updateProgress(m_itemId, currentPos, totalDuration, isFinished, m_episodeId);
+                    }
+                    m_lastSyncedTime = currentPos;
+                } else {
+                    // Remote playback - sync to server
+                    syncProgressToServer();
+                }
             }
         }
     }
@@ -1087,8 +1105,16 @@ void PlayerActivity::updateProgress() {
     // Check if playback ended (only if we were actually playing)
     if (m_isPlaying && player.hasEnded()) {
         m_isPlaying = false;  // Prevent multiple triggers
-        // Mark as finished with Audiobookshelf (set isFinished=true)
         float totalDuration = (float)player.getDuration();
+
+        if (m_isLocalFile) {
+            // Save completed progress for downloaded media
+            DownloadsManager::getInstance().updateProgress(m_itemId, totalDuration, m_episodeId);
+            DownloadsManager::getInstance().saveState();
+            brls::Logger::info("PlayerActivity: Saved completed progress for local file");
+        }
+
+        // Mark as finished with Audiobookshelf (set isFinished=true)
         AudiobookshelfClient::getInstance().updateProgress(m_itemId, totalDuration, totalDuration, true, m_episodeId);
         brls::Application::popActivity();
     }

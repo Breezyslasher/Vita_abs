@@ -657,13 +657,14 @@ std::string DownloadsManager::getPlaybackPath(const std::string& itemId) const {
     return "";
 }
 
-void DownloadsManager::updateProgress(const std::string& itemId, float currentTime) {
+void DownloadsManager::updateProgress(const std::string& itemId, float currentTime, const std::string& episodeId) {
     std::lock_guard<std::mutex> lock(m_mutex);
     for (auto& item : m_downloads) {
-        if (item.itemId == itemId) {
+        // Match by itemId and episodeId (episodeId is empty for books, non-empty for podcasts)
+        if (item.itemId == itemId && (episodeId.empty() || item.episodeId == episodeId)) {
             item.currentTime = currentTime;
             item.viewOffset = static_cast<int64_t>(currentTime * 1000.0f);  // Convert to milliseconds
-            brls::Logger::debug("DownloadsManager: Updated progress for {} to {}s",
+            brls::Logger::debug("DownloadsManager: Updated progress for '{}' to {}s",
                                item.title, currentTime);
             break;
         }
