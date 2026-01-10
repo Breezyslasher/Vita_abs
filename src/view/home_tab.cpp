@@ -4,6 +4,7 @@
 
 #include "view/home_tab.hpp"
 #include "view/media_detail_view.hpp"
+#include "view/media_item_cell.hpp"
 #include "app/application.hpp"
 #include "utils/async.hpp"
 
@@ -43,13 +44,16 @@ HomeTab::HomeTab() {
     m_continueLabel->setVisibility(brls::Visibility::GONE);  // Hidden until loaded
     m_contentBox->addView(m_continueLabel);
 
-    m_continueGrid = new RecyclingGrid();
-    m_continueGrid->setHeight(200);  // Fixed height for this section
-    m_continueGrid->setOnItemSelected([this](const MediaItem& item) {
-        onItemSelected(item);
-    });
-    m_continueGrid->setVisibility(brls::Visibility::GONE);  // Hidden until loaded
-    m_contentBox->addView(m_continueGrid);
+    // Horizontal scrolling container for Continue Listening
+    m_continueScroll = new brls::ScrollingFrame();
+    m_continueScroll->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
+    m_continueScroll->setHeight(200);  // Height for one row of items
+    m_continueScroll->setVisibility(brls::Visibility::GONE);
+    m_continueBox = new brls::Box();
+    m_continueBox->setAxis(brls::Axis::ROW);  // Horizontal layout
+    m_continueBox->setJustifyContent(brls::JustifyContent::FLEX_START);
+    m_continueScroll->setContentView(m_continueBox);
+    m_contentBox->addView(m_continueScroll);
 
     // Recently Added Episodes section
     m_recentEpisodesLabel = new brls::Label();
@@ -60,13 +64,16 @@ HomeTab::HomeTab() {
     m_recentEpisodesLabel->setVisibility(brls::Visibility::GONE);  // Hidden until loaded
     m_contentBox->addView(m_recentEpisodesLabel);
 
-    m_recentEpisodesGrid = new RecyclingGrid();
-    m_recentEpisodesGrid->setHeight(200);  // Fixed height for this section
-    m_recentEpisodesGrid->setOnItemSelected([this](const MediaItem& item) {
-        onItemSelected(item);
-    });
-    m_recentEpisodesGrid->setVisibility(brls::Visibility::GONE);  // Hidden until loaded
-    m_contentBox->addView(m_recentEpisodesGrid);
+    // Horizontal scrolling container for Recently Added Episodes
+    m_recentEpisodesScroll = new brls::ScrollingFrame();
+    m_recentEpisodesScroll->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
+    m_recentEpisodesScroll->setHeight(200);  // Height for one row of items
+    m_recentEpisodesScroll->setVisibility(brls::Visibility::GONE);
+    m_recentEpisodesBox = new brls::Box();
+    m_recentEpisodesBox->setAxis(brls::Axis::ROW);  // Horizontal layout
+    m_recentEpisodesBox->setJustifyContent(brls::JustifyContent::FLEX_START);
+    m_recentEpisodesScroll->setContentView(m_recentEpisodesBox);
+    m_contentBox->addView(m_recentEpisodesScroll);
 
     m_scrollView->setContentView(m_contentBox);
     this->addView(m_scrollView);
@@ -167,15 +174,15 @@ void HomeTab::loadContent() {
             // Show Continue Listening section if we have items
             if (!m_continueItems.empty()) {
                 m_continueLabel->setVisibility(brls::Visibility::VISIBLE);
-                m_continueGrid->setVisibility(brls::Visibility::VISIBLE);
-                m_continueGrid->setDataSource(m_continueItems);
+                m_continueScroll->setVisibility(brls::Visibility::VISIBLE);
+                populateHorizontalRow(m_continueBox, m_continueItems);
             }
 
             // Show Recently Added Episodes section if we have items
             if (!m_recentEpisodes.empty()) {
                 m_recentEpisodesLabel->setVisibility(brls::Visibility::VISIBLE);
-                m_recentEpisodesGrid->setVisibility(brls::Visibility::VISIBLE);
-                m_recentEpisodesGrid->setDataSource(m_recentEpisodes);
+                m_recentEpisodesScroll->setVisibility(brls::Visibility::VISIBLE);
+                populateHorizontalRow(m_recentEpisodesBox, m_recentEpisodes);
             }
 
             // Show message if nothing to display
@@ -186,6 +193,34 @@ void HomeTab::loadContent() {
             brls::Logger::debug("HomeTab: Content loaded and displayed");
         });
     });
+}
+
+void HomeTab::populateHorizontalRow(brls::Box* container, const std::vector<MediaItem>& items) {
+    if (!container) return;
+
+    // Clear existing items
+    container->clearViews();
+
+    // Add cells for each item
+    for (size_t i = 0; i < items.size(); i++) {
+        auto* cell = new MediaItemCell();
+        cell->setItem(items[i]);
+        cell->setWidth(150);
+        cell->setHeight(185);  // Square cover (140) + labels (~45)
+        cell->setMarginRight(10);
+
+        // Store the item for click handler
+        MediaItem itemCopy = items[i];
+        cell->registerClickAction([this, itemCopy](brls::View* view) {
+            onItemSelected(itemCopy);
+            return true;
+        });
+        cell->addGestureRecognizer(new brls::TapGestureRecognizer(cell));
+
+        container->addView(cell);
+    }
+
+    brls::Logger::debug("HomeTab: Populated horizontal row with {} items", items.size());
 }
 
 void HomeTab::onItemSelected(const MediaItem& item) {

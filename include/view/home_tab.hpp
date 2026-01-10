@@ -8,9 +8,10 @@
 #include <borealis.hpp>
 #include <memory>
 #include "app/audiobookshelf_client.hpp"
-#include "view/recycling_grid.hpp"
 
 namespace vitaabs {
+
+class MediaItemCell;  // Forward declaration
 
 class HomeTab : public brls::Box {
 public:
@@ -21,6 +22,7 @@ public:
 
 private:
     void loadContent();
+    void populateHorizontalRow(brls::Box* container, const std::vector<MediaItem>& items);
     void onItemSelected(const MediaItem& item);
 
     // Check if this tab is still valid (not destroyed)
@@ -30,14 +32,16 @@ private:
     brls::ScrollingFrame* m_scrollView = nullptr;
     brls::Box* m_contentBox = nullptr;
 
-    // Continue Listening section
+    // Continue Listening section (horizontal scrolling row)
     brls::Label* m_continueLabel = nullptr;
-    RecyclingGrid* m_continueGrid = nullptr;
+    brls::ScrollingFrame* m_continueScroll = nullptr;
+    brls::Box* m_continueBox = nullptr;
     std::vector<MediaItem> m_continueItems;
 
-    // Recently Added Episodes section
+    // Recently Added Episodes section (horizontal scrolling row)
     brls::Label* m_recentEpisodesLabel = nullptr;
-    RecyclingGrid* m_recentEpisodesGrid = nullptr;
+    brls::ScrollingFrame* m_recentEpisodesScroll = nullptr;
+    brls::Box* m_recentEpisodesBox = nullptr;
     std::vector<MediaItem> m_recentEpisodes;
 
     bool m_loaded = false;
