@@ -2314,6 +2314,35 @@ bool AudiobookshelfClient::addPodcastToLibrary(const std::string& libraryId, con
         return false;
     }
 
+    // Create a sanitized folder name from the podcast title
+    auto sanitizeFolderName = [](const std::string& name) -> std::string {
+        std::string result;
+        for (char c : name) {
+            // Replace invalid filesystem characters with underscore
+            if (c == '/' || c == '\\' || c == ':' || c == '*' ||
+                c == '?' || c == '"' || c == '<' || c == '>' || c == '|') {
+                result += '_';
+            } else {
+                result += c;
+            }
+        }
+        // Trim trailing spaces and dots (Windows compatibility)
+        while (!result.empty() && (result.back() == ' ' || result.back() == '.')) {
+            result.pop_back();
+        }
+        return result;
+    };
+
+    // Create the full path with podcast's own folder
+    std::string podcastFolderName = sanitizeFolderName(podcast.title);
+    std::string fullPodcastPath = folderPath;
+    if (!fullPodcastPath.empty() && fullPodcastPath.back() != '/') {
+        fullPodcastPath += '/';
+    }
+    fullPodcastPath += podcastFolderName;
+
+    brls::Logger::info("Creating podcast folder: {}", fullPodcastPath);
+
     HttpClient client;
     HttpRequest req;
     req.url = buildApiUrl("/api/podcasts");
@@ -2342,7 +2371,7 @@ bool AudiobookshelfClient::addPodcastToLibrary(const std::string& libraryId, con
     // Build request body with proper media.metadata structure
     // Match the Kodi addon's structure exactly
     std::string body = "{";
-    body += "\"path\":\"" + escapeJson(folderPath) + "\",";
+    body += "\"path\":\"" + escapeJson(fullPodcastPath) + "\",";
     body += "\"folderId\":\"" + folder + "\",";
     body += "\"libraryId\":\"" + libraryId + "\",";
     body += "\"media\":{\"metadata\":{";
