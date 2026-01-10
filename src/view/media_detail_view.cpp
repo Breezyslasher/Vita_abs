@@ -27,6 +27,8 @@ namespace vitaabs {
 
 MediaDetailView::MediaDetailView(const MediaItem& item)
     : m_item(item) {
+    brls::Logger::info("MediaDetailView: Creating for '{}' id='{}' type='{}'",
+                       item.title, item.id, item.type);
 
     this->setAxis(brls::Axis::COLUMN);
     this->setJustifyContent(brls::JustifyContent::FLEX_START);

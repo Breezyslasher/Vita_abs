@@ -809,6 +809,8 @@ bool AudiobookshelfClient::fetchLibraryPersonalized(const std::string& libraryId
         }
 
         if (!shelf.label.empty() || !shelf.labelStringKey.empty()) {
+            brls::Logger::debug("fetchLibraryPersonalized: Found shelf id='{}' label='{}' labelStringKey='{}' type='{}' entities={}",
+                               shelf.id, shelf.label, shelf.labelStringKey, shelf.type, shelf.entities.size());
             shelves.push_back(shelf);
         }
 
@@ -2280,30 +2282,32 @@ bool AudiobookshelfClient::addPodcastToLibrary(const std::string& libraryId, con
                                                 const std::string& folderId) {
     brls::Logger::debug("Adding podcast '{}' to library {} from feed: {}", podcast.title, libraryId, podcast.feedUrl);
 
-    // Get folder ID and path if not provided - fetch from library
+    // Always fetch library to get folder path (needed to create podcast subfolder)
     std::string folder = folderId;
     std::string folderPath;
-    if (folder.empty()) {
-        // Fetch library to get first folder
-        HttpClient libClient;
-        HttpRequest libReq;
-        libReq.url = buildApiUrl("/api/libraries/" + libraryId);
-        libReq.method = "GET";
-        libReq.headers["Accept"] = "application/json";
-        libReq.headers["Authorization"] = "Bearer " + m_authToken;
 
-        HttpResponse libResp = libClient.request(libReq);
-        if (libResp.statusCode == 200) {
-            // Extract first folder ID and path
-            std::string foldersArray = extractJsonArray(libResp.body, "folders");
-            if (!foldersArray.empty()) {
+    HttpClient libClient;
+    HttpRequest libReq;
+    libReq.url = buildApiUrl("/api/libraries/" + libraryId);
+    libReq.method = "GET";
+    libReq.headers["Accept"] = "application/json";
+    libReq.headers["Authorization"] = "Bearer " + m_authToken;
+
+    HttpResponse libResp = libClient.request(libReq);
+    if (libResp.statusCode == 200) {
+        // Extract folder info from library
+        std::string foldersArray = extractJsonArray(libResp.body, "folders");
+        if (!foldersArray.empty()) {
+            // If no folder ID provided, use the first one
+            if (folder.empty()) {
                 folder = extractJsonValue(foldersArray, "id");
-                folderPath = extractJsonValue(foldersArray, "fullPath");
-                if (folderPath.empty()) {
-                    folderPath = extractJsonValue(foldersArray, "path");
-                }
-                brls::Logger::debug("Using folder ID: {} path: {}", folder, folderPath);
             }
+            // Always get the folder path for creating podcast subfolder
+            folderPath = extractJsonValue(foldersArray, "fullPath");
+            if (folderPath.empty()) {
+                folderPath = extractJsonValue(foldersArray, "path");
+            }
+            brls::Logger::debug("Using folder ID: {} path: {}", folder, folderPath);
         }
     }
 
@@ -2311,6 +2315,40 @@ bool AudiobookshelfClient::addPodcastToLibrary(const std::string& libraryId, con
         brls::Logger::error("No folder ID available for library {}", libraryId);
         return false;
     }
+
+    if (folderPath.empty()) {
+        brls::Logger::error("No folder path available for library {}", libraryId);
+        return false;
+    }
+
+    // Create a sanitized folder name from the podcast title
+    auto sanitizeFolderName = [](const std::string& name) -> std::string {
+        std::string result;
+        for (char c : name) {
+            // Replace invalid filesystem characters with underscore
+            if (c == '/' || c == '\\' || c == ':' || c == '*' ||
+                c == '?' || c == '"' || c == '<' || c == '>' || c == '|') {
+                result += '_';
+            } else {
+                result += c;
+            }
+        }
+        // Trim trailing spaces and dots (Windows compatibility)
+        while (!result.empty() && (result.back() == ' ' || result.back() == '.')) {
+            result.pop_back();
+        }
+        return result;
+    };
+
+    // Create the full path with podcast's own folder
+    std::string podcastFolderName = sanitizeFolderName(podcast.title);
+    std::string fullPodcastPath = folderPath;
+    if (!fullPodcastPath.empty() && fullPodcastPath.back() != '/') {
+        fullPodcastPath += '/';
+    }
+    fullPodcastPath += podcastFolderName;
+
+    brls::Logger::info("Creating podcast folder: {}", fullPodcastPath);
 
     HttpClient client;
     HttpRequest req;
@@ -2340,7 +2378,7 @@ bool AudiobookshelfClient::addPodcastToLibrary(const std::string& libraryId, con
     // Build request body with proper media.metadata structure
     // Match the Kodi addon's structure exactly
     std::string body = "{";
-    body += "\"path\":\"" + escapeJson(folderPath) + "\",";
+    body += "\"path\":\"" + escapeJson(fullPodcastPath) + "\",";
     body += "\"folderId\":\"" + folder + "\",";
     body += "\"libraryId\":\"" + libraryId + "\",";
     body += "\"media\":{\"metadata\":{";

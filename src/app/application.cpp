@@ -329,10 +329,6 @@ bool Application::loadSettings() {
     m_settings.animationsEnabled = extractBool("animationsEnabled", true);
     m_settings.debugLogging = extractBool("debugLogging", true);
 
-    // Load layout settings
-    m_settings.collapseSidebar = extractBool("collapseSidebar", false);
-    m_settings.hiddenLibraries = extractString("hiddenLibraries");
-
     // Load content display settings
     m_settings.showCollections = extractBool("showCollections", true);
     m_settings.showSeries = extractBool("showSeries", true);
@@ -417,10 +413,6 @@ bool Application::saveSettings() {
     json += "  \"showClock\": " + std::string(m_settings.showClock ? "true" : "false") + ",\n";
     json += "  \"animationsEnabled\": " + std::string(m_settings.animationsEnabled ? "true" : "false") + ",\n";
     json += "  \"debugLogging\": " + std::string(m_settings.debugLogging ? "true" : "false") + ",\n";
-
-    // Layout settings
-    json += "  \"collapseSidebar\": " + std::string(m_settings.collapseSidebar ? "true" : "false") + ",\n";
-    json += "  \"hiddenLibraries\": \"" + m_settings.hiddenLibraries + "\",\n";
 
     // Content display settings
     json += "  \"showCollections\": " + std::string(m_settings.showCollections ? "true" : "false") + ",\n";
