@@ -16,7 +16,6 @@ namespace vitaabs {
 // View mode for the library section
 enum class LibraryViewMode {
     ALL_ITEMS,      // Show all items in the library
-    RECENT,         // Show recently added items
     COLLECTIONS,    // Show collections as browsable items
     CATEGORIES,     // Show categories/genres as browsable items
     FILTERED,       // Showing items filtered by collection or category
@@ -35,12 +34,10 @@ private:
     void loadCollections();
     void loadGenres();
     void loadDownloadedItems();
-    void loadRecentItems();
     void showAllItems();
     void showCollections();
     void showCategories();
     void showDownloaded();
-    void showRecent();
     void onItemSelected(const MediaItem& item);
     void onCollectionSelected(const MediaItem& collection);
     void onGenreSelected(const GenreItem& genre);
@@ -64,7 +61,6 @@ private:
     // View mode selector buttons
     brls::Box* m_viewModeBox = nullptr;
     brls::Button* m_allBtn = nullptr;
-    brls::Button* m_recentBtn = nullptr;      // Recently added items
     brls::Button* m_collectionsBtn = nullptr;
     brls::Button* m_categoriesBtn = nullptr;
     brls::Button* m_downloadedBtn = nullptr;  // Downloaded items filter
@@ -82,7 +78,6 @@ private:
     std::vector<MediaItem> m_collections;
     std::vector<GenreItem> m_genres;
     std::vector<MediaItem> m_downloadedItems;  // Locally downloaded items
-    std::vector<MediaItem> m_recentItems;      // Recently added items
 
     LibraryViewMode m_viewMode = LibraryViewMode::ALL_ITEMS;
     std::string m_filterTitle;  // Title of current filter (collection/genre name)
@@ -90,7 +85,6 @@ private:
     bool m_collectionsLoaded = false;
     bool m_genresLoaded = false;
     bool m_downloadedLoaded = false;
-    bool m_recentLoaded = false;
 
     // Shared pointer to track if this object is still alive
     // Used by async callbacks to check validity before updating UI

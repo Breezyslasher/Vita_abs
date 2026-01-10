@@ -3,6 +3,7 @@
  */
 
 #include "activity/main_activity.hpp"
+#include "view/home_tab.hpp"
 #include "view/library_section_tab.hpp"
 #include "view/search_tab.hpp"
 #include "view/settings_tab.hpp"
@@ -123,7 +124,7 @@ void MainActivity::onContentAvailable() {
         // Calculate dynamic sidebar width based on content
         int sidebarWidth = 200;  // Minimum width
 
-        std::vector<std::string> standardTabs = {"Search", "Downloads", "Settings"};
+        std::vector<std::string> standardTabs = {"Home", "Search", "Downloads", "Settings"};
         for (const auto& tab : standardTabs) {
             sidebarWidth = std::max(sidebarWidth, calculateTextWidth(tab));
         }
@@ -139,6 +140,10 @@ void MainActivity::onContentAvailable() {
         if (sidebar) {
             sidebar->setWidth(sidebarWidth);
         }
+
+        // Add Home tab first (Continue Listening + Recently Added Episodes)
+        tabFrame->addTab("Home", []() { return new HomeTab(); });
+        brls::Logger::debug("MainActivity: Added Home tab");
 
         // Add library tabs directly (no Home/Library intermediate screens)
         // Sort by type: Audiobooks first, then Podcasts

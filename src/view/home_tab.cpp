@@ -1,0 +1,197 @@
+/**
+ * VitaABS - Home Tab implementation
+ */
+
+#include "view/home_tab.hpp"
+#include "view/media_detail_view.hpp"
+#include "app/application.hpp"
+#include "utils/async.hpp"
+
+namespace vitaabs {
+
+HomeTab::HomeTab() {
+    // Create alive flag for async callback safety
+    m_alive = std::make_shared<bool>(true);
+
+    this->setAxis(brls::Axis::COLUMN);
+    this->setJustifyContent(brls::JustifyContent::FLEX_START);
+    this->setAlignItems(brls::AlignItems::STRETCH);
+    this->setPadding(20);
+    this->setGrow(1.0f);
+
+    // Title
+    m_titleLabel = new brls::Label();
+    m_titleLabel->setText("Home");
+    m_titleLabel->setFontSize(28);
+    m_titleLabel->setMarginBottom(15);
+    this->addView(m_titleLabel);
+
+    // Scrolling view for content
+    m_scrollView = new brls::ScrollingFrame();
+    m_scrollView->setGrow(1.0f);
+
+    m_contentBox = new brls::Box();
+    m_contentBox->setAxis(brls::Axis::COLUMN);
+    m_contentBox->setJustifyContent(brls::JustifyContent::FLEX_START);
+    m_contentBox->setAlignItems(brls::AlignItems::STRETCH);
+
+    // Continue Listening section
+    m_continueLabel = new brls::Label();
+    m_continueLabel->setText("Continue Listening");
+    m_continueLabel->setFontSize(22);
+    m_continueLabel->setMarginBottom(10);
+    m_continueLabel->setVisibility(brls::Visibility::GONE);  // Hidden until loaded
+    m_contentBox->addView(m_continueLabel);
+
+    m_continueGrid = new RecyclingGrid();
+    m_continueGrid->setHeight(200);  // Fixed height for this section
+    m_continueGrid->setOnItemSelected([this](const MediaItem& item) {
+        onItemSelected(item);
+    });
+    m_continueGrid->setVisibility(brls::Visibility::GONE);  // Hidden until loaded
+    m_contentBox->addView(m_continueGrid);
+
+    // Recently Added Episodes section
+    m_recentEpisodesLabel = new brls::Label();
+    m_recentEpisodesLabel->setText("Recently Added Episodes");
+    m_recentEpisodesLabel->setFontSize(22);
+    m_recentEpisodesLabel->setMarginTop(20);
+    m_recentEpisodesLabel->setMarginBottom(10);
+    m_recentEpisodesLabel->setVisibility(brls::Visibility::GONE);  // Hidden until loaded
+    m_contentBox->addView(m_recentEpisodesLabel);
+
+    m_recentEpisodesGrid = new RecyclingGrid();
+    m_recentEpisodesGrid->setHeight(200);  // Fixed height for this section
+    m_recentEpisodesGrid->setOnItemSelected([this](const MediaItem& item) {
+        onItemSelected(item);
+    });
+    m_recentEpisodesGrid->setVisibility(brls::Visibility::GONE);  // Hidden until loaded
+    m_contentBox->addView(m_recentEpisodesGrid);
+
+    m_scrollView->setContentView(m_contentBox);
+    this->addView(m_scrollView);
+
+    // Load content
+    brls::Logger::debug("HomeTab: Created");
+}
+
+HomeTab::~HomeTab() {
+    // Mark as no longer alive to prevent async callbacks
+    if (m_alive) {
+        *m_alive = false;
+    }
+    brls::Logger::debug("HomeTab: Destroyed");
+}
+
+void HomeTab::onFocusGained() {
+    brls::Box::onFocusGained();
+
+    if (!m_loaded) {
+        loadContent();
+    }
+}
+
+void HomeTab::loadContent() {
+    if (m_loaded) return;
+
+    brls::Logger::debug("HomeTab: Loading content");
+
+    std::weak_ptr<bool> aliveWeak = m_alive;
+
+    asyncRun([this, aliveWeak]() {
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+
+        // Get all libraries
+        std::vector<Library> libraries;
+        if (!client.fetchLibraries(libraries)) {
+            brls::Logger::error("HomeTab: Failed to fetch libraries");
+            return;
+        }
+
+        std::vector<MediaItem> continueItems;
+        std::vector<MediaItem> recentEpisodes;
+
+        // Fetch personalized content from all libraries
+        for (const auto& lib : libraries) {
+            std::vector<PersonalizedShelf> shelves;
+            if (client.fetchLibraryPersonalized(lib.id, shelves)) {
+                for (const auto& shelf : shelves) {
+                    std::string key = shelf.labelStringKey;
+                    std::string label = shelf.label;
+
+                    // Check for Continue Listening shelf
+                    if (key == "continue-listening" || key == "continueListening" ||
+                        label.find("Continue") != std::string::npos) {
+                        for (const auto& item : shelf.entities) {
+                            continueItems.push_back(item);
+                        }
+                    }
+
+                    // Check for Recently Added Episodes (podcasts)
+                    if (key == "recent-episodes" || key == "recentEpisodes" ||
+                        key == "newest-episodes" || key == "newestEpisodes" ||
+                        (lib.mediaType == "podcast" &&
+                         (key == "recently-added" || key == "recentlyAdded" ||
+                          label.find("Recent") != std::string::npos))) {
+                        for (const auto& item : shelf.entities) {
+                            if (item.mediaType == MediaType::PODCAST_EPISODE ||
+                                item.type == "podcastEpisode" || item.type == "episode") {
+                                recentEpisodes.push_back(item);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        brls::Logger::info("HomeTab: Found {} continue items, {} recent episodes",
+                          continueItems.size(), recentEpisodes.size());
+
+        // Update UI on main thread
+        brls::sync([this, continueItems, recentEpisodes, aliveWeak]() {
+            auto alive = aliveWeak.lock();
+            if (!alive || !*alive) return;
+
+            m_continueItems = continueItems;
+            m_recentEpisodes = recentEpisodes;
+            m_loaded = true;
+
+            // Show Continue Listening section if we have items
+            if (!m_continueItems.empty()) {
+                m_continueLabel->setVisibility(brls::Visibility::VISIBLE);
+                m_continueGrid->setVisibility(brls::Visibility::VISIBLE);
+                m_continueGrid->setDataSource(m_continueItems);
+            }
+
+            // Show Recently Added Episodes section if we have items
+            if (!m_recentEpisodes.empty()) {
+                m_recentEpisodesLabel->setVisibility(brls::Visibility::VISIBLE);
+                m_recentEpisodesGrid->setVisibility(brls::Visibility::VISIBLE);
+                m_recentEpisodesGrid->setDataSource(m_recentEpisodes);
+            }
+
+            // Show message if nothing to display
+            if (m_continueItems.empty() && m_recentEpisodes.empty()) {
+                m_titleLabel->setText("Home - No items in progress");
+            }
+
+            brls::Logger::debug("HomeTab: Content loaded and displayed");
+        });
+    });
+}
+
+void HomeTab::onItemSelected(const MediaItem& item) {
+    brls::Logger::debug("HomeTab: Selected item: {} (type={})", item.title, item.type);
+
+    // For podcast episodes, start playback directly
+    if (item.mediaType == MediaType::PODCAST_EPISODE) {
+        Application::getInstance().pushPlayerActivity(item.podcastId, item.episodeId);
+        return;
+    }
+
+    // For books and other items, show detail view
+    auto* detailView = new MediaDetailView(item);
+    brls::Application::pushActivity(new brls::Activity(detailView));
+}
+
+} // namespace vitaabs
