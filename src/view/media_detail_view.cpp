@@ -866,7 +866,8 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
             return;
         }
 
-        brls::Logger::info("Session started: {} tracks", session.audioTracks.size());
+        brls::Logger::info("Session started: {} tracks, currentTime={}s, duration={}s",
+                          session.audioTracks.size(), session.currentTime, session.duration);
 
         // Determine file extension and multi-file status
         bool isMultiFile = session.audioTracks.size() > 1;
@@ -911,6 +912,8 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
 
         // Use requested start time if specified, otherwise use session's current time
         float startTime = (requestedStartTime >= 0) ? requestedStartTime : session.currentTime;
+        brls::Logger::info("Using startTime={}s (requested={}, session={}s)",
+                          startTime, requestedStartTime, session.currentTime);
 
 #ifdef __vita__
         HttpClient httpClient;
@@ -1082,25 +1085,39 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                 // Play mode: download track containing resume position, start playback, download rest in background
                 std::string currentTrackPath;
                 int currentTrackIdx = 0;
-                float trackSeekTime = startTime;
+                float trackSeekTime = 0.0f;  // Initialize to 0 for safety
+                bool foundTrack = false;
+
+                brls::Logger::info("Multi-file play mode: Finding track for resume position {}s", startTime);
 
                 // Find which track contains the current playback position
                 for (size_t i = 0; i < session.audioTracks.size(); i++) {
                     const AudioTrack& track = session.audioTracks[i];
                     float trackEnd = track.startOffset + track.duration;
 
+                    brls::Logger::debug("Track {}: startOffset={}s, duration={}s, end={}s",
+                                       i, track.startOffset, track.duration, trackEnd);
+
                     if (startTime >= track.startOffset && startTime < trackEnd) {
                         currentTrackIdx = static_cast<int>(i);
                         trackSeekTime = startTime - track.startOffset;
-                        brls::Logger::info("Current position {}s is in track {} (offset {}s, seek {}s)",
-                                          startTime, currentTrackIdx, track.startOffset, trackSeekTime);
+                        foundTrack = true;
+                        brls::Logger::info("Resume position {}s is in track {} (offset {}s, seek within track {}s)",
+                                          startTime, currentTrackIdx + 1, track.startOffset, trackSeekTime);
                         break;
                     }
                 }
 
+                // If no track found (startTime is 0 or beyond all tracks), use first track from start
+                if (!foundTrack) {
+                    currentTrackIdx = 0;
+                    trackSeekTime = 0.0f;
+                    brls::Logger::info("No matching track found for {}s, starting from track 1 at 0s", startTime);
+                }
+
                 // Download track containing resume position first, then rest in background
-                brls::Logger::info("Downloading {} tracks for multi-file audiobook (starting with track {} for resume)",
-                                  numTracks, currentTrackIdx + 1);
+                brls::Logger::info("Downloading track {}/{} for multi-file audiobook (seek to {}s within track)",
+                                  currentTrackIdx + 1, numTracks, trackSeekTime);
 
                 // First, download the track containing resume position so we can start playing
                 {
