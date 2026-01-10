@@ -1269,20 +1269,62 @@ bool AudiobookshelfClient::fetchItem(const std::string& itemId, MediaItem& item)
             std::string trackObj = tracksArray.substr(objStart, objEnd - objStart);
             AudioTrack track;
             track.index = trackIdx++;
+            std::string metaObj = extractJsonObject(trackObj, "metadata");
             track.title = extractJsonValue(trackObj, "metadata");
-            if (track.title.empty()) {
-                // Try getting filename
-                std::string metaObj = extractJsonObject(trackObj, "metadata");
-                if (!metaObj.empty()) {
-                    track.title = extractJsonValue(metaObj, "filename");
-                }
+            if (track.title.empty() && !metaObj.empty()) {
+                // Try getting filename from metadata object
+                track.title = extractJsonValue(metaObj, "filename");
             }
             track.duration = extractJsonFloat(trackObj, "duration");
             track.mimeType = extractJsonValue(trackObj, "mimeType");
+
+            // Parse startOffset for multi-file audiobooks (used for chapter generation)
+            if (!metaObj.empty()) {
+                // Try different field names for start offset
+                float offset = extractJsonFloat(metaObj, "startOffset");
+                if (offset == 0.0f && trackIdx > 1) {
+                    // Calculate from previous tracks if not explicitly set
+                    float accumulatedDuration = 0.0f;
+                    for (const auto& prevTrack : item.audioTracks) {
+                        accumulatedDuration += prevTrack.duration;
+                    }
+                    track.startOffset = accumulatedDuration;
+                } else {
+                    track.startOffset = offset;
+                }
+            }
+
             item.audioTracks.push_back(track);
 
             pos = objEnd;
         }
+    }
+
+    // If still no chapters and we have multiple audio files, create chapters from files
+    if (item.chapters.empty() && item.audioTracks.size() > 1) {
+        brls::Logger::info("Creating chapters from {} audio files", item.audioTracks.size());
+        float currentOffset = 0.0f;
+        for (size_t i = 0; i < item.audioTracks.size(); ++i) {
+            const auto& track = item.audioTracks[i];
+            Chapter ch;
+            ch.id = static_cast<int>(i);
+            ch.title = track.title;
+            // Clean up filename-based titles (remove extension)
+            size_t dotPos = ch.title.rfind('.');
+            if (dotPos != std::string::npos && dotPos > ch.title.length() - 6) {
+                ch.title = ch.title.substr(0, dotPos);
+            }
+            ch.start = (track.startOffset > 0) ? track.startOffset : currentOffset;
+            ch.end = ch.start + track.duration;
+            currentOffset = ch.end;
+
+            if (ch.end > ch.start) {
+                item.chapters.push_back(ch);
+                brls::Logger::debug("Created chapter from file: '{}' ({:.1f}s - {:.1f}s)",
+                    ch.title, ch.start, ch.end);
+            }
+        }
+        brls::Logger::info("Created {} chapters from audio files", item.chapters.size());
     }
 
     brls::Logger::info("Fetched item: {} ({} chapters, {} tracks)",
