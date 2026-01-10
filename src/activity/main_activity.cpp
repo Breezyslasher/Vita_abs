@@ -116,6 +116,10 @@ void MainActivity::onContentAvailable() {
         // Online mode - normal flow
         s_cachedSections = sections;
 
+        // Sync progress from server for all downloaded items
+        brls::Logger::info("MainActivity: Online - syncing progress from server for downloaded items");
+        DownloadsManager::getInstance().syncProgressFromServer();
+
         // Calculate dynamic sidebar width based on content
         int sidebarWidth = 200;  // Minimum width
 
