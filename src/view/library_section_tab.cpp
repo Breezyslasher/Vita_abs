@@ -520,15 +520,20 @@ void LibrarySectionTab::hideNavigationButtons() {
 }
 
 void LibrarySectionTab::onItemSelected(const MediaItem& item) {
+    brls::Logger::debug("LibrarySectionTab::onItemSelected - title='{}' id='{}' type='{}' viewMode={}",
+                       item.title, item.id, item.type, static_cast<int>(m_viewMode));
+
     // Handle selection based on current view mode
     if (m_viewMode == LibraryViewMode::COLLECTIONS) {
         // Selected a collection - show its contents
+        brls::Logger::debug("LibrarySectionTab: Opening collection");
         onCollectionSelected(item);
         return;
     }
 
     if (m_viewMode == LibraryViewMode::CATEGORIES) {
         // Selected a category/genre - filter by it
+        brls::Logger::debug("LibrarySectionTab: Opening category");
         GenreItem genre;
         genre.title = item.title;
         genre.id = item.id;
@@ -539,13 +544,17 @@ void LibrarySectionTab::onItemSelected(const MediaItem& item) {
     // Normal item selection - for Audiobookshelf, most items go to detail view
     // Podcast episodes can be played directly
     if (item.mediaType == MediaType::PODCAST_EPISODE) {
+        brls::Logger::debug("LibrarySectionTab: Playing podcast episode");
         Application::getInstance().pushPlayerActivity(item.podcastId, item.episodeId);
         return;
     }
 
     // Show media detail view for books and other types
+    brls::Logger::info("LibrarySectionTab: Opening detail view for '{}'", item.title);
     auto* detailView = new MediaDetailView(item);
+    brls::Logger::debug("LibrarySectionTab: MediaDetailView created, pushing activity");
     brls::Application::pushActivity(new brls::Activity(detailView));
+    brls::Logger::debug("LibrarySectionTab: Activity pushed successfully");
 }
 
 void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
@@ -572,10 +581,19 @@ void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
 
                 brls::Logger::debug("LibrarySectionTab: Displaying {} collection items", items.size());
                 m_viewMode = LibraryViewMode::FILTERED;
+                brls::Logger::debug("LibrarySectionTab: Setting title");
                 m_titleLabel->setText(m_title + " - " + filterTitle);
+                brls::Logger::debug("LibrarySectionTab: Setting grid data source");
                 m_contentGrid->setDataSource(items);
                 brls::Logger::debug("LibrarySectionTab: Grid updated, updating buttons");
                 updateViewModeButtons();
+                brls::Logger::debug("LibrarySectionTab: Buttons updated");
+
+                // Try to give focus to the grid
+                brls::Logger::debug("LibrarySectionTab: About to request focus on grid");
+                if (m_contentGrid) {
+                    brls::Application::giveFocus(m_contentGrid);
+                }
                 brls::Logger::debug("LibrarySectionTab: Collection display complete");
             });
         } else {

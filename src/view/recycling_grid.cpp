@@ -73,8 +73,17 @@ void RecyclingGrid::rebuildGrid() {
 }
 
 void RecyclingGrid::onItemClicked(int index) {
-    if (index >= 0 && index < (int)m_items.size() && m_onItemSelected) {
-        m_onItemSelected(m_items[index]);
+    brls::Logger::debug("RecyclingGrid::onItemClicked index={} items={}", index, m_items.size());
+    if (index >= 0 && index < (int)m_items.size()) {
+        if (m_onItemSelected) {
+            brls::Logger::debug("RecyclingGrid: Calling onItemSelected for '{}'", m_items[index].title);
+            m_onItemSelected(m_items[index]);
+            brls::Logger::debug("RecyclingGrid: onItemSelected completed");
+        } else {
+            brls::Logger::warning("RecyclingGrid: No onItemSelected callback set");
+        }
+    } else {
+        brls::Logger::error("RecyclingGrid: Invalid index {} (size={})", index, m_items.size());
     }
 }
 
