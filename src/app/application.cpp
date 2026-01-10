@@ -346,6 +346,9 @@ bool Application::loadSettings() {
     m_settings.longSeekInterval = extractInt("longSeekInterval");
     if (m_settings.longSeekInterval <= 0) m_settings.longSeekInterval = 300;
 
+    // Load podcast settings
+    m_settings.podcastAutoComplete = static_cast<AutoCompleteThreshold>(extractInt("podcastAutoComplete"));
+
     // Load audio settings
     m_settings.audioQuality = static_cast<AudioQuality>(extractInt("audioQuality"));
     m_settings.boostVolume = extractBool("boostVolume", false);
@@ -428,6 +431,9 @@ bool Application::saveSettings() {
     json += "  \"sleepTimer\": " + std::to_string(static_cast<int>(m_settings.sleepTimer)) + ",\n";
     json += "  \"seekInterval\": " + std::to_string(m_settings.seekInterval) + ",\n";
     json += "  \"longSeekInterval\": " + std::to_string(m_settings.longSeekInterval) + ",\n";
+
+    // Podcast settings
+    json += "  \"podcastAutoComplete\": " + std::to_string(static_cast<int>(m_settings.podcastAutoComplete)) + ",\n";
 
     // Audio settings
     json += "  \"audioQuality\": " + std::to_string(static_cast<int>(m_settings.audioQuality)) + ",\n";
