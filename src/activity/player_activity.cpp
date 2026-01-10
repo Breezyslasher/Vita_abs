@@ -55,6 +55,7 @@ PlayerActivity::PlayerActivity(const std::string& itemId, const std::string& epi
     m_tempFilePath = preDownloadedPath;
     if (startTime >= 0) {
         m_pendingSeek = static_cast<double>(startTime);
+        brls::Logger::info("PlayerActivity: Will resume from {}s", startTime);
     }
     brls::Logger::debug("PlayerActivity created with pre-downloaded file: {}", preDownloadedPath);
 }
@@ -336,6 +337,11 @@ void PlayerActivity::loadMedia() {
         if (videoView) {
             videoView->setVisibility(brls::Visibility::VISIBLE);
             videoView->setVideoVisible(true);
+        }
+
+        // Log pending seek for debugging
+        if (m_pendingSeek > 0.0) {
+            brls::Logger::info("PlayerActivity: Pending seek to {}s will be applied when playback starts", m_pendingSeek);
         }
 
         m_isPlaying = true;
@@ -993,9 +999,13 @@ void PlayerActivity::updateProgress() {
     }
 
     // Handle pending seek when playback becomes ready
-    if (m_pendingSeek > 0.0 && player.isPlaying()) {
-        player.seekTo(m_pendingSeek);
-        m_pendingSeek = 0.0;
+    if (m_pendingSeek > 0.0) {
+        // Try to seek once player is ready (playing or paused with valid duration)
+        if (player.isPlaying() || (player.isPaused() && player.getDuration() > 0)) {
+            brls::Logger::info("PlayerActivity: Seeking to resume position {}s", m_pendingSeek);
+            player.seekTo(m_pendingSeek);
+            m_pendingSeek = 0.0;
+        }
     }
 
     double position = player.getPosition();
