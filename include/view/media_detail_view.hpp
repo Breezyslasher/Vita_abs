@@ -65,7 +65,6 @@ private:
     brls::Label* m_summaryLabel = nullptr;
     brls::Image* m_posterImage = nullptr;
     brls::Button* m_playButton = nullptr;
-    brls::Button* m_resumeButton = nullptr;
     brls::Button* m_downloadButton = nullptr;
     brls::Button* m_deleteButton = nullptr;        // Delete download button
     brls::Button* m_findEpisodesButton = nullptr;  // Find New Episodes button for podcasts
