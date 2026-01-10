@@ -205,6 +205,40 @@ MediaItem AudiobookshelfClient::parseMediaItem(const std::string& json) {
             // Podcasts use "author" field for the creator/feed owner
             item.authorName = extractJsonValue(metadataObj, "author");
         }
+        // If still empty, try parsing the authors array (expanded format)
+        if (item.authorName.empty()) {
+            std::string authorsArray = extractJsonArray(metadataObj, "authors");
+            if (!authorsArray.empty() && authorsArray != "[]") {
+                // Extract author names from array and join them
+                std::vector<std::string> authorNames;
+                size_t pos = 0;
+                while ((pos = authorsArray.find("\"name\"", pos)) != std::string::npos) {
+                    size_t colonPos = authorsArray.find(':', pos);
+                    if (colonPos != std::string::npos) {
+                        size_t nameStart = authorsArray.find('"', colonPos + 1);
+                        if (nameStart != std::string::npos) {
+                            size_t nameEnd = authorsArray.find('"', nameStart + 1);
+                            if (nameEnd != std::string::npos) {
+                                std::string name = authorsArray.substr(nameStart + 1, nameEnd - nameStart - 1);
+                                if (!name.empty()) {
+                                    authorNames.push_back(name);
+                                }
+                                pos = nameEnd;
+                            }
+                        }
+                    }
+                    pos++;
+                }
+                // Join author names with ", "
+                for (size_t i = 0; i < authorNames.size(); ++i) {
+                    if (i > 0) item.authorName += ", ";
+                    item.authorName += authorNames[i];
+                }
+                if (!item.authorName.empty()) {
+                    brls::Logger::debug("Parsed authors from array: {}", item.authorName);
+                }
+            }
+        }
         item.narratorName = extractJsonValue(metadataObj, "narratorName");
         item.publishedYear = extractJsonValue(metadataObj, "publishedYear");
         item.publisher = extractJsonValue(metadataObj, "publisher");
