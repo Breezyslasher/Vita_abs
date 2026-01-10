@@ -22,8 +22,10 @@ RecyclingGrid::RecyclingGrid() {
 }
 
 void RecyclingGrid::setDataSource(const std::vector<MediaItem>& items) {
+    brls::Logger::debug("RecyclingGrid: setDataSource with {} items", items.size());
     m_items = items;
     rebuildGrid();
+    brls::Logger::debug("RecyclingGrid: rebuildGrid completed");
 }
 
 void RecyclingGrid::setOnItemSelected(std::function<void(const MediaItem&)> callback) {

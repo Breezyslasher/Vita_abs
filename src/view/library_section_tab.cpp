@@ -43,18 +43,28 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
     m_viewModeBox->setAlignItems(brls::AlignItems::CENTER);
     m_viewModeBox->setMarginBottom(15);
 
-    // All Items button (only show if collections are enabled - otherwise no need for view switching)
-    if (settings.showCollections) {
-        m_allBtn = new brls::Button();
-        m_allBtn->setText("All");
-        m_allBtn->setMarginRight(10);
-        m_allBtn->registerClickAction([this](brls::View* view) {
-            showAllItems();
-            return true;
-        });
-        m_viewModeBox->addView(m_allBtn);
+    // All Items button
+    m_allBtn = new brls::Button();
+    m_allBtn->setText("All");
+    m_allBtn->setMarginRight(10);
+    m_allBtn->registerClickAction([this](brls::View* view) {
+        showAllItems();
+        return true;
+    });
+    m_viewModeBox->addView(m_allBtn);
 
-        // Collections button
+    // Recent button - always show
+    m_recentBtn = new brls::Button();
+    m_recentBtn->setText("Recent");
+    m_recentBtn->setMarginRight(10);
+    m_recentBtn->registerClickAction([this](brls::View* view) {
+        showRecent();
+        return true;
+    });
+    m_viewModeBox->addView(m_recentBtn);
+
+    // Collections button (only show if collections are enabled)
+    if (settings.showCollections) {
         m_collectionsBtn = new brls::Button();
         m_collectionsBtn->setText("Collections");
         m_collectionsBtn->setMarginRight(10);
@@ -425,6 +435,61 @@ void LibrarySectionTab::showAllItems() {
     updateViewModeButtons();
 }
 
+void LibrarySectionTab::showRecent() {
+    if (!m_recentLoaded) {
+        loadRecentItems();
+        return;
+    }
+
+    if (m_recentItems.empty()) {
+        brls::Application::notify("No recent items");
+        return;
+    }
+
+    m_viewMode = LibraryViewMode::RECENT;
+    m_titleLabel->setText(m_title + " - Recent");
+    m_contentGrid->setDataSource(m_recentItems);
+    updateViewModeButtons();
+}
+
+void LibrarySectionTab::loadRecentItems() {
+    brls::Logger::debug("LibrarySectionTab: Loading recent items for {}", m_sectionKey);
+    brls::Application::notify("Loading recent items...");
+
+    std::string key = m_sectionKey;
+    std::weak_ptr<bool> aliveWeak = m_alive;
+
+    asyncRun([this, key, aliveWeak]() {
+        std::vector<MediaItem> recent;
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+
+        if (client.fetchRecentlyAdded(key, recent)) {
+            brls::Logger::info("LibrarySectionTab: Got {} recent items", recent.size());
+
+            brls::sync([this, recent, aliveWeak]() {
+                auto alive = aliveWeak.lock();
+                if (!alive || !*alive) return;
+
+                m_recentItems = recent;
+                m_recentLoaded = true;
+
+                // If we're waiting to show recent, show them now
+                m_viewMode = LibraryViewMode::RECENT;
+                m_titleLabel->setText(m_title + " - Recent");
+                m_contentGrid->setDataSource(m_recentItems);
+                updateViewModeButtons();
+            });
+        } else {
+            brls::Logger::error("LibrarySectionTab: Failed to load recent items");
+            brls::sync([aliveWeak]() {
+                auto alive = aliveWeak.lock();
+                if (!alive || !*alive) return;
+                brls::Application::notify("Failed to load recent items");
+            });
+        }
+    });
+}
+
 void LibrarySectionTab::showCollections() {
     if (!m_collectionsLoaded) {
         brls::Application::notify("Loading collections...");
@@ -483,6 +548,9 @@ void LibrarySectionTab::updateViewModeButtons() {
     if (m_allBtn) {
         m_allBtn->setVisibility(showModeButtons ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
     }
+    if (m_recentBtn) {
+        m_recentBtn->setVisibility(showModeButtons ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+    }
     if (m_collectionsBtn) {
         m_collectionsBtn->setVisibility(showModeButtons && !m_collections.empty() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
     }
@@ -498,6 +566,9 @@ void LibrarySectionTab::hideNavigationButtons() {
     // Hide all navigation buttons for offline/downloaded-only mode
     if (m_allBtn) {
         m_allBtn->setVisibility(brls::Visibility::GONE);
+    }
+    if (m_recentBtn) {
+        m_recentBtn->setVisibility(brls::Visibility::GONE);
     }
     if (m_collectionsBtn) {
         m_collectionsBtn->setVisibility(brls::Visibility::GONE);
@@ -565,12 +636,18 @@ void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
 
             brls::sync([this, items, filterTitle, aliveWeak]() {
                 auto alive = aliveWeak.lock();
-                if (!alive || !*alive) return;
+                if (!alive || !*alive) {
+                    brls::Logger::debug("LibrarySectionTab: Tab no longer alive, skipping collection display");
+                    return;
+                }
 
+                brls::Logger::debug("LibrarySectionTab: Displaying {} collection items", items.size());
                 m_viewMode = LibraryViewMode::FILTERED;
                 m_titleLabel->setText(m_title + " - " + filterTitle);
                 m_contentGrid->setDataSource(items);
+                brls::Logger::debug("LibrarySectionTab: Grid updated, updating buttons");
                 updateViewModeButtons();
+                brls::Logger::debug("LibrarySectionTab: Collection display complete");
             });
         } else {
             brls::Logger::error("LibrarySectionTab: Failed to load collection content");

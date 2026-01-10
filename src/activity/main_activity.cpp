@@ -137,11 +137,7 @@ void MainActivity::onContentAvailable() {
         sidebarWidth = std::min(sidebarWidth, 350);
         brls::View* sidebar = tabFrame->getView("brls/tab_frame/sidebar");
         if (sidebar) {
-            if (settings.collapseSidebar) {
-                sidebar->setWidth(160);
-            } else {
-                sidebar->setWidth(sidebarWidth);
-            }
+            sidebar->setWidth(sidebarWidth);
         }
 
         // Add library tabs directly (no Home/Library intermediate screens)

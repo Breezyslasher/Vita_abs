@@ -80,10 +80,6 @@ struct AppSettings {
     bool animationsEnabled = true;
     bool debugLogging = true;
 
-    // Layout Settings
-    bool collapseSidebar = false;
-    std::string hiddenLibraries;       // Comma-separated list of library IDs to hide
-
     // Content Display Settings
     bool showCollections = true;
     bool showSeries = true;
