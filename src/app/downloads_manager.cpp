@@ -1595,8 +1595,10 @@ bool DownloadsManager::registerCompletedDownload(const std::string& itemId, cons
     item.chapters = chapters;
     item.numChapters = static_cast<int>(chapters.size());
 
-    // For podcast episodes, store authorName as parentTitle (podcast name)
-    if (mediaType == "episode" && !authorName.empty()) {
+    // Set parentTitle for proper display in player
+    // For podcast episodes: parentTitle = podcast name (authorName parameter)
+    // For books: parentTitle = author name
+    if (!authorName.empty()) {
         item.parentTitle = authorName;
     }
 
