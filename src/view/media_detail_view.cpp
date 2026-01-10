@@ -1918,11 +1918,12 @@ void MediaDetailView::batchDownloadEpisodes(const std::vector<MediaItem>& episod
             sceIoClose(fd);
 
             if (success) {
-                // Register the download - use podcast title as authorName for episodes
+                // Register the download - use podcast author for episodes
                 std::string coverUrl = client.getCoverUrl(itemId);
-                std::string podcastName = m_item.title;  // Store podcast name for offline display
+                // Use the actual podcast author, fall back to podcast title if no author
+                std::string podcastAuthor = m_item.authorName.empty() ? m_item.title : m_item.authorName;
                 downloadsMgr.registerCompletedDownload(
-                    itemId, episodeId, ep.title, podcastName,
+                    itemId, episodeId, ep.title, podcastAuthor,
                     destPath, totalDownloaded, ep.duration, "episode",
                     coverUrl, "", {}
                 );
