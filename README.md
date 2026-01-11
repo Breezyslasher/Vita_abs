@@ -12,16 +12,16 @@
 
 ## Authentication & Login
 
-- [✓] Login with username/password
-- [✓] Login credentials persist after app restart
-- [✓] Logout works correctly
-- [✓] App handles invalid credentials gracefully
-- [✓] App starts in offline mode when no network (with downloaded content)
+- [X] Login with username/password
+- [X] Login credentials persist after app restart
+- [X] Logout works correctly
+- [X] App handles invalid credentials gracefully
+- [X] App starts in offline mode when no network (with downloaded content)
 
 ## Library Browsing
 
-- [✓] All libraries from server appear as tabs
-- [✓] Audiobook libraries show book content
+- [X] All libraries from server appear as tabs
+- [X] Audiobook libraries show book content
 - [✓] Podcast libraries show podcast content
 - [✓] Browse all items in a library (scroll through grid)
 - [✓] View collections within library collection crash
@@ -29,7 +29,7 @@
 - [✓] View authors section
 - [✓] Recently added items display correctly
 - [✓] Item covers load properly
-- [X] Progress bars show on partially-played items
+- [x] Progress bars show on partially-played items
 - [✓] Sidebar collapse option works
 - [✓] Hidden libraries don't appear in sidebar
 
