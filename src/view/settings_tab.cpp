@@ -554,6 +554,21 @@ void SettingsTab::createDownloadsSection() {
     });
     m_contentBox->addView(syncNowCell);
 
+    // Refresh downloads list button
+    auto* refreshDownloadsCell = new brls::DetailCell();
+    refreshDownloadsCell->setText("Refresh Downloads List");
+    refreshDownloadsCell->setDetailText("Reload downloads from storage");
+    refreshDownloadsCell->registerClickAction([this](brls::View* view) {
+        DownloadsManager::getInstance().loadState();
+        auto downloads = DownloadsManager::getInstance().getDownloads();
+        if (m_clearDownloadsCell) {
+            m_clearDownloadsCell->setDetailText(std::to_string(downloads.size()) + " items");
+        }
+        brls::Application::notify("Downloads list refreshed (" + std::to_string(downloads.size()) + " items)");
+        return true;
+    });
+    m_contentBox->addView(refreshDownloadsCell);
+
     // Clear all downloads
     m_clearDownloadsCell = new brls::DetailCell();
     m_clearDownloadsCell->setText("Clear All Downloads");
