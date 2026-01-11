@@ -25,8 +25,6 @@
 - [X] Podcast libraries show podcast content
 - [X] Browse all items in a library (scroll through grid)
 - [X] View collections within library collection crash
-- [X] View series groupings
-- [X] View authors section
 - [X] Recently added items display correctly
 - [X] Item covers load properly
 - [ ] Progress bars show on partially-played items
@@ -42,35 +40,33 @@
 
 ## Media Detail View
 
-- [ ] Cover image displays
-- [ ] Title and author display correctly
-- [ ] Duration shows correctly
-- [ ] Description/summary displays
-- [ ] Chapter list shows (for audiobooks with chapters)
+- [X] Cover image displays
+- [X] Title and author display correctly
+- [X] Duration shows correctly
+- [X] Description/summary displays
+- [X] Chapter list shows (for audiobooks with chapters)
 - [ ] Chapter UI update
 - [ ] Play button starts playback
-- [ ] Resume button appears when item has progress
-- [ ] Resume button starts from saved position
-- [ ] Download button queues download
-- [ ] Delete button removes downloaded content
+- [X] Download button queues download
+- [X] Delete button removes downloaded content
 
 ## Podcast Features
 
-- [ ] Podcast detail shows episode list
-- [ ] Episode list scrolls properly
-- [ ] Individual episode download works
-- [ ] "Find New Episodes" checks for new content
-- [ ] Batch download episodes works
-- [ ] Episode progress shows correctly
+- [X] Podcast detail shows episode list
+- [X] Episode list scrolls properly
+- [X] Individual episode download works
+- [X] "Find New Episodes" checks for new content
+- [X] Batch download episodes works
+- [X] Episode progress shows correctly
 
 ## Playback - Basic Controls
 
-- [ ] Play/Pause toggle works
-- [ ] Progress slider shows current position
-- [ ] Elapsed time displays correctly
-- [ ] Remaining time displays correctly
-- [ ] Cover art shows in player
-- [ ] Title and author show in player
+- [X] Play/Pause toggle works
+- [X] Progress slider shows current position
+- [X] Elapsed time displays correctly
+- [X] Remaining time displays correctly
+- [X] Cover art shows in player
+- [X] Title and author show in player
 
 ## Playback - Seeking
 
