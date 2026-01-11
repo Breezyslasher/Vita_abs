@@ -4,24 +4,24 @@
 
 | Symbol | Status |
 |--------|--------|
-| 🟡 | Working |
-| 🔴 | Broken |
+| ✓ | Working |
+| X | Broken |
 | _(no symbol)_ | Untested |
 
 ---
 
 ## Authentication & Login
 
-- [🟡] Login with username/password
-- [🟡] Login credentials persist after app restart
-- [🟡] Logout works correctly
-- [🟡] App handles invalid credentials gracefully
-- [🟡] App starts in offline mode when no network (with downloaded content)
+- [✓] Login with username/password
+- [✓] Login credentials persist after app restart
+- [✓] Logout works correctly
+- [✓] App handles invalid credentials gracefully
+- [✓] App starts in offline mode when no network (with downloaded content)
 
 ## Library Browsing
 
-- [🟡] All libraries from server appear as tabs
-- [🟡] Audiobook libraries show book content
+- [✓] All libraries from server appear as tabs
+- [✓] Audiobook libraries show book content
 - [ ] Podcast libraries show podcast content
 - [ ] Browse all items in a library (scroll through grid)
 - [ ] View collections within library collection crash
