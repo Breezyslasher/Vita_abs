@@ -207,16 +207,16 @@
 
 ## Quick Smoke Test (10 minutes)
 
-1. - [ ] Start app → Login succeeds
-2. - [ ] Libraries load with covers
-3. - [ ] Select audiobook → Detail view shows
+1. - [X] Start app → Login succeeds
+2. - [X] Libraries load with covers
+3. - [X] Select audiobook → Detail view shows
 4. - [ ] Play audiobook → Audio plays
-5. - [ ] Seek forward/backward works
-6. - [ ] Stop playback → Progress saves
-7. - [ ] Download an item → Completes successfully
-8. - [ ] Play downloaded item → Works offline
-9. - [ ] Change a setting → Persists after restart
-10. - [ ] Logout → Returns to login screen
+5. - [X] Seek forward/backward works
+6. - [X] Stop playback → Progress saves
+7. - [X] Download an item → Completes successfully
+8. - [X] Play downloaded item → Works offline
+9. - [X] Change a setting → Persists after restart
+10. - [X] Logout → Returns to login screen
 
 ---
 
