@@ -1,0 +1,28 @@
+
+
+
+
+cd /home/breezy/Downloads
+rm -rf vita-abs
+git clone --recursive https://github.com/Breezyslasher/Vita_abs.git
+cd Vita_abs
+mkdir -p build && cd build
+cmake ..
+make
+
+
+cd /home/breezy/Downloads
+rm -rf vita-abs
+git clone --recursive \
+  -b claude/downloaded-books-filter-IhLCF \
+  https://github.com/Breezyslasher/Vita_abs.git vita-abs
+cd vita-abs
+mkdir -p build && cd build
+cmake ..
+make
+
+
+
+
+sudo cp -r include/* $VITASDK/arm-vita-eabi/include/
+sudo cp -r lib/*     $VITASDK/arm-vita-eabi/lib/
