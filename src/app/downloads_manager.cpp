@@ -504,21 +504,53 @@ void DownloadsManager::pauseDownloads() {
 }
 
 bool DownloadsManager::cancelDownload(const std::string& itemId) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    brls::Logger::info("DownloadsManager: Cancelling download {}", itemId);
 
-    for (auto it = m_downloads.begin(); it != m_downloads.end(); ++it) {
-        if (it->itemId == itemId) {
-            // Delete partial file if exists
-            if (!it->localPath.empty()) {
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        for (auto it = m_downloads.begin(); it != m_downloads.end(); ++it) {
+            if (it->itemId == itemId) {
+                // If currently downloading, set cancellation flag
+                if (it->state == DownloadState::DOWNLOADING) {
+                    m_cancelledItemId = itemId;
+                    m_cancelledEpisodeId = it->episodeId;
+                    brls::Logger::info("DownloadsManager: Set cancellation flag for active download");
+                }
+
+                // Delete partial file if exists
+                if (!it->localPath.empty()) {
 #ifdef __vita__
-                sceIoRemove(it->localPath.c_str());
+                    sceIoRemove(it->localPath.c_str());
 #else
-                std::remove(it->localPath.c_str());
+                    std::remove(it->localPath.c_str());
 #endif
+                }
+
+                // Delete multi-file folder if exists
+                if (it->numFiles > 1) {
+                    std::string folderPath = m_downloadsPath + "/" + it->itemId;
+                    for (const auto& fi : it->files) {
+                        if (!fi.localPath.empty()) {
+#ifdef __vita__
+                            sceIoRemove(fi.localPath.c_str());
+#else
+                            std::remove(fi.localPath.c_str());
+#endif
+                        }
+                    }
+#ifdef __vita__
+                    sceIoRmdir(folderPath.c_str());
+#else
+                    std::remove(folderPath.c_str());
+#endif
+                }
+
+                m_downloads.erase(it);
+                saveStateUnlocked();
+                brls::Logger::info("DownloadsManager: Download cancelled and removed");
+                return true;
             }
-            m_downloads.erase(it);
-            saveState();
-            return true;
         }
     }
     return false;
@@ -776,10 +808,30 @@ bool DownloadsManager::fetchProgressFromServer(const std::string& itemId, const 
     return false;
 }
 
+// Helper to check if the current download should be cancelled
+bool DownloadsManager::isDownloadCancelled(const std::string& itemId, const std::string& episodeId) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_cancelledItemId == itemId) {
+        if (episodeId.empty() || m_cancelledEpisodeId == episodeId) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void DownloadsManager::clearCancelFlag() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_cancelledItemId.clear();
+    m_cancelledEpisodeId.clear();
+}
+
 void DownloadsManager::downloadItem(DownloadItem& item) {
     brls::Logger::info("DownloadsManager: Starting download of {}", item.title);
     brls::Logger::info("DownloadsManager: Item ID: {}, Episode ID: {}, Type: {}",
                        item.itemId, item.episodeId.empty() ? "(none)" : item.episodeId, item.mediaType);
+
+    // Clear any previous cancel flag for this item
+    clearCancelFlag();
 
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
     std::string serverUrl = client.getServerUrl();
@@ -835,7 +887,19 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
         HttpClient http;
         http.setDefaultHeader("Authorization", "Bearer " + token);
 
-        for (size_t i = 0; i < item.files.size() && m_downloading; ++i) {
+        // Store item info for cancellation checking
+        std::string currentItemId = item.itemId;
+        std::string currentEpisodeId = item.episodeId;
+        bool wasCancelled = false;
+
+        for (size_t i = 0; i < item.files.size() && m_downloading && !wasCancelled; ++i) {
+            // Check for cancellation at start of each file
+            if (isDownloadCancelled(currentItemId, currentEpisodeId)) {
+                brls::Logger::info("DownloadsManager: Download cancelled, stopping");
+                wasCancelled = true;
+                break;
+            }
+
             auto& fi = item.files[i];
             item.currentFileIndex = static_cast<int>(i);
 
@@ -859,6 +923,11 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
 
             bool success = http.downloadFile(url,
                 [&](const char* data, size_t size) {
+                    // Check for cancellation during download
+                    if (isDownloadCancelled(currentItemId, currentEpisodeId)) {
+                        wasCancelled = true;
+                        return false;  // Stop download
+                    }
 #ifdef __vita__
                     sceIoWrite(fd, data, size);
 #else
@@ -869,7 +938,7 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
                         m_progressCallback(static_cast<float>(item.downloadedBytes),
                                            static_cast<float>(item.totalBytes));
                     }
-                    return m_downloading;
+                    return m_downloading && !wasCancelled;
                 },
                 [&](int64_t total) {
                     brls::Logger::debug("DownloadsManager: File size: {} bytes", total);
@@ -882,7 +951,13 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
             file.close();
 #endif
 
-            fi.downloaded = success;
+            fi.downloaded = success && !wasCancelled;
+        }
+
+        // If cancelled, clean up and return
+        if (wasCancelled) {
+            brls::Logger::info("DownloadsManager: Multi-file download was cancelled");
+            return;
         }
 
         // Check if all files downloaded
@@ -1033,8 +1108,19 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
     // Set auth header
     http.setDefaultHeader("Authorization", "Bearer " + token);
 
+    // Store item info for cancellation checking
+    std::string currentItemId = item.itemId;
+    std::string currentEpisodeId = item.episodeId;
+    bool wasCancelled = false;
+
     bool success = http.downloadFile(url,
         [&](const char* data, size_t size) {
+            // Check for cancellation during download
+            if (isDownloadCancelled(currentItemId, currentEpisodeId)) {
+                wasCancelled = true;
+                return false;  // Stop download
+            }
+
             // Write chunk to file
 #ifdef __vita__
             sceIoWrite(fd, data, size);
@@ -1049,13 +1135,26 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
                                    static_cast<float>(item.totalBytes));
             }
 
-            return m_downloading; // Return false to cancel
+            return m_downloading && !wasCancelled;
         },
         [&](int64_t total) {
             item.totalBytes = total;
             brls::Logger::debug("DownloadsManager: Total size: {} bytes", total);
         }
     );
+
+    // Check if cancelled
+    if (wasCancelled) {
+        brls::Logger::info("DownloadsManager: Single file download was cancelled");
+#ifdef __vita__
+        sceIoClose(fd);
+        sceIoRemove(item.localPath.c_str());
+#else
+        file.close();
+        std::remove(item.localPath.c_str());
+#endif
+        return;
+    }
 
 #ifdef __vita__
     sceIoClose(fd);

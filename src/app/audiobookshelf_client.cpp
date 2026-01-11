@@ -1898,6 +1898,7 @@ bool AudiobookshelfClient::getAudioFiles(const std::string& itemId, std::vector<
 
         AudioFileInfo info;
         info.ino = extractJsonValue(fileObj, "ino");
+        info.index = extractJsonInt(fileObj, "index");
 
         // Get metadata from nested object
         std::string metadataObj = extractJsonObject(fileObj, "metadata");
@@ -1912,13 +1913,18 @@ bool AudiobookshelfClient::getAudioFiles(const std::string& itemId, std::vector<
 
         if (!info.ino.empty()) {
             files.push_back(info);
-            brls::Logger::debug("Found audio file: {} (ino: {})", info.filename, info.ino);
+            brls::Logger::debug("Found audio file: {} (ino: {}, index: {})", info.filename, info.ino, info.index);
         }
 
         pos = objEnd;
     }
 
-    brls::Logger::info("Found {} audio files for item", files.size());
+    // Sort files by index to ensure correct order
+    std::sort(files.begin(), files.end(), [](const AudioFileInfo& a, const AudioFileInfo& b) {
+        return a.index < b.index;
+    });
+
+    brls::Logger::info("Found {} audio files for item (sorted by index)", files.size());
     return !files.empty();
 }
 

@@ -37,6 +37,7 @@ struct AudioFileInfo {
     float duration = 0.0f;     // Duration in seconds
     int64_t size = 0;          // File size in bytes
     std::string mimeType;
+    int index = 0;             // Track index for ordering
 };
 
 // Chapter info
