@@ -1387,17 +1387,28 @@ void DownloadsManager::loadState() {
 
     // Parse each download item object
     size_t pos = arrStart;
+    int parsedCount = 0;
+    int skippedCount = 0;
     while (true) {
         size_t objStart = content.find('{', pos);
-        if (objStart == std::string::npos) break;
+        if (objStart == std::string::npos) {
+            brls::Logger::debug("DownloadsManager: No more objects found after position {}", pos);
+            break;
+        }
 
         // Skip the files array objects - look for itemId to identify download items
         size_t itemIdPos = content.find("\"itemId\"", objStart);
-        if (itemIdPos == std::string::npos) break;
+        if (itemIdPos == std::string::npos) {
+            brls::Logger::debug("DownloadsManager: No more itemId found after position {}", objStart);
+            break;
+        }
 
         // Check if this itemId is within a reasonable distance (not a nested object)
         if (itemIdPos - objStart > 50) {
+            brls::Logger::debug("DownloadsManager: Skipping nested object at {} (itemId at {}, distance: {})",
+                               objStart, itemIdPos, itemIdPos - objStart);
             pos = objStart + 1;
+            skippedCount++;
             continue;
         }
 
@@ -1547,15 +1558,31 @@ void DownloadsManager::loadState() {
         }
 
         if (!item.itemId.empty()) {
-            m_downloads.push_back(item);
-            brls::Logger::debug("DownloadsManager: Loaded download: {} (state: {})",
-                               item.title, static_cast<int>(item.state));
+            // Check for duplicates - skip if already have this itemId/episodeId combo
+            bool isDuplicate = false;
+            for (const auto& existing : m_downloads) {
+                if (existing.itemId == item.itemId && existing.episodeId == item.episodeId) {
+                    isDuplicate = true;
+                    brls::Logger::warning("DownloadsManager: Skipping duplicate item: {} ({})",
+                                         item.title, item.itemId);
+                    break;
+                }
+            }
+            if (!isDuplicate) {
+                m_downloads.push_back(item);
+                parsedCount++;
+                brls::Logger::debug("DownloadsManager: Loaded download: {} (itemId: {}, state: {})",
+                                   item.title, item.itemId, static_cast<int>(item.state));
+            }
+        } else {
+            brls::Logger::warning("DownloadsManager: Skipping item with empty itemId (title: {})", item.title);
         }
 
         pos = objEnd;
     }
 
-    brls::Logger::info("DownloadsManager: Loaded {} downloads from state", m_downloads.size());
+    brls::Logger::info("DownloadsManager: Loaded {} downloads from state (parsed: {}, skipped nested: {})",
+                       m_downloads.size(), parsedCount, skippedCount);
 }
 
 int DownloadsManager::scanDownloadsFolder() {
@@ -2000,6 +2027,87 @@ int DownloadsManager::scanDownloadsFolder() {
     }
 
     return newFilesFound;
+}
+
+int DownloadsManager::updateMissingMetadata() {
+    brls::Logger::info("DownloadsManager: Checking for items with missing metadata...");
+
+    AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+    if (!client.isAuthenticated()) {
+        brls::Logger::info("DownloadsManager: Not connected to server, cannot update metadata");
+        return 0;
+    }
+
+    int updatedCount = 0;
+    std::vector<std::string> itemsToUpdate;
+
+    // Find items that need metadata update (title == itemId)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        for (const auto& item : m_downloads) {
+            // If title equals itemId, it means metadata wasn't fetched
+            if (item.title == item.itemId || item.title.empty()) {
+                itemsToUpdate.push_back(item.itemId);
+                brls::Logger::info("DownloadsManager: Item {} needs metadata update", item.itemId);
+            }
+        }
+    }
+
+    if (itemsToUpdate.empty()) {
+        brls::Logger::info("DownloadsManager: All items have metadata");
+        return 0;
+    }
+
+    // Update each item
+    for (const auto& itemId : itemsToUpdate) {
+        MediaItem mediaInfo;
+        if (client.fetchItem(itemId, mediaInfo)) {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            for (auto& item : m_downloads) {
+                if (item.itemId == itemId) {
+                    brls::Logger::info("DownloadsManager: Updating metadata for {} -> {}",
+                                       itemId, mediaInfo.title);
+                    item.title = mediaInfo.title;
+                    item.authorName = mediaInfo.authorName;
+                    item.parentTitle = mediaInfo.authorName;
+                    item.duration = mediaInfo.duration;
+                    item.mediaType = mediaInfo.type;
+
+                    // Download cover if needed
+                    if (item.localCoverPath.empty()) {
+                        std::string coverUrl = client.getCoverUrl(itemId);
+                        if (!coverUrl.empty()) {
+                            item.coverUrl = coverUrl;
+                            item.localCoverPath = downloadCoverImage(itemId, coverUrl);
+                        }
+                    }
+
+                    // Store chapters
+                    item.chapters.clear();
+                    for (const auto& ch : mediaInfo.chapters) {
+                        DownloadChapter dch;
+                        dch.title = ch.title;
+                        dch.start = ch.start;
+                        dch.end = ch.end;
+                        item.chapters.push_back(dch);
+                    }
+                    item.numChapters = static_cast<int>(item.chapters.size());
+
+                    updatedCount++;
+                    break;
+                }
+            }
+        } else {
+            brls::Logger::warning("DownloadsManager: Could not fetch metadata for {}", itemId);
+        }
+    }
+
+    if (updatedCount > 0) {
+        saveState();
+        brls::Logger::info("DownloadsManager: Updated metadata for {} items", updatedCount);
+    }
+
+    return updatedCount;
 }
 
 void DownloadsManager::setProgressCallback(DownloadProgressCallback callback) {

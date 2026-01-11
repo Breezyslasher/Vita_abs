@@ -135,6 +135,10 @@ public:
     // Returns number of new files found
     int scanDownloadsFolder();
 
+    // Update metadata for downloads that are missing it (title == itemId)
+    // Returns number of items updated
+    int updateMissingMetadata();
+
     // Set progress callback for UI updates
     void setProgressCallback(DownloadProgressCallback callback);
 

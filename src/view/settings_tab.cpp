@@ -562,15 +562,21 @@ void SettingsTab::createDownloadsSection() {
         // Reload state first, then scan for untracked files
         DownloadsManager::getInstance().loadState();
         int newFiles = DownloadsManager::getInstance().scanDownloadsFolder();
+        // Also update metadata for items that are missing it
+        int updatedMetadata = DownloadsManager::getInstance().updateMissingMetadata();
         auto downloads = DownloadsManager::getInstance().getDownloads();
         if (m_clearDownloadsCell) {
             m_clearDownloadsCell->setDetailText(std::to_string(downloads.size()) + " items");
         }
-        if (newFiles > 0) {
-            brls::Application::notify("Found " + std::to_string(newFiles) + " new files (" + std::to_string(downloads.size()) + " total)");
+        std::string message;
+        if (newFiles > 0 || updatedMetadata > 0) {
+            message = "Found " + std::to_string(newFiles) + " new, updated " +
+                      std::to_string(updatedMetadata) + " metadata (" +
+                      std::to_string(downloads.size()) + " total)";
         } else {
-            brls::Application::notify("Downloads list refreshed (" + std::to_string(downloads.size()) + " items)");
+            message = "Downloads list refreshed (" + std::to_string(downloads.size()) + " items)";
         }
+        brls::Application::notify(message);
         return true;
     });
     m_contentBox->addView(refreshDownloadsCell);
