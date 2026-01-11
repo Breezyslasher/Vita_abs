@@ -20,8 +20,8 @@
 
 ## Library Browsing
 
-- [ ] All libraries from server appear as tabs
-- [ ] Audiobook libraries show book content
+- [🟡] All libraries from server appear as tabs
+- [🟡] Audiobook libraries show book content
 - [ ] Podcast libraries show podcast content
 - [ ] Browse all items in a library (scroll through grid)
 - [ ] View collections within library collection crash
