@@ -20,6 +20,9 @@
 #include <psp2/io/stat.h>
 #include <psp2/io/dirent.h>
 #include <psp2/kernel/threadmgr.h>
+#else
+#include <dirent.h>
+#include <sys/stat.h>
 #endif
 
 // FFmpeg for audio concatenation
@@ -1546,6 +1549,244 @@ void DownloadsManager::loadState() {
     }
 
     brls::Logger::info("DownloadsManager: Loaded {} downloads from state", m_downloads.size());
+}
+
+int DownloadsManager::scanDownloadsFolder() {
+    brls::Logger::info("DownloadsManager: Scanning downloads folder for untracked files...");
+
+    if (m_downloadsPath.empty()) {
+        init();
+    }
+
+    int newFilesFound = 0;
+    std::vector<std::string> audioExtensions = {".m4b", ".mp3", ".m4a", ".ogg", ".flac", ".opus"};
+
+    // Helper to check if a file is already tracked
+    auto isFileTracked = [this](const std::string& filePath) -> bool {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        for (const auto& item : m_downloads) {
+            if (item.localPath == filePath) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // Helper to extract item ID from filename (filename without extension and _cover suffix)
+    auto extractItemId = [](const std::string& filename) -> std::string {
+        // Remove extension
+        size_t dotPos = filename.rfind('.');
+        std::string nameWithoutExt = (dotPos != std::string::npos) ? filename.substr(0, dotPos) : filename;
+        // Skip cover images
+        if (nameWithoutExt.length() > 6 && nameWithoutExt.substr(nameWithoutExt.length() - 6) == "_cover") {
+            return "";
+        }
+        return nameWithoutExt;
+    };
+
+#ifdef __vita__
+    SceUID dir = sceIoDopen(m_downloadsPath.c_str());
+    if (dir < 0) {
+        brls::Logger::error("DownloadsManager: Failed to open downloads directory");
+        return 0;
+    }
+
+    SceIoDirent entry;
+    while (sceIoDread(dir, &entry) > 0) {
+        std::string filename = entry.d_name;
+
+        // Skip directories and special files
+        if (SCE_S_ISDIR(entry.d_stat.st_mode)) continue;
+        if (filename == "." || filename == "..") continue;
+        if (filename == "state.json") continue;
+
+        // Check if it's an audio file
+        bool isAudioFile = false;
+        for (const auto& ext : audioExtensions) {
+            if (filename.length() > ext.length() &&
+                filename.substr(filename.length() - ext.length()) == ext) {
+                isAudioFile = true;
+                break;
+            }
+        }
+
+        if (!isAudioFile) continue;
+
+        std::string fullPath = m_downloadsPath + "/" + filename;
+
+        // Check if already tracked
+        if (isFileTracked(fullPath)) continue;
+
+        // Extract item ID
+        std::string itemId = extractItemId(filename);
+        if (itemId.empty()) continue;
+
+        // Get file size
+        int64_t fileSize = entry.d_stat.st_size;
+
+        brls::Logger::info("DownloadsManager: Found untracked file: {} ({})", filename, itemId);
+
+        // Try to fetch metadata from server
+        MediaItem mediaInfo;
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+        bool hasMetadata = client.isAuthenticated() && client.fetchItem(itemId, mediaInfo);
+
+        // Create download entry
+        DownloadItem item;
+        item.itemId = itemId;
+        item.localPath = fullPath;
+        item.totalBytes = fileSize;
+        item.downloadedBytes = fileSize;
+        item.state = DownloadState::COMPLETED;
+        item.numFiles = 1;
+
+        if (hasMetadata) {
+            item.title = mediaInfo.title;
+            item.authorName = mediaInfo.authorName;
+            item.parentTitle = mediaInfo.authorName;
+            item.duration = mediaInfo.duration;
+            item.mediaType = mediaInfo.type;
+            item.coverUrl = client.getCoverUrl(itemId);
+
+            // Download cover
+            if (!item.coverUrl.empty()) {
+                item.localCoverPath = downloadCoverImage(itemId, item.coverUrl);
+            }
+
+            // Store chapters
+            for (const auto& ch : mediaInfo.chapters) {
+                DownloadChapter dch;
+                dch.title = ch.title;
+                dch.start = ch.start;
+                dch.end = ch.end;
+                item.chapters.push_back(dch);
+            }
+            item.numChapters = static_cast<int>(item.chapters.size());
+        } else {
+            // Use filename as title if no metadata
+            item.title = itemId;
+            item.mediaType = "book";
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_downloads.push_back(item);
+        }
+        newFilesFound++;
+
+        brls::Logger::info("DownloadsManager: Registered untracked file: {}", item.title);
+    }
+
+    sceIoDclose(dir);
+#else
+    // Desktop implementation using dirent
+    DIR* dir = opendir(m_downloadsPath.c_str());
+    if (!dir) {
+        brls::Logger::error("DownloadsManager: Failed to open downloads directory");
+        return 0;
+    }
+
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != nullptr) {
+        std::string filename = entry->d_name;
+
+        // Skip directories and special files
+        if (entry->d_type == DT_DIR) continue;
+        if (filename == "." || filename == "..") continue;
+        if (filename == "state.json") continue;
+
+        // Check if it's an audio file
+        bool isAudioFile = false;
+        for (const auto& ext : audioExtensions) {
+            if (filename.length() > ext.length() &&
+                filename.substr(filename.length() - ext.length()) == ext) {
+                isAudioFile = true;
+                break;
+            }
+        }
+
+        if (!isAudioFile) continue;
+
+        std::string fullPath = m_downloadsPath + "/" + filename;
+
+        // Check if already tracked
+        if (isFileTracked(fullPath)) continue;
+
+        // Extract item ID
+        std::string itemId = extractItemId(filename);
+        if (itemId.empty()) continue;
+
+        // Get file size
+        struct stat st;
+        int64_t fileSize = 0;
+        if (stat(fullPath.c_str(), &st) == 0) {
+            fileSize = st.st_size;
+        }
+
+        brls::Logger::info("DownloadsManager: Found untracked file: {} ({})", filename, itemId);
+
+        // Try to fetch metadata from server
+        MediaItem mediaInfo;
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+        bool hasMetadata = client.isAuthenticated() && client.fetchItem(itemId, mediaInfo);
+
+        // Create download entry
+        DownloadItem item;
+        item.itemId = itemId;
+        item.localPath = fullPath;
+        item.totalBytes = fileSize;
+        item.downloadedBytes = fileSize;
+        item.state = DownloadState::COMPLETED;
+        item.numFiles = 1;
+
+        if (hasMetadata) {
+            item.title = mediaInfo.title;
+            item.authorName = mediaInfo.authorName;
+            item.parentTitle = mediaInfo.authorName;
+            item.duration = mediaInfo.duration;
+            item.mediaType = mediaInfo.type;
+            item.coverUrl = client.getCoverUrl(itemId);
+
+            // Download cover
+            if (!item.coverUrl.empty()) {
+                item.localCoverPath = downloadCoverImage(itemId, item.coverUrl);
+            }
+
+            // Store chapters
+            for (const auto& ch : mediaInfo.chapters) {
+                DownloadChapter dch;
+                dch.title = ch.title;
+                dch.start = ch.start;
+                dch.end = ch.end;
+                item.chapters.push_back(dch);
+            }
+            item.numChapters = static_cast<int>(item.chapters.size());
+        } else {
+            // Use filename as title if no metadata
+            item.title = itemId;
+            item.mediaType = "book";
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_downloads.push_back(item);
+        }
+        newFilesFound++;
+
+        brls::Logger::info("DownloadsManager: Registered untracked file: {}", item.title);
+    }
+
+    closedir(dir);
+#endif
+
+    if (newFilesFound > 0) {
+        saveState();
+        brls::Logger::info("DownloadsManager: Found and registered {} untracked files", newFilesFound);
+    } else {
+        brls::Logger::info("DownloadsManager: No untracked files found");
+    }
+
+    return newFilesFound;
 }
 
 void DownloadsManager::setProgressCallback(DownloadProgressCallback callback) {

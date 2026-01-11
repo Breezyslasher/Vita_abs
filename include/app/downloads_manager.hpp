@@ -131,6 +131,10 @@ public:
     void saveState();
     void loadState();
 
+    // Scan downloads folder for untracked files and add them
+    // Returns number of new files found
+    int scanDownloadsFolder();
+
     // Set progress callback for UI updates
     void setProgressCallback(DownloadProgressCallback callback);
 
