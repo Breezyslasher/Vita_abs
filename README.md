@@ -22,16 +22,16 @@
 
 - [✓] All libraries from server appear as tabs
 - [✓] Audiobook libraries show book content
-- [ ] Podcast libraries show podcast content
-- [ ] Browse all items in a library (scroll through grid)
-- [ ] View collections within library collection crash
-- [ ] View series groupings
-- [ ] View authors section
-- [ ] Recently added items display correctly
-- [ ] Item covers load properly
-- [ ] Progress bars show on partially-played items
-- [ ] Sidebar collapse option works
-- [ ] Hidden libraries don't appear in sidebar
+- [✓] Podcast libraries show podcast content
+- [✓] Browse all items in a library (scroll through grid)
+- [✓] View collections within library collection crash
+- [✓] View series groupings
+- [✓] View authors section
+- [✓] Recently added items display correctly
+- [✓] Item covers load properly
+- [X] Progress bars show on partially-played items
+- [✓] Sidebar collapse option works
+- [✓] Hidden libraries don't appear in sidebar
 
 ## Search
 
@@ -228,13 +228,8 @@
 
 1. **Mark as tested**: Change `- [ ]` to `- [x]` when testing an item
 2. **Mark status**: Add emoji before the item text:
-   - 🟡 for **working** features
-   - 🔴 for **broken** features
+   - ✓ for **working** features
+   - X for **broken** features
    - Leave blank for **untested**
 
-### Example:
-```markdown
-- [x] 🟡 Login with username/password
-- [x] 🔴 View collections within library collection crash
-- [ ] App starts in offline mode when no network
-```
+
