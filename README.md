@@ -70,10 +70,10 @@
 
 ## Playback - Seeking
 
-- [ ] Skip forward button works
-- [ ] Skip backward button works
-- [ ] Dragging progress slider seeks correctly
-- [ ] Seek interval setting changes skip amount (5s/10s/15s/30s/60s)
+- [X] Skip forward button works
+- [X] Skip backward button works
+- [X] Dragging progress slider seeks correctly
+- [X] Seek interval setting changes skip amount (5s/10s/15s/30s/60s)
 
 ## Playback - Speed Control
 
@@ -89,12 +89,12 @@
 
 ## Playback - Progress & Resume
 
-- [ ] Progress saves when stopping playback
-- [ ] Progress saves periodically during playback (every 30s)
-- [ ] Progress syncs to server (when online)
-- [ ] Resume playback starts at saved position
-- [ ] Progress syncs FROM server on app start
-- [ ] Finishing content marks it as complete
+- [X] Progress saves when stopping playback
+- [X] Progress saves periodically during playback (every 30s)
+- [X] Progress syncs to server (when online)
+- [X] Resume playback starts at saved position
+- [X] Progress syncs FROM server on app start
+- [X] Finishing content marks it as complete
 
 ## Multi-Track Audiobooks
 
