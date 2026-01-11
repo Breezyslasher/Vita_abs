@@ -12,11 +12,11 @@
 
 ## Authentication & Login
 
-- [ ] Login with username/password
-- [ ] Login credentials persist after app restart
-- [ ] Logout works correctly
-- [ ] App handles invalid credentials gracefully
-- [ ] App starts in offline mode when no network (with downloaded content)
+- [🟡] Login with username/password
+- [🟡] Login credentials persist after app restart
+- [🟡] Logout works correctly
+- [🟡] App handles invalid credentials gracefully
+- [🟡] App starts in offline mode when no network (with downloaded content)
 
 ## Library Browsing
 
