@@ -22,23 +22,23 @@
 
 - [X] All libraries from server appear as tabs
 - [X] Audiobook libraries show book content
-- [✓] Podcast libraries show podcast content
-- [✓] Browse all items in a library (scroll through grid)
-- [✓] View collections within library collection crash
-- [✓] View series groupings
-- [✓] View authors section
-- [✓] Recently added items display correctly
-- [✓] Item covers load properly
-- [x] Progress bars show on partially-played items
-- [✓] Sidebar collapse option works
-- [✓] Hidden libraries don't appear in sidebar
+- [X] Podcast libraries show podcast content
+- [X] Browse all items in a library (scroll through grid)
+- [X] View collections within library collection crash
+- [X] View series groupings
+- [X] View authors section
+- [X] Recently added items display correctly
+- [X] Item covers load properly
+- [ ] Progress bars show on partially-played items
+- [X] Sidebar collapse option works
+- [X] Hidden libraries don't appear in sidebar
 
 ## Search
 
-- [ ] Search tab opens correctly
-- [ ] Search returns results from server
-- [ ] Search results show covers and titles
-- [ ] Clicking search result opens detail view
+- [X] Search tab opens correctly
+- [X] Search returns results from server
+- [X] Search results show covers and titles
+- [X] Clicking search result opens detail view
 
 ## Media Detail View
 
