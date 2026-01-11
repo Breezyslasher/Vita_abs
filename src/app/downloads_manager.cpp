@@ -12,6 +12,7 @@
 #include <sstream>
 #include <ctime>
 #include <cstdlib>
+#include <cstring>
 #include <thread>
 #include <utility>
 
@@ -1561,18 +1562,42 @@ int DownloadsManager::scanDownloadsFolder() {
     int newFilesFound = 0;
     std::vector<std::string> audioExtensions = {".m4b", ".mp3", ".m4a", ".ogg", ".flac", ".opus"};
 
-    // Helper to check if a file is already tracked
-    auto isFileTracked = [this](const std::string& filePath) -> bool {
+    // Helper to check if an item is already tracked (by itemId OR localPath)
+    auto isItemTracked = [this](const std::string& itemId, const std::string& filePath) -> bool {
         std::lock_guard<std::mutex> lock(m_mutex);
         for (const auto& item : m_downloads) {
-            if (item.localPath == filePath) {
+            // Check by item ID first (primary key)
+            if (!itemId.empty() && item.itemId == itemId) {
+                brls::Logger::debug("DownloadsManager: Item {} already tracked by ID", itemId);
+                return true;
+            }
+            // Also check by path as fallback
+            if (!filePath.empty() && item.localPath == filePath) {
+                brls::Logger::debug("DownloadsManager: Item already tracked by path: {}", filePath);
                 return true;
             }
         }
         return false;
     };
 
-    // Helper to extract item ID from filename (filename without extension and _cover suffix)
+    // Helper to check if local cover exists
+    auto getLocalCoverPath = [this](const std::string& itemId) -> std::string {
+        std::string coverPath = m_downloadsPath + "/" + itemId + "_cover.jpg";
+#ifdef __vita__
+        SceIoStat stat;
+        if (sceIoGetstat(coverPath.c_str(), &stat) >= 0) {
+            return coverPath;
+        }
+#else
+        struct stat st;
+        if (stat(coverPath.c_str(), &st) == 0) {
+            return coverPath;
+        }
+#endif
+        return "";
+    };
+
+    // Helper to extract item ID from filename (filename without extension)
     auto extractItemId = [](const std::string& filename) -> std::string {
         // Remove extension
         size_t dotPos = filename.rfind('.');
@@ -1584,14 +1609,18 @@ int DownloadsManager::scanDownloadsFolder() {
         return nameWithoutExt;
     };
 
+    // Collect new items first, then add them (to avoid holding lock during network calls)
+    std::vector<DownloadItem> newItems;
+
 #ifdef __vita__
     SceUID dir = sceIoDopen(m_downloadsPath.c_str());
     if (dir < 0) {
-        brls::Logger::error("DownloadsManager: Failed to open downloads directory");
+        brls::Logger::error("DownloadsManager: Failed to open downloads directory: {}", m_downloadsPath);
         return 0;
     }
 
     SceIoDirent entry;
+    memset(&entry, 0, sizeof(entry));
     while (sceIoDread(dir, &entry) > 0) {
         std::string filename = entry.d_name;
 
@@ -1602,10 +1631,12 @@ int DownloadsManager::scanDownloadsFolder() {
 
         // Check if it's an audio file
         bool isAudioFile = false;
+        std::string fileExt;
         for (const auto& ext : audioExtensions) {
             if (filename.length() > ext.length() &&
                 filename.substr(filename.length() - ext.length()) == ext) {
                 isAudioFile = true;
+                fileExt = ext;
                 break;
             }
         }
@@ -1613,23 +1644,24 @@ int DownloadsManager::scanDownloadsFolder() {
         if (!isAudioFile) continue;
 
         std::string fullPath = m_downloadsPath + "/" + filename;
+        std::string itemId = extractItemId(filename);
+
+        if (itemId.empty()) {
+            brls::Logger::debug("DownloadsManager: Skipping file with empty itemId: {}", filename);
+            continue;
+        }
 
         // Check if already tracked
-        if (isFileTracked(fullPath)) continue;
-
-        // Extract item ID
-        std::string itemId = extractItemId(filename);
-        if (itemId.empty()) continue;
+        if (isItemTracked(itemId, fullPath)) {
+            brls::Logger::debug("DownloadsManager: Already tracked: {}", filename);
+            continue;
+        }
 
         // Get file size
         int64_t fileSize = entry.d_stat.st_size;
 
-        brls::Logger::info("DownloadsManager: Found untracked file: {} ({})", filename, itemId);
-
-        // Try to fetch metadata from server
-        MediaItem mediaInfo;
-        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-        bool hasMetadata = client.isAuthenticated() && client.fetchItem(itemId, mediaInfo);
+        brls::Logger::info("DownloadsManager: Found untracked file: {} (itemId: {}, size: {})",
+                          filename, itemId, fileSize);
 
         // Create download entry
         DownloadItem item;
@@ -1639,42 +1671,56 @@ int DownloadsManager::scanDownloadsFolder() {
         item.downloadedBytes = fileSize;
         item.state = DownloadState::COMPLETED;
         item.numFiles = 1;
+        item.mediaType = "book";
 
-        if (hasMetadata) {
-            item.title = mediaInfo.title;
-            item.authorName = mediaInfo.authorName;
-            item.parentTitle = mediaInfo.authorName;
-            item.duration = mediaInfo.duration;
-            item.mediaType = mediaInfo.type;
-            item.coverUrl = client.getCoverUrl(itemId);
+        // First check for local cover
+        std::string localCover = getLocalCoverPath(itemId);
+        if (!localCover.empty()) {
+            item.localCoverPath = localCover;
+            brls::Logger::info("DownloadsManager: Found local cover for {}", itemId);
+        }
 
-            // Download cover
-            if (!item.coverUrl.empty()) {
-                item.localCoverPath = downloadCoverImage(itemId, item.coverUrl);
+        // Try to fetch metadata from server if connected
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+        if (client.isAuthenticated()) {
+            MediaItem mediaInfo;
+            if (client.fetchItem(itemId, mediaInfo)) {
+                brls::Logger::info("DownloadsManager: Fetched metadata for {} from server", itemId);
+                item.title = mediaInfo.title;
+                item.authorName = mediaInfo.authorName;
+                item.parentTitle = mediaInfo.authorName;
+                item.duration = mediaInfo.duration;
+                item.mediaType = mediaInfo.type;
+
+                // Download cover if we don't have a local one
+                if (item.localCoverPath.empty()) {
+                    std::string coverUrl = client.getCoverUrl(itemId);
+                    if (!coverUrl.empty()) {
+                        item.coverUrl = coverUrl;
+                        item.localCoverPath = downloadCoverImage(itemId, coverUrl);
+                    }
+                }
+
+                // Store chapters
+                for (const auto& ch : mediaInfo.chapters) {
+                    DownloadChapter dch;
+                    dch.title = ch.title;
+                    dch.start = ch.start;
+                    dch.end = ch.end;
+                    item.chapters.push_back(dch);
+                }
+                item.numChapters = static_cast<int>(item.chapters.size());
+            } else {
+                brls::Logger::warning("DownloadsManager: Could not fetch metadata for {} from server", itemId);
+                item.title = itemId;  // Use item ID as fallback title
             }
-
-            // Store chapters
-            for (const auto& ch : mediaInfo.chapters) {
-                DownloadChapter dch;
-                dch.title = ch.title;
-                dch.start = ch.start;
-                dch.end = ch.end;
-                item.chapters.push_back(dch);
-            }
-            item.numChapters = static_cast<int>(item.chapters.size());
         } else {
-            // Use filename as title if no metadata
-            item.title = itemId;
-            item.mediaType = "book";
+            brls::Logger::info("DownloadsManager: Not connected to server, using itemId as title");
+            item.title = itemId;  // Use item ID as fallback title
         }
 
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            m_downloads.push_back(item);
-        }
-        newFilesFound++;
-
-        brls::Logger::info("DownloadsManager: Registered untracked file: {}", item.title);
+        newItems.push_back(item);
+        brls::Logger::info("DownloadsManager: Prepared to register: {} ({})", item.title, itemId);
     }
 
     sceIoDclose(dir);
@@ -1682,7 +1728,7 @@ int DownloadsManager::scanDownloadsFolder() {
     // Desktop implementation using dirent
     DIR* dir = opendir(m_downloadsPath.c_str());
     if (!dir) {
-        brls::Logger::error("DownloadsManager: Failed to open downloads directory");
+        brls::Logger::error("DownloadsManager: Failed to open downloads directory: {}", m_downloadsPath);
         return 0;
     }
 
@@ -1697,10 +1743,12 @@ int DownloadsManager::scanDownloadsFolder() {
 
         // Check if it's an audio file
         bool isAudioFile = false;
+        std::string fileExt;
         for (const auto& ext : audioExtensions) {
             if (filename.length() > ext.length() &&
                 filename.substr(filename.length() - ext.length()) == ext) {
                 isAudioFile = true;
+                fileExt = ext;
                 break;
             }
         }
@@ -1708,13 +1756,18 @@ int DownloadsManager::scanDownloadsFolder() {
         if (!isAudioFile) continue;
 
         std::string fullPath = m_downloadsPath + "/" + filename;
+        std::string itemId = extractItemId(filename);
+
+        if (itemId.empty()) {
+            brls::Logger::debug("DownloadsManager: Skipping file with empty itemId: {}", filename);
+            continue;
+        }
 
         // Check if already tracked
-        if (isFileTracked(fullPath)) continue;
-
-        // Extract item ID
-        std::string itemId = extractItemId(filename);
-        if (itemId.empty()) continue;
+        if (isItemTracked(itemId, fullPath)) {
+            brls::Logger::debug("DownloadsManager: Already tracked: {}", filename);
+            continue;
+        }
 
         // Get file size
         struct stat st;
@@ -1723,12 +1776,8 @@ int DownloadsManager::scanDownloadsFolder() {
             fileSize = st.st_size;
         }
 
-        brls::Logger::info("DownloadsManager: Found untracked file: {} ({})", filename, itemId);
-
-        // Try to fetch metadata from server
-        MediaItem mediaInfo;
-        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-        bool hasMetadata = client.isAuthenticated() && client.fetchItem(itemId, mediaInfo);
+        brls::Logger::info("DownloadsManager: Found untracked file: {} (itemId: {}, size: {})",
+                          filename, itemId, fileSize);
 
         // Create download entry
         DownloadItem item;
@@ -1738,52 +1787,78 @@ int DownloadsManager::scanDownloadsFolder() {
         item.downloadedBytes = fileSize;
         item.state = DownloadState::COMPLETED;
         item.numFiles = 1;
+        item.mediaType = "book";
 
-        if (hasMetadata) {
-            item.title = mediaInfo.title;
-            item.authorName = mediaInfo.authorName;
-            item.parentTitle = mediaInfo.authorName;
-            item.duration = mediaInfo.duration;
-            item.mediaType = mediaInfo.type;
-            item.coverUrl = client.getCoverUrl(itemId);
+        // First check for local cover
+        std::string localCover = getLocalCoverPath(itemId);
+        if (!localCover.empty()) {
+            item.localCoverPath = localCover;
+            brls::Logger::info("DownloadsManager: Found local cover for {}", itemId);
+        }
 
-            // Download cover
-            if (!item.coverUrl.empty()) {
-                item.localCoverPath = downloadCoverImage(itemId, item.coverUrl);
+        // Try to fetch metadata from server if connected
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+        if (client.isAuthenticated()) {
+            MediaItem mediaInfo;
+            if (client.fetchItem(itemId, mediaInfo)) {
+                brls::Logger::info("DownloadsManager: Fetched metadata for {} from server", itemId);
+                item.title = mediaInfo.title;
+                item.authorName = mediaInfo.authorName;
+                item.parentTitle = mediaInfo.authorName;
+                item.duration = mediaInfo.duration;
+                item.mediaType = mediaInfo.type;
+
+                // Download cover if we don't have a local one
+                if (item.localCoverPath.empty()) {
+                    std::string coverUrl = client.getCoverUrl(itemId);
+                    if (!coverUrl.empty()) {
+                        item.coverUrl = coverUrl;
+                        item.localCoverPath = downloadCoverImage(itemId, coverUrl);
+                    }
+                }
+
+                // Store chapters
+                for (const auto& ch : mediaInfo.chapters) {
+                    DownloadChapter dch;
+                    dch.title = ch.title;
+                    dch.start = ch.start;
+                    dch.end = ch.end;
+                    item.chapters.push_back(dch);
+                }
+                item.numChapters = static_cast<int>(item.chapters.size());
+            } else {
+                brls::Logger::warning("DownloadsManager: Could not fetch metadata for {} from server", itemId);
+                item.title = itemId;  // Use item ID as fallback title
             }
-
-            // Store chapters
-            for (const auto& ch : mediaInfo.chapters) {
-                DownloadChapter dch;
-                dch.title = ch.title;
-                dch.start = ch.start;
-                dch.end = ch.end;
-                item.chapters.push_back(dch);
-            }
-            item.numChapters = static_cast<int>(item.chapters.size());
         } else {
-            // Use filename as title if no metadata
-            item.title = itemId;
-            item.mediaType = "book";
+            brls::Logger::info("DownloadsManager: Not connected to server, using itemId as title");
+            item.title = itemId;  // Use item ID as fallback title
         }
 
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            m_downloads.push_back(item);
-        }
-        newFilesFound++;
-
-        brls::Logger::info("DownloadsManager: Registered untracked file: {}", item.title);
+        newItems.push_back(item);
+        brls::Logger::info("DownloadsManager: Prepared to register: {} ({})", item.title, itemId);
     }
 
     closedir(dir);
 #endif
 
-    if (newFilesFound > 0) {
+    // Now add all new items to the downloads list
+    if (!newItems.empty()) {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            for (const auto& item : newItems) {
+                m_downloads.push_back(item);
+                newFilesFound++;
+                brls::Logger::info("DownloadsManager: Added to library: {} ({})", item.title, item.itemId);
+            }
+        }
+
+        // Save state outside the lock
         saveState();
-        brls::Logger::info("DownloadsManager: Found and registered {} untracked files", newFilesFound);
+        brls::Logger::info("DownloadsManager: Saved state with {} new files (total: {})",
+                          newFilesFound, m_downloads.size());
     } else {
-        brls::Logger::info("DownloadsManager: No untracked files found");
+        brls::Logger::info("DownloadsManager: No untracked files found in {}", m_downloadsPath);
     }
 
     return newFilesFound;
