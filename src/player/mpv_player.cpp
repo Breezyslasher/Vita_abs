@@ -98,27 +98,35 @@ bool MpvPlayer::init() {
     mpv_set_option_string(m_mpv, "volume-max", "150");
 
     // ========================================
-    // Cache and demuxer settings
+    // Cache and demuxer settings for HTTP streaming
     // ========================================
 
 #ifdef __vita__
     // Enable cache for network streaming (required for HTTP)
-    // Use smaller cache sizes for Vita's limited memory
+    // Optimized for Vita's limited memory but enough for smooth streaming
     mpv_set_option_string(m_mpv, "cache", "yes");
-    mpv_set_option_string(m_mpv, "demuxer-max-bytes", "2MiB");
-    mpv_set_option_string(m_mpv, "demuxer-max-back-bytes", "512KiB");
-    mpv_set_option_string(m_mpv, "cache-secs", "10");
+    mpv_set_option_string(m_mpv, "demuxer-max-bytes", "4MiB");       // Increased for streaming
+    mpv_set_option_string(m_mpv, "demuxer-max-back-bytes", "1MiB"); // Back buffer for seeking
+    mpv_set_option_string(m_mpv, "cache-secs", "30");               // 30 seconds of audio cache
+    mpv_set_option_string(m_mpv, "demuxer-readahead-secs", "20");   // Read ahead 20 seconds
+
+    // Stream caching - buffer before playing starts
+    mpv_set_option_string(m_mpv, "cache-pause-initial", "yes");     // Pause to fill cache initially
+    mpv_set_option_string(m_mpv, "cache-pause-wait", "3");          // Wait for 3 seconds of cache before resuming
 #else
     mpv_set_option_string(m_mpv, "cache", "yes");
-    mpv_set_option_string(m_mpv, "demuxer-max-bytes", "4MiB");
-    mpv_set_option_string(m_mpv, "demuxer-max-back-bytes", "2MiB");
+    mpv_set_option_string(m_mpv, "demuxer-max-bytes", "8MiB");
+    mpv_set_option_string(m_mpv, "demuxer-max-back-bytes", "4MiB");
+    mpv_set_option_string(m_mpv, "cache-secs", "60");
+    mpv_set_option_string(m_mpv, "demuxer-readahead-secs", "30");
 #endif
 
     // ========================================
-    // Network settings for streaming
+    // Network settings for HTTP streaming
     // ========================================
 
-    mpv_set_option_string(m_mpv, "network-timeout", "30");
+    mpv_set_option_string(m_mpv, "network-timeout", "60");          // Longer timeout for streaming
+    mpv_set_option_string(m_mpv, "stream-buffer-size", "512KiB");   // Stream buffer size
 
     // User agent for Plex compatibility
     mpv_set_option_string(m_mpv, "user-agent", "VitaABS/1.0");

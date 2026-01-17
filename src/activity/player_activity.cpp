@@ -610,7 +610,8 @@ void PlayerActivity::loadMedia() {
     }
 
     // Remote playback from Audiobookshelf server
-    // Download to temp file first, then play locally (streaming doesn't work well on Vita)
+    // Supports HTTP streaming for single-file audiobooks (default)
+    // Multi-file audiobooks still require download + concatenation
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
     MediaItem item;
 
@@ -718,13 +719,83 @@ void PlayerActivity::loadMedia() {
             }
         }
 
+        // Check if we can use HTTP streaming (single-file audiobooks only)
+        bool canUseStreaming = settings.useHttpStreaming && !isMultiFile && !useDownloads;
+
         if (!needsDownload) {
+            // Using cached/downloaded file
             m_tempFilePath = cachedPath;
             if (chapterInfoLabel) {
                 chapterInfoLabel->setText("Using cached file...");
             }
+        } else if (canUseStreaming) {
+            // ================================================================
+            // HTTP STREAMING MODE - Stream directly without downloading first
+            // ================================================================
+            std::string streamUrl;
+            if (!session.audioTracks.empty() && !session.audioTracks[0].contentUrl.empty()) {
+                streamUrl = client.getStreamUrl(session.audioTracks[0].contentUrl, "");
+            } else {
+                streamUrl = client.getDirectStreamUrl(m_itemId, 0);
+            }
+
+            if (streamUrl.empty()) {
+                brls::Logger::error("Failed to get stream URL for: {}", m_itemId);
+                m_loadingMedia = false;
+                return;
+            }
+
+            brls::Logger::info("PlayerActivity: Using HTTP streaming mode");
+            brls::Logger::info("PlayerActivity: Stream URL: {}", streamUrl);
+
+            if (chapterInfoLabel) {
+                chapterInfoLabel->setText("Buffering...");
+            }
+
+            // Initialize player for streaming
+            MpvPlayer& player = MpvPlayer::getInstance();
+
+            if (!player.isInitialized()) {
+                brls::Logger::info("PlayerActivity: Initializing MPV player for streaming...");
+                if (!player.init()) {
+                    brls::Logger::error("Failed to initialize MPV player");
+                    m_loadingMedia = false;
+                    return;
+                }
+            }
+
+            brls::Logger::info("PlayerActivity: Loading HTTP stream (startTime={}s)", startTime);
+            // Load the HTTP stream URL directly - MPV will handle buffering
+            if (!player.loadUrl(streamUrl, item.title, startTime > 0 ? static_cast<double>(startTime) : -1.0)) {
+                brls::Logger::error("Failed to load HTTP stream: {}", streamUrl);
+                m_loadingMedia = false;
+                return;
+            }
+            brls::Logger::info("PlayerActivity: HTTP streaming started, buffering...");
+
+            // Apply saved playback speed
+            AppSettings& playSettings = Application::getInstance().getSettings();
+            float speed = getSpeedValue(static_cast<int>(playSettings.playbackSpeed));
+            if (speed != 1.0f) {
+                player.setSpeed(speed);
+            }
+
+            // Show video view for audio playback (shows progress/controls)
+            if (videoView) {
+                videoView->setVisibility(brls::Visibility::VISIBLE);
+                videoView->setVideoVisible(true);
+            }
+
+            m_isPlaying = true;
+            m_loadingMedia = false;
+            return;  // Early return - streaming mode doesn't need the download logic
         } else {
-            // Need to download
+            // ================================================================
+            // DOWNLOAD MODE - Download file first, then play locally
+            // Required for: multi-file audiobooks, saveToDownloads enabled,
+            // or useHttpStreaming disabled
+            // ================================================================
+
             // Determine final destination path
             if (useDownloads) {
                 std::string filename = m_itemId;
@@ -857,7 +928,7 @@ void PlayerActivity::loadMedia() {
                 brls::Logger::info("PlayerActivity: Successfully combined {} tracks", numTracks);
 
             } else {
-                // Single file audiobook: download directly
+                // Single file audiobook: download directly (streaming disabled or saveToDownloads)
                 std::string streamUrl;
                 if (!session.audioTracks.empty() && !session.audioTracks[0].contentUrl.empty()) {
                     streamUrl = client.getStreamUrl(session.audioTracks[0].contentUrl, "");
@@ -953,7 +1024,7 @@ void PlayerActivity::loadMedia() {
                 tempMgr.registerTempFile(m_itemId, m_episodeId, m_tempFilePath, item.title, totalDownloaded);
             }
 #else
-            // Non-Vita: just use the first stream URL directly
+            // Non-Vita: just use the first stream URL directly (streaming always works)
             if (!session.audioTracks.empty() && !session.audioTracks[0].contentUrl.empty()) {
                 m_tempFilePath = client.getStreamUrl(session.audioTracks[0].contentUrl, "");
             } else {
@@ -962,7 +1033,7 @@ void PlayerActivity::loadMedia() {
 #endif
         }
 
-        // Now play the local temp file
+        // Now play the local/cached file (for download mode or cached files)
         MpvPlayer& player = MpvPlayer::getInstance();
 
         if (!player.isInitialized()) {
@@ -977,10 +1048,10 @@ void PlayerActivity::loadMedia() {
             brls::Logger::info("PlayerActivity: MPV player initialized successfully");
         }
 
-        brls::Logger::info("PlayerActivity: Loading temp file: {} (startTime={}s)", m_tempFilePath, startTime);
+        brls::Logger::info("PlayerActivity: Loading file: {} (startTime={}s)", m_tempFilePath, startTime);
         // Pass start time directly for more reliable seeking
         if (!player.loadUrl(m_tempFilePath, item.title, startTime > 0 ? static_cast<double>(startTime) : -1.0)) {
-            brls::Logger::error("Failed to load temp file: {}", m_tempFilePath);
+            brls::Logger::error("Failed to load file: {}", m_tempFilePath);
             tempMgr.deleteTempFile(m_itemId, m_episodeId);
             m_tempFilePath.clear();
             m_loadingMedia = false;
@@ -1022,6 +1093,18 @@ void PlayerActivity::updateProgress() {
 
     // Update play/pause button state
     updatePlayPauseButton();
+
+    // Handle buffering state for HTTP streaming
+    const MpvPlaybackInfo& info = player.getPlaybackInfo();
+    if (info.buffering && chapterInfoLabel) {
+        chapterInfoLabel->setText("Buffering...");
+    } else if (!info.buffering && chapterInfoLabel) {
+        // Clear buffering message if it was showing
+        std::string currentText = chapterInfoLabel->getFullText();
+        if (currentText == "Buffering...") {
+            chapterInfoLabel->setText("");
+        }
+    }
 
     // Skip UI updates while MPV is still loading - be gentle on Vita's limited hardware
     if (player.isLoading()) {

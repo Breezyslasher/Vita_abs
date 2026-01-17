@@ -374,6 +374,7 @@ bool Application::loadSettings() {
     m_settings.syncProgressOnConnect = extractBool("syncProgressOnConnect", true);
 
     // Load streaming/temp file settings
+    m_settings.useHttpStreaming = extractBool("useHttpStreaming", true);  // Default: enabled
     m_settings.saveToDownloads = extractBool("saveToDownloads", false);
     m_settings.maxTempFiles = extractInt("maxTempFiles");
     if (m_settings.maxTempFiles <= 0) m_settings.maxTempFiles = 5;
@@ -458,6 +459,7 @@ bool Application::saveSettings() {
     json += "  \"syncProgressOnConnect\": " + std::string(m_settings.syncProgressOnConnect ? "true" : "false") + ",\n";
 
     // Streaming/temp file settings
+    json += "  \"useHttpStreaming\": " + std::string(m_settings.useHttpStreaming ? "true" : "false") + ",\n";
     json += "  \"saveToDownloads\": " + std::string(m_settings.saveToDownloads ? "true" : "false") + ",\n";
     json += "  \"maxTempFiles\": " + std::to_string(m_settings.maxTempFiles) + ",\n";
     json += "  \"maxTempSizeMB\": " + std::to_string(m_settings.maxTempSizeMB) + ",\n";

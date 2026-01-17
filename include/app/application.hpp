@@ -132,6 +132,7 @@ struct AppSettings {
     bool syncProgressOnConnect = true;
 
     // Streaming/Temp File Settings
+    bool useHttpStreaming = true;      // Use HTTP streaming instead of downloading first (default: enabled)
     bool saveToDownloads = false;      // Save streamed files to downloads folder instead of temp
     int maxTempFiles = 5;              // Maximum number of temp files to keep
     int64_t maxTempSizeMB = 500;       // Maximum total temp size in MB (0 = unlimited)
