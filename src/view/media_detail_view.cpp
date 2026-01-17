@@ -88,11 +88,10 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         buttonRow->addView(m_playButton);
 
         // Download/Delete button for directly playable content
-        AppSettings& settings = Application::getInstance().getSettings();
         bool isDownloaded = DownloadsManager::getInstance().isDownloaded(m_item.id);
 
-        if (!settings.saveToDownloads && !isDownloaded) {
-            // Show Download button only if not already downloaded and not auto-saving
+        if (!isDownloaded) {
+            // Show Download button if not already downloaded
             m_downloadButton = new brls::Button();
             m_downloadButton->setText("Download");
             m_downloadButton->setWidth(115);
@@ -749,43 +748,18 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
     brls::Logger::info("startDownloadAndPlay: itemId={}, episodeId={}, startTime={}, downloadOnly={}",
                        itemId, episodeId, requestedStartTime, downloadOnly);
 
-    // Get settings
-    AppSettings& settings = Application::getInstance().getSettings();
-    // If downloadOnly mode, always save to downloads folder
-    bool useDownloads = downloadOnly ? true : settings.saveToDownloads;
-
-    // Initialize managers
-    TempFileManager& tempMgr = TempFileManager::getInstance();
+    // Initialize downloads manager
     DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
-    tempMgr.init();
     downloadsMgr.init();
 
-    // Check if we have a cached version - ALWAYS check downloads first, then temp
+    // Check if already downloaded
     std::string cachedPath;
     bool isFromDownloads = false;
 
-    // First check downloads folder (regardless of saveToDownloads setting)
     if (downloadsMgr.isDownloaded(itemId, episodeId)) {
         cachedPath = downloadsMgr.getPlaybackPath(itemId);
         isFromDownloads = true;
         brls::Logger::info("Found in downloads: {}", cachedPath);
-    }
-
-    // If not in downloads, check temp cache
-    if (cachedPath.empty()) {
-        cachedPath = tempMgr.getCachedFilePath(itemId, episodeId);
-        if (!cachedPath.empty()) {
-            // If save to downloads is enabled and we're playing (not download only),
-            // delete the temp file and re-download to downloads folder
-            if (useDownloads && !downloadOnly) {
-                brls::Logger::info("Deleting temp file to re-download to downloads folder: {}", cachedPath);
-                tempMgr.deleteTempFile(itemId, episodeId);
-                cachedPath.clear();
-            } else {
-                tempMgr.touchTempFile(itemId, episodeId);
-                brls::Logger::info("Found in temp cache: {}", cachedPath);
-            }
-        }
     }
 
     // If cached, play immediately (fetch progress from server first if online)
@@ -1479,14 +1453,7 @@ void MediaDetailView::onDeleteDownload() {
             m_deleteButton->setVisibility(brls::Visibility::GONE);
         }
 
-        // Show download button if saveToDownloads is not enabled
-        AppSettings& settings = Application::getInstance().getSettings();
-        if (!settings.saveToDownloads) {
-            // Re-create the download button if it doesn't exist
-            if (!m_downloadButton) {
-                // Will be visible on next view load
-            }
-        }
+        // Download button will be visible on next view load if needed
 
         dialog->close();
     });
