@@ -178,19 +178,30 @@ bool AvPlayer::init() {
     SceAvPlayerInitData initData;
     memset(&initData, 0, sizeof(initData));
 
+    // Memory allocation callbacks
     initData.memoryReplacement.allocate = playerAllocate;
     initData.memoryReplacement.deallocate = playerDeallocate;
     initData.memoryReplacement.allocateTexture = playerAllocate;
     initData.memoryReplacement.deallocateTexture = playerDeallocate;
 
+    // Memory alignment requirements
+    initData.memoryReplacement.generalPurposeAlignment = 0x40;  // 64-byte alignment
+    initData.memoryReplacement.textureAlignment = 0x1000;       // 4KB alignment for textures
+
+    // Event callback
     initData.eventReplacement.eventCallback = playerEventCallback;
     initData.eventReplacement.objectPointer = this;
 
-    initData.basePriority = 0xA0;
-    initData.numOutputVideoFrameBuffers = 2;
-    initData.autoStart = SCE_FALSE;
+    // Default language (required)
+    strncpy(initData.defaultLanguage, "en", 3);
+
+    // Thread priority and settings
+    initData.basePriority = 160;  // 0xA0
+    initData.numOutputVideoFrameBuffers = 1;  // Audio only, minimal buffers
+    initData.autoStart = SCE_TRUE;  // Auto-start playback when source is added
     initData.debugLevel = 0;
 
+    brls::Logger::info("AvPlayer: Calling sceAvPlayerInit...");
     m_avPlayer = sceAvPlayerInit(&initData);
     if (m_avPlayer < 0) {
         brls::Logger::error("AvPlayer: sceAvPlayerInit failed: {:#x}", m_avPlayer);
