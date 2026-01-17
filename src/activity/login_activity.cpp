@@ -149,10 +149,34 @@ void LoginActivity::onLoginPressed() {
 
     if (client.login(m_username, m_password)) {
         // Save credentials
-        Application::getInstance().setUsername(m_username);
-        Application::getInstance().setServerUrl(m_serverUrl);
-        Application::getInstance().setAuthToken(client.getAuthToken());
-        Application::getInstance().saveSettings();
+        Application& app = Application::getInstance();
+        app.setUsername(m_username);
+        app.setAuthToken(client.getAuthToken());
+
+        // Determine if the URL is local (192.168.x.x, 10.x.x.x, 172.16-31.x.x, localhost, or no dots in hostname)
+        // or remote (has a domain name like abs.example.com)
+        bool isLocalUrl = (m_serverUrl.find("192.168.") != std::string::npos ||
+                          m_serverUrl.find("10.") != std::string::npos ||
+                          m_serverUrl.find("172.16.") != std::string::npos ||
+                          m_serverUrl.find("172.17.") != std::string::npos ||
+                          m_serverUrl.find("172.18.") != std::string::npos ||
+                          m_serverUrl.find("172.19.") != std::string::npos ||
+                          m_serverUrl.find("172.2") != std::string::npos ||
+                          m_serverUrl.find("172.30.") != std::string::npos ||
+                          m_serverUrl.find("172.31.") != std::string::npos ||
+                          m_serverUrl.find("localhost") != std::string::npos ||
+                          m_serverUrl.find("127.0.0.1") != std::string::npos);
+
+        // Store in appropriate URL field
+        if (isLocalUrl) {
+            app.setLocalServerUrl(m_serverUrl);
+            app.setUseLocalUrl(true);
+        } else {
+            app.setRemoteServerUrl(m_serverUrl);
+            app.setUseLocalUrl(false);
+        }
+        app.setServerUrl(m_serverUrl);
+        app.saveSettings();
 
         if (statusLabel) statusLabel->setText("Login successful!");
 

@@ -131,6 +131,14 @@ public:
     void saveState();
     void loadState();
 
+    // Scan downloads folder for untracked files and add them
+    // Returns number of new files found
+    int scanDownloadsFolder();
+
+    // Update metadata for downloads that are missing it (title == itemId)
+    // Returns number of items updated
+    int updateMissingMetadata();
+
     // Set progress callback for UI updates
     void setProgressCallback(DownloadProgressCallback callback);
 
@@ -165,10 +173,16 @@ private:
     // Internal save without locking (caller must hold m_mutex)
     void saveStateUnlocked();
 
+    // Check if current download should be cancelled
+    bool isDownloadCancelled(const std::string& itemId, const std::string& episodeId);
+    void clearCancelFlag();
+
     std::vector<DownloadItem> m_downloads;
     mutable std::mutex m_mutex;
     bool m_downloading = false;
     bool m_initialized = false;
+    std::string m_cancelledItemId;  // Item ID to cancel (checked during download)
+    std::string m_cancelledEpisodeId;  // Episode ID to cancel (for podcasts)
     DownloadProgressCallback m_progressCallback;
     std::string m_downloadsPath;
 };

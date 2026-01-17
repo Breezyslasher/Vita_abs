@@ -56,7 +56,6 @@ private:
     brls::BooleanCell* m_genresToggle = nullptr;
 
     // Playback section
-    brls::BooleanCell* m_autoPlayToggle = nullptr;
     brls::BooleanCell* m_resumeToggle = nullptr;
     brls::BooleanCell* m_subtitlesToggle = nullptr;
     brls::SelectorCell* m_subtitleSizeSelector = nullptr;

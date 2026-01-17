@@ -59,25 +59,24 @@ void Application::run() {
     DownloadsManager::getInstance().init();
 
     // Check if we have saved login credentials
-    if (isLoggedIn() && !m_serverUrl.empty()) {
+    if (isLoggedIn() && (!m_serverUrl.empty() || !m_localServerUrl.empty() || !m_remoteServerUrl.empty())) {
         brls::Logger::info("Restoring saved session...");
-        // Verify connection and go to main
+        // Set auth token first
         AudiobookshelfClient::getInstance().setAuthToken(m_authToken);
-        AudiobookshelfClient::getInstance().setServerUrl(m_serverUrl);
 
-        // Validate token before proceeding
-        if (AudiobookshelfClient::getInstance().validateToken()) {
-            brls::Logger::info("Restored session, token valid");
+        // Try to connect, with automatic URL switching if needed
+        if (tryConnectToServer()) {
+            brls::Logger::info("Restored session, connected to {}", m_serverUrl);
             pushMainActivity();
         } else {
-            // Token validation failed - could be offline
+            // Connection failed - could be offline
             // Check if we have downloads, if so go to main activity (offline mode)
             auto downloads = DownloadsManager::getInstance().getDownloads();
             if (!downloads.empty()) {
                 brls::Logger::info("Offline with {} downloads, going to main activity", downloads.size());
                 pushMainActivity();
             } else {
-                brls::Logger::error("Saved token invalid and no downloads, showing login");
+                brls::Logger::error("Cannot connect and no downloads, showing login");
                 pushLoginActivity();
             }
         }
@@ -315,8 +314,17 @@ bool Application::loadSettings() {
     // Load authentication
     m_authToken = extractString("authToken");
     m_serverUrl = extractString("serverUrl");
+    m_localServerUrl = extractString("localServerUrl");
+    m_remoteServerUrl = extractString("remoteServerUrl");
+    m_useLocalUrl = extractBool("useLocalUrl", true);
     m_username = extractString("username");
     m_currentLibraryId = extractString("currentLibraryId");
+
+    // Migration: if no local/remote URLs but serverUrl exists, use it as local
+    if (m_localServerUrl.empty() && m_remoteServerUrl.empty() && !m_serverUrl.empty()) {
+        m_localServerUrl = m_serverUrl;
+        m_useLocalUrl = true;
+    }
 
     brls::Logger::info("loadSettings: authToken={}, serverUrl={}, username={}",
                        m_authToken.empty() ? "(empty)" : "(set)",
@@ -337,7 +345,6 @@ bool Application::loadSettings() {
     m_settings.showOnlyDownloaded = extractBool("showOnlyDownloaded", false);
 
     // Load playback settings
-    m_settings.autoPlayNext = extractBool("autoPlayNext", false);
     m_settings.resumePlayback = extractBool("resumePlayback", true);
     m_settings.playbackSpeed = static_cast<PlaybackSpeed>(extractInt("playbackSpeed"));
     m_settings.sleepTimer = static_cast<SleepTimer>(extractInt("sleepTimer"));
@@ -409,6 +416,9 @@ bool Application::saveSettings() {
     // Authentication
     json += "  \"authToken\": \"" + m_authToken + "\",\n";
     json += "  \"serverUrl\": \"" + m_serverUrl + "\",\n";
+    json += "  \"localServerUrl\": \"" + m_localServerUrl + "\",\n";
+    json += "  \"remoteServerUrl\": \"" + m_remoteServerUrl + "\",\n";
+    json += "  \"useLocalUrl\": " + std::string(m_useLocalUrl ? "true" : "false") + ",\n";
     json += "  \"username\": \"" + m_username + "\",\n";
     json += "  \"currentLibraryId\": \"" + m_currentLibraryId + "\",\n";
 
@@ -426,7 +436,6 @@ bool Application::saveSettings() {
     json += "  \"showOnlyDownloaded\": " + std::string(m_settings.showOnlyDownloaded ? "true" : "false") + ",\n";
 
     // Playback settings
-    json += "  \"autoPlayNext\": " + std::string(m_settings.autoPlayNext ? "true" : "false") + ",\n";
     json += "  \"resumePlayback\": " + std::string(m_settings.resumePlayback ? "true" : "false") + ",\n";
     json += "  \"playbackSpeed\": " + std::to_string(static_cast<int>(m_settings.playbackSpeed)) + ",\n";
     json += "  \"sleepTimer\": " + std::to_string(static_cast<int>(m_settings.sleepTimer)) + ",\n";
@@ -507,6 +516,53 @@ BackgroundDownloadProgress Application::getBackgroundDownloadProgress() const {
 void Application::clearBackgroundDownloadProgress() {
     std::lock_guard<std::mutex> lock(m_bgDownloadMutex);
     m_bgDownloadProgress = BackgroundDownloadProgress();
+}
+
+void Application::setUseLocalUrl(bool useLocal) {
+    m_useLocalUrl = useLocal;
+    // Update the active server URL based on selection
+    if (useLocal && !m_localServerUrl.empty()) {
+        m_serverUrl = m_localServerUrl;
+    } else if (!useLocal && !m_remoteServerUrl.empty()) {
+        m_serverUrl = m_remoteServerUrl;
+    }
+    // Update the client as well
+    AudiobookshelfClient::getInstance().setServerUrl(m_serverUrl);
+    brls::Logger::info("Switched to {} URL: {}", useLocal ? "local" : "remote", m_serverUrl);
+}
+
+bool Application::tryConnectToServer() {
+    AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+
+    // Try the currently selected URL first
+    std::string primaryUrl = m_useLocalUrl ? m_localServerUrl : m_remoteServerUrl;
+    std::string fallbackUrl = m_useLocalUrl ? m_remoteServerUrl : m_localServerUrl;
+
+    if (!primaryUrl.empty()) {
+        brls::Logger::info("Trying primary {} URL: {}", m_useLocalUrl ? "local" : "remote", primaryUrl);
+        client.setServerUrl(primaryUrl);
+        if (client.validateToken()) {
+            m_serverUrl = primaryUrl;
+            brls::Logger::info("Connected to primary URL");
+            return true;
+        }
+    }
+
+    // Try fallback URL if available
+    if (!fallbackUrl.empty()) {
+        brls::Logger::info("Primary failed, trying fallback URL: {}", fallbackUrl);
+        client.setServerUrl(fallbackUrl);
+        if (client.validateToken()) {
+            m_serverUrl = fallbackUrl;
+            m_useLocalUrl = !m_useLocalUrl;  // Switch to the working URL
+            brls::Logger::info("Connected to fallback URL, switched to {}", m_useLocalUrl ? "local" : "remote");
+            saveSettings();
+            return true;
+        }
+    }
+
+    brls::Logger::error("Failed to connect to any server URL");
+    return false;
 }
 
 } // namespace vitaabs
