@@ -14,6 +14,7 @@
 #include <psp2/kernel/clib.h>
 #include <psp2/kernel/sysmem.h>
 #include <psp2/io/fcntl.h>
+#include <psp2/sysmodule.h>  // For loading AvPlayer module
 #endif
 
 namespace vitaabs {
@@ -164,6 +165,15 @@ bool AvPlayer::init() {
     brls::Logger::info("AvPlayer: Initializing...");
 
 #ifdef __vita__
+    // Load the AvPlayer system module first
+    int moduleRet = sceSysmoduleLoadModule(SCE_SYSMODULE_AVPLAYER);
+    if (moduleRet < 0 && moduleRet != SCE_SYSMODULE_LOADED) {
+        brls::Logger::error("AvPlayer: Failed to load AVPLAYER module: {:#x}", moduleRet);
+        m_errorMessage = "Failed to load AvPlayer module";
+        return false;
+    }
+    brls::Logger::info("AvPlayer: AVPLAYER module loaded");
+
     // Initialize sceAvPlayer
     SceAvPlayerInitData initData;
     memset(&initData, 0, sizeof(initData));
@@ -259,6 +269,9 @@ void AvPlayer::shutdown() {
         sceAvPlayerClose(m_avPlayer);
         m_avPlayer = 0;
     }
+
+    // Unload the AvPlayer module
+    sceSysmoduleUnloadModule(SCE_SYSMODULE_AVPLAYER);
 #endif
 
     m_initialized.store(false);
