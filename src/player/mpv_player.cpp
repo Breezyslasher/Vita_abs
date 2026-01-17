@@ -286,7 +286,26 @@ bool MpvPlayer::loadUrl(const std::string& url, const std::string& title, double
         return false;
     }
 
-    brls::Logger::debug("MpvPlayer: Command queued successfully, setting state to LOADING");
+    brls::Logger::debug("MpvPlayer: Command queued successfully");
+
+#ifdef __vita__
+    // Give MPV a moment to process the command and check for immediate errors
+    sceKernelDelayThread(50000);  // 50ms delay
+    brls::Logger::debug("MpvPlayer: After delay, processing events...");
+
+    // Process any immediate events/errors
+    mpv_event* event = mpv_wait_event(m_mpv, 0);
+    if (event && event->event_id != MPV_EVENT_NONE) {
+        brls::Logger::debug("MpvPlayer: Got immediate event: {}", (int)event->event_id);
+        if (event->event_id == MPV_EVENT_LOG_MESSAGE && event->data) {
+            mpv_event_log_message* msg = (mpv_event_log_message*)event->data;
+            brls::Logger::info("mpv immediate: {} {}", msg->prefix, msg->text);
+        }
+    }
+    brls::Logger::debug("MpvPlayer: Event check done");
+#endif
+
+    brls::Logger::debug("MpvPlayer: Setting state to LOADING");
     setState(MpvPlayerState::LOADING);
     brls::Logger::debug("MpvPlayer: loadUrl returning true");
     return true;
