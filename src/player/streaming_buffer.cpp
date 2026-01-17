@@ -8,7 +8,7 @@
 
 #include "player/streaming_buffer.hpp"
 #include "app/temp_file_manager.hpp"
-#include "network/http_client.hpp"
+#include "utils/http_client.hpp"
 #include "utils/async.hpp"
 
 #include <borealis.hpp>
