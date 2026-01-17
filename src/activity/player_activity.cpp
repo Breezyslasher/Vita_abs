@@ -890,7 +890,7 @@ void PlayerActivity::loadMedia() {
 
                             case AvPlayerState::ERROR:
                                 brls::Logger::error("PlayerActivity: AvPlayer error: {}",
-                                                  avPlayer.getErrorMessage());
+                                                  AvPlayer::getInstance().getErrorMessage());
                                 if (chapterInfoLabel) {
                                     chapterInfoLabel->setText("Playback error");
                                 }
