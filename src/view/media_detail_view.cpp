@@ -13,6 +13,7 @@
 #include "utils/http_client.hpp"
 #include "utils/audio_utils.hpp"
 #include "utils/async.hpp"
+#include "player/streaming_audio_player.hpp"
 #include <thread>
 #include <algorithm>
 #include <fstream>
@@ -903,6 +904,29 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
         float startTime = (requestedStartTime >= 0) ? requestedStartTime : session.currentTime;
         brls::Logger::info("Using startTime={}s (requested={}, session={}s)",
                           startTime, requestedStartTime, session.currentTime);
+
+        // For single-file content (podcasts) and not download-only mode: use streaming player
+        // This provides instant playback while buffering, cspot_vita-style
+        if (!isMultiFile && !downloadOnly && !session.audioTracks.empty()) {
+            // Build streaming URL
+            std::string streamUrl = client.getStreamUrl(session.audioTracks[0].contentUrl, "");
+            if (!streamUrl.empty()) {
+                brls::Logger::info("Using StreamingAudioPlayer for instant playback: {}", streamUrl);
+
+                brls::sync([progressDialog, streamUrl, startTime, title]() {
+                    progressDialog->dismiss();
+
+                    // Initialize and start streaming player
+                    StreamingAudioPlayer& player = StreamingAudioPlayer::getInstance();
+                    if (player.startStreaming(streamUrl, startTime)) {
+                        brls::Application::notify("Streaming: " + title);
+                    } else {
+                        brls::Application::notify("Streaming failed, try again");
+                    }
+                });
+                return;
+            }
+        }
 
 #ifdef __vita__
         HttpClient httpClient;
