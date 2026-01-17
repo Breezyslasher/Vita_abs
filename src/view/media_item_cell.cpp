@@ -119,27 +119,9 @@ void MediaItemCell::setItem(const MediaItem& item) {
         m_titleLabel->setText(displayTitle);
     }
 
-    // Set subtitle for podcast episodes (show podcast name as subtitle)
+    // Hide subtitle - podcast name already shown on page
     if (m_subtitleLabel) {
-        if (item.mediaType == MediaType::PODCAST_EPISODE) {
-            // Show the podcast name (authorName often contains it) or subtitle
-            std::string subtitle = item.subtitle;
-            if (subtitle.empty() && !item.authorName.empty()) {
-                subtitle = item.authorName;
-            }
-            if (!subtitle.empty()) {
-                // Truncate subtitle too
-                if (subtitle.length() > 20) {
-                    subtitle = subtitle.substr(0, 18) + "...";
-                }
-                m_subtitleLabel->setText(subtitle);
-                m_subtitleLabel->setVisibility(brls::Visibility::VISIBLE);
-            } else {
-                m_subtitleLabel->setVisibility(brls::Visibility::GONE);
-            }
-        } else {
-            m_subtitleLabel->setVisibility(brls::Visibility::GONE);
-        }
+        m_subtitleLabel->setVisibility(brls::Visibility::GONE);
     }
 
     // Show progress bar for items with listening progress
