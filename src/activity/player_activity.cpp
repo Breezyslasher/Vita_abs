@@ -814,8 +814,11 @@ void PlayerActivity::loadMedia() {
                 }
 
                 brls::Logger::info("PlayerActivity: Loading HTTP stream (startTime={}s)", startTime);
+                brls::Logger::debug("PlayerActivity: Calling player.loadUrl...");
                 // Load the HTTP stream URL directly - MPV will handle buffering
-                if (!player.loadUrl(streamUrl, item.title, startTime > 0 ? static_cast<double>(startTime) : -1.0)) {
+                bool loadResult = player.loadUrl(streamUrl, item.title, startTime > 0 ? static_cast<double>(startTime) : -1.0);
+                brls::Logger::debug("PlayerActivity: player.loadUrl returned: {}", loadResult);
+                if (!loadResult) {
                     brls::Logger::error("Failed to load HTTP stream: {}", streamUrl);
                     m_loadingMedia = false;
                     return;

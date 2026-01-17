@@ -131,6 +131,13 @@ bool MpvPlayer::init() {
     // User agent for Plex compatibility
     mpv_set_option_string(m_mpv, "user-agent", "VitaABS/1.0");
 
+    // TLS/SSL settings for HTTPS streaming
+    mpv_set_option_string(m_mpv, "tls-verify", "no");               // Skip TLS certificate verification
+    mpv_set_option_string(m_mpv, "tls-ca-file", "");                // No custom CA file
+
+    // FFmpeg demuxer options for better HTTP handling
+    mpv_set_option_string(m_mpv, "demuxer-lavf-o", "reconnect=1,reconnect_streamed=1,reconnect_delay_max=5");
+
     // ========================================
     // Subtitle settings
     // ========================================
@@ -142,7 +149,7 @@ bool MpvPlayer::init() {
     // Request log messages (verbose for debugging crashes)
     // ========================================
 
-    mpv_request_log_messages(m_mpv, "info");
+    mpv_request_log_messages(m_mpv, "v");  // Verbose logging for debugging
 
     // ========================================
     // Initialize MPV
@@ -250,6 +257,9 @@ bool MpvPlayer::loadUrl(const std::string& url, const std::string& title, double
     // Mark command as pending
     m_commandPending = true;
 
+    brls::Logger::debug("MpvPlayer: About to call mpv_command_async for loadfile");
+    brls::Logger::debug("MpvPlayer: URL length: {}", m_currentUrl.length());
+
     int result;
     if (startTime > 0) {
         // Build start option string for resuming at specific position
@@ -257,11 +267,15 @@ bool MpvPlayer::loadUrl(const std::string& url, const std::string& title, double
         snprintf(startOpt, sizeof(startOpt), "start=%.2f", startTime);
         brls::Logger::info("MpvPlayer: Using start option: {}", startOpt);
         const char* cmd[] = {"loadfile", m_currentUrl.c_str(), "replace", startOpt, nullptr};
+        brls::Logger::debug("MpvPlayer: Calling mpv_command_async with start option...");
         result = mpv_command_async(m_mpv, CMD_LOADFILE, cmd);
+        brls::Logger::debug("MpvPlayer: mpv_command_async returned: {}", result);
     } else {
         // No start time - load from beginning
         const char* cmd[] = {"loadfile", m_currentUrl.c_str(), "replace", nullptr};
+        brls::Logger::debug("MpvPlayer: Calling mpv_command_async without start option...");
         result = mpv_command_async(m_mpv, CMD_LOADFILE, cmd);
+        brls::Logger::debug("MpvPlayer: mpv_command_async returned: {}", result);
     }
 
     if (result < 0) {
@@ -272,7 +286,9 @@ bool MpvPlayer::loadUrl(const std::string& url, const std::string& title, double
         return false;
     }
 
+    brls::Logger::debug("MpvPlayer: Command queued successfully, setting state to LOADING");
     setState(MpvPlayerState::LOADING);
+    brls::Logger::debug("MpvPlayer: loadUrl returning true");
     return true;
 }
 
