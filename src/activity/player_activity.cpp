@@ -265,15 +265,8 @@ void PlayerActivity::willDisappear(bool resetState) {
 
     m_isPlaying = false;
 
-    // Update last access time for cached temp file (don't delete - we want to cache)
-    // Only touch temp files if not using downloads (downloads persist permanently)
-    if (!m_tempFilePath.empty()) {
-        AppSettings& settings = Application::getInstance().getSettings();
-        if (!settings.saveToDownloads) {
-            TempFileManager::getInstance().touchTempFile(m_itemId, m_episodeId);
-        }
-        m_tempFilePath.clear();
-    }
+    // Clear temp file path (we don't use temp caching anymore)
+    m_tempFilePath.clear();
 }
 
 void PlayerActivity::loadMedia() {
@@ -697,7 +690,7 @@ void PlayerActivity::loadMedia() {
         // ================================================================
         if (settings.checkDownloadsFirst) {
             if (downloadsMgr.isDownloaded(m_itemId, m_episodeId)) {
-                std::string downloadedPath = downloadsMgr.getPlaybackPath(m_itemId, m_episodeId);
+                std::string downloadedPath = downloadsMgr.getPlaybackPath(m_itemId);
                 if (!downloadedPath.empty()) {
                     brls::Logger::info("PlayerActivity: Using downloaded file: {}", downloadedPath);
 
@@ -846,8 +839,10 @@ void PlayerActivity::loadMedia() {
 
                 if (!downloadUrl.empty()) {
                     // Use DownloadsManager to queue the download
-                    downloadsMgr.queueDownload(m_itemId, m_episodeId, item.title, item.authorName,
-                                              downloadUrl, "", item.duration, item.type);
+                    // Note: queueDownload doesn't support URL parameter directly,
+                    // so we just queue the item and let DownloadsManager fetch the URL
+                    downloadsMgr.queueDownload(m_itemId, item.title, item.authorName,
+                                              item.duration, item.type);
                     brls::Logger::info("PlayerActivity: Background download queued");
                 }
             }
@@ -876,7 +871,7 @@ void PlayerActivity::loadMedia() {
 
             // Check if file is downloaded
             if (downloadsMgr.isDownloaded(m_itemId, m_episodeId)) {
-                std::string downloadedPath = downloadsMgr.getPlaybackPath(m_itemId, m_episodeId);
+                std::string downloadedPath = downloadsMgr.getPlaybackPath(m_itemId);
                 if (!downloadedPath.empty()) {
                     brls::Logger::info("PlayerActivity: Playing downloaded file: {}", downloadedPath);
 
