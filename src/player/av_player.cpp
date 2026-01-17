@@ -10,6 +10,7 @@
 #include <cstdlib>
 
 #ifdef __vita__
+#include <malloc.h>  // For memalign
 #include <psp2/kernel/clib.h>
 #include <psp2/kernel/sysmem.h>
 #include <psp2/io/fcntl.h>
@@ -56,14 +57,11 @@ void AvPlayer::playerEventCallback(void* argP, int32_t argEventId, int32_t argSo
 
     brls::Logger::debug("AvPlayer: Event callback - eventId={}", argEventId);
 
+    // sceAvPlayer event IDs (not officially documented, derived from testing/community)
+    // The actual values may vary - use polling via sceAvPlayerIsActive() as primary method
     switch (argEventId) {
-        case SCE_AVPLAYER_STATE_BUFFERING:
-            brls::Logger::info("AvPlayer: Buffering...");
-            player->setState(AvPlayerState::BUFFERING);
-            break;
-
-        case SCE_AVPLAYER_STATE_READY:
-            brls::Logger::info("AvPlayer: Ready");
+        case 0:  // Stream ready/info available
+            brls::Logger::info("AvPlayer: Stream info available");
             // Get stream info
             {
                 SceAvPlayerStreamInfo info;
@@ -73,45 +71,33 @@ void AvPlayer::playerEventCallback(void* argP, int32_t argEventId, int32_t argSo
                     brls::Logger::info("AvPlayer: Audio - {}Hz, {} channels",
                                       info.details.audio.sampleRate, info.details.audio.channelCount);
                 }
-                // Try to get duration
-                uint64_t duration = 0;
-                // Duration comes from stream info - stored in audio/video details
             }
+            break;
+
+        case 1:  // Playback started
+            brls::Logger::info("AvPlayer: Playback started");
             player->setState(AvPlayerState::PLAYING);
             break;
 
-        case SCE_AVPLAYER_STATE_PLAY:
-            brls::Logger::info("AvPlayer: Playing");
-            player->setState(AvPlayerState::PLAYING);
-            break;
-
-        case SCE_AVPLAYER_STATE_PAUSE:
-            brls::Logger::info("AvPlayer: Paused");
+        case 2:  // Playback paused
+            brls::Logger::info("AvPlayer: Playback paused");
             player->setState(AvPlayerState::PAUSED);
             break;
 
-        case SCE_AVPLAYER_STATE_STOP:
-            brls::Logger::info("AvPlayer: Stopped");
+        case 3:  // Playback stopped
+            brls::Logger::info("AvPlayer: Playback stopped");
             player->setState(AvPlayerState::STOPPED);
             break;
 
-        case SCE_AVPLAYER_STATE_EOF:
-            brls::Logger::info("AvPlayer: End of file");
+        case 4:  // End of stream
+            brls::Logger::info("AvPlayer: End of stream");
             player->setState(AvPlayerState::ENDED);
             break;
 
-        case SCE_AVPLAYER_STATE_ERROR:
+        case 5:  // Error
             brls::Logger::error("AvPlayer: Error event");
             player->m_errorMessage = "Playback error";
             player->setState(AvPlayerState::ERROR);
-            break;
-
-        case SCE_AVPLAYER_TIMED_TEXT_DELIVERY:
-            // Subtitle/text event - ignore for audio
-            break;
-
-        case SCE_AVPLAYER_WARNING_ID:
-            brls::Logger::warning("AvPlayer: Warning event");
             break;
 
         default:
@@ -219,7 +205,7 @@ bool AvPlayer::init() {
 
     // Set initial volume
     int vol[2] = {SCE_AUDIO_VOLUME_0DB, SCE_AUDIO_VOLUME_0DB};
-    sceAudioOutSetVolume(m_audioPort, SCE_AUDIO_VOLUME_FLAG_L_CH | SCE_AUDIO_VOLUME_FLAG_R_CH, vol);
+    sceAudioOutSetVolume(m_audioPort, static_cast<SceAudioOutChannelFlag>(SCE_AUDIO_VOLUME_FLAG_L_CH | SCE_AUDIO_VOLUME_FLAG_R_CH), vol);
 
     // Create audio thread
     m_audioRunning.store(true);
@@ -319,6 +305,9 @@ bool AvPlayer::loadUrl(const std::string& url, const std::string& title) {
         setState(AvPlayerState::ERROR);
         return false;
     }
+
+    // Set initial state - will be updated by event callback or polling
+    setState(AvPlayerState::BUFFERING);
 #endif
 
     return true;
@@ -359,6 +348,9 @@ bool AvPlayer::loadFile(const std::string& path, const std::string& title) {
         setState(AvPlayerState::ERROR);
         return false;
     }
+
+    // Set initial state
+    setState(AvPlayerState::BUFFERING);
 #endif
 
     return true;
@@ -368,6 +360,7 @@ void AvPlayer::play() {
 #ifdef __vita__
     if (m_avPlayer > 0) {
         sceAvPlayerResume(m_avPlayer);
+        setState(AvPlayerState::PLAYING);
     }
 #endif
 }
@@ -376,6 +369,7 @@ void AvPlayer::pause() {
 #ifdef __vita__
     if (m_avPlayer > 0) {
         sceAvPlayerPause(m_avPlayer);
+        setState(AvPlayerState::PAUSED);
     }
 #endif
 }
@@ -444,7 +438,7 @@ void AvPlayer::setVolume(int volume) {
     if (m_audioPort >= 0) {
         int vol = (volume * SCE_AUDIO_VOLUME_0DB) / 100;
         int vols[2] = {vol, vol};
-        sceAudioOutSetVolume(m_audioPort, SCE_AUDIO_VOLUME_FLAG_L_CH | SCE_AUDIO_VOLUME_FLAG_R_CH, vols);
+        sceAudioOutSetVolume(m_audioPort, static_cast<SceAudioOutChannelFlag>(SCE_AUDIO_VOLUME_FLAG_L_CH | SCE_AUDIO_VOLUME_FLAG_R_CH), vols);
     }
 #endif
 }
@@ -455,8 +449,23 @@ void AvPlayer::update() {
 
     // Check if player is still active
     SceBool active = sceAvPlayerIsActive(m_avPlayer);
-    if (!active && m_state.load() == AvPlayerState::PLAYING) {
-        setState(AvPlayerState::ENDED);
+
+    // Update state based on activity
+    AvPlayerState currentState = m_state.load();
+    if (active) {
+        // If we were loading/buffering and now have audio data, switch to playing
+        if (currentState == AvPlayerState::LOADING || currentState == AvPlayerState::BUFFERING) {
+            uint64_t timeMs = sceAvPlayerCurrentTime(m_avPlayer);
+            if (timeMs > 0) {
+                setState(AvPlayerState::PLAYING);
+            }
+        }
+    } else {
+        // Player is not active
+        if (currentState == AvPlayerState::PLAYING) {
+            // Playback has ended
+            setState(AvPlayerState::ENDED);
+        }
     }
 #endif
 }
