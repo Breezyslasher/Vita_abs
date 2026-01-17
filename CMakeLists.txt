@@ -104,6 +104,11 @@ set(APP_INCLUDES
     ${BOREALIS_LIBRARY}/include/borealis/extern
 )
 
+# Add VitaSDK include paths for external libraries (mpv, ffmpeg, etc.)
+if(DEFINED ENV{VITASDK})
+    list(APPEND APP_INCLUDES $ENV{VITASDK}/arm-vita-eabi/include)
+endif()
+
 # Create executable
 add_executable(${PROJECT_NAME} ${APP_SOURCES})
 
