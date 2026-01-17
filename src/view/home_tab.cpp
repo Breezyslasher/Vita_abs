@@ -156,6 +156,13 @@ void HomeTab::loadContent() {
         brls::Logger::info("HomeTab: Found {} continue items, {} recent episodes",
                           continueItems.size(), recentEpisodes.size());
 
+        // Apply maxRecentEpisodes limit from settings
+        AppSettings& settings = Application::getInstance().getSettings();
+        if (settings.maxRecentEpisodes > 0 && recentEpisodes.size() > static_cast<size_t>(settings.maxRecentEpisodes)) {
+            recentEpisodes.resize(settings.maxRecentEpisodes);
+            brls::Logger::debug("HomeTab: Limited recent episodes to {}", settings.maxRecentEpisodes);
+        }
+
         // Update UI on main thread
         brls::sync([this, continueItems, recentEpisodes, aliveWeak]() {
             auto alive = aliveWeak.lock();

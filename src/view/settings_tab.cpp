@@ -37,6 +37,7 @@ SettingsTab::SettingsTab() {
     createAccountSection();
     createUISection();
     createLayoutSection();
+    createHomePageSection();
     createContentDisplaySection();
     createPlaybackSection();
     createAudioSection();
@@ -198,6 +199,45 @@ void SettingsTab::createUISection() {
 
 void SettingsTab::createLayoutSection() {
     // Layout section removed - collapse sidebar and hidden libraries settings removed
+}
+
+void SettingsTab::createHomePageSection() {
+    Application& app = Application::getInstance();
+    AppSettings& settings = app.getSettings();
+
+    // Section header
+    auto* header = new brls::Header();
+    header->setTitle("Home Page");
+    m_contentBox->addView(header);
+
+    // Disable Home toggle
+    auto* disableHomeToggle = new brls::BooleanCell();
+    disableHomeToggle->init("Disable Home Page", settings.disableHome, [&settings](bool value) {
+        settings.disableHome = value;
+        Application::getInstance().saveSettings();
+    });
+    m_contentBox->addView(disableHomeToggle);
+
+    // Max recent episodes selector
+    auto* maxRecentSelector = new brls::SelectorCell();
+    std::vector<std::string> recentOptions = {"Unlimited", "5", "10", "15", "20", "25", "30"};
+    int currentIndex = 0;
+    if (settings.maxRecentEpisodes == 0) currentIndex = 0;       // Unlimited
+    else if (settings.maxRecentEpisodes == 5) currentIndex = 1;
+    else if (settings.maxRecentEpisodes == 10) currentIndex = 2;
+    else if (settings.maxRecentEpisodes == 15) currentIndex = 3;
+    else if (settings.maxRecentEpisodes == 20) currentIndex = 4;
+    else if (settings.maxRecentEpisodes == 25) currentIndex = 5;
+    else if (settings.maxRecentEpisodes == 30) currentIndex = 6;
+    else currentIndex = 2;  // Default to 10
+
+    maxRecentSelector->init("Max Recent Episodes", recentOptions, currentIndex,
+        [&settings](int index) {
+            int values[] = {0, 5, 10, 15, 20, 25, 30};
+            settings.maxRecentEpisodes = values[index];
+            Application::getInstance().saveSettings();
+        });
+    m_contentBox->addView(maxRecentSelector);
 }
 
 void SettingsTab::createContentDisplaySection() {

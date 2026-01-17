@@ -714,6 +714,10 @@ void MediaDetailView::populateChapters() {
 }
 
 void MediaDetailView::onPlay(bool resume) {
+    AppSettings& settings = Application::getInstance().getSettings();
+    DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
+    downloadsMgr.init();
+
     // For podcasts, handle episode selection first
     if (m_item.mediaType == MediaType::PODCAST) {
         std::string podcastId, episodeId;
@@ -731,16 +735,48 @@ void MediaDetailView::onPlay(bool resume) {
                 return;
             }
         }
-        // Start download for podcast episode
-        startDownloadAndPlay(podcastId, episodeId);
+
+        // Check if already downloaded (if checkDownloadsFirst is enabled)
+        if (settings.checkDownloadsFirst && downloadsMgr.isDownloaded(podcastId, episodeId)) {
+            std::string downloadedPath = downloadsMgr.getPlaybackPath(podcastId, episodeId);
+            if (!downloadedPath.empty()) {
+                brls::Logger::info("Playing downloaded podcast episode: {}", downloadedPath);
+                Application::getInstance().pushPlayerActivityWithFile(podcastId, episodeId, downloadedPath, -1.0f);
+                return;
+            }
+        }
+
+        // Use streaming if enabled, otherwise download first
+        if (settings.useHttpStreaming) {
+            brls::Logger::info("Streaming podcast episode: {}/{}", podcastId, episodeId);
+            Application::getInstance().pushPlayerActivity(podcastId, episodeId, -1.0f);
+        } else {
+            startDownloadAndPlay(podcastId, episodeId);
+        }
         return;
     }
 
-    // For books and podcast episodes, start download
+    // For books and podcast episodes
     std::string itemId = (m_item.mediaType == MediaType::PODCAST_EPISODE) ? m_item.podcastId : m_item.id;
     std::string episodeId = (m_item.mediaType == MediaType::PODCAST_EPISODE) ? m_item.episodeId : "";
 
-    startDownloadAndPlay(itemId, episodeId);
+    // Check if already downloaded (if checkDownloadsFirst is enabled)
+    if (settings.checkDownloadsFirst && downloadsMgr.isDownloaded(itemId, episodeId)) {
+        std::string downloadedPath = downloadsMgr.getPlaybackPath(itemId, episodeId);
+        if (!downloadedPath.empty()) {
+            brls::Logger::info("Playing downloaded file: {}", downloadedPath);
+            Application::getInstance().pushPlayerActivityWithFile(itemId, episodeId, downloadedPath, -1.0f);
+            return;
+        }
+    }
+
+    // Use streaming if enabled, otherwise download first
+    if (settings.useHttpStreaming) {
+        brls::Logger::info("Streaming: itemId={}, episodeId={}", itemId, episodeId);
+        Application::getInstance().pushPlayerActivity(itemId, episodeId, -1.0f);
+    } else {
+        startDownloadAndPlay(itemId, episodeId);
+    }
 }
 
 void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std::string& episodeId,

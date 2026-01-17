@@ -17,6 +17,7 @@ private:
     void createAccountSection();
     void createUISection();
     void createLayoutSection();
+    void createHomePageSection();
     void createContentDisplaySection();
     void createPlaybackSection();
     void createAudioSection();

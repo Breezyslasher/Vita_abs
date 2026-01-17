@@ -91,6 +91,10 @@ struct AppSettings {
     bool animationsEnabled = true;
     bool debugLogging = true;
 
+    // Home Page Settings
+    bool disableHome = false;          // Skip home page and go directly to library
+    int maxRecentEpisodes = 10;        // Max recently added episodes on home page (0 = unlimited)
+
     // Content Display Settings
     bool showCollections = true;
     bool showSeries = true;

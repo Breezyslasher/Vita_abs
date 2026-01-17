@@ -141,9 +141,14 @@ void MainActivity::onContentAvailable() {
             sidebar->setWidth(sidebarWidth);
         }
 
-        // Add Home tab first (Continue Listening + Recently Added Episodes)
-        tabFrame->addTab("Home", []() { return new HomeTab(); });
-        brls::Logger::debug("MainActivity: Added Home tab");
+        // Add Home tab first (Continue Listening + Recently Added Episodes) unless disabled
+        AppSettings& settings = Application::getInstance().getSettings();
+        if (!settings.disableHome) {
+            tabFrame->addTab("Home", []() { return new HomeTab(); });
+            brls::Logger::debug("MainActivity: Added Home tab");
+        } else {
+            brls::Logger::debug("MainActivity: Home tab disabled in settings");
+        }
 
         // Add library tabs directly (no Home/Library intermediate screens)
         // Sort by type: Audiobooks first, then Podcasts

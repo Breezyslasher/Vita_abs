@@ -337,6 +337,11 @@ bool Application::loadSettings() {
     m_settings.animationsEnabled = extractBool("animationsEnabled", true);
     m_settings.debugLogging = extractBool("debugLogging", true);
 
+    // Load home page settings
+    m_settings.disableHome = extractBool("disableHome", false);
+    m_settings.maxRecentEpisodes = extractInt("maxRecentEpisodes");
+    if (m_settings.maxRecentEpisodes < 0) m_settings.maxRecentEpisodes = 10;
+
     // Load content display settings
     m_settings.showCollections = extractBool("showCollections", true);
     m_settings.showSeries = extractBool("showSeries", true);
@@ -424,6 +429,10 @@ bool Application::saveSettings() {
     json += "  \"showClock\": " + std::string(m_settings.showClock ? "true" : "false") + ",\n";
     json += "  \"animationsEnabled\": " + std::string(m_settings.animationsEnabled ? "true" : "false") + ",\n";
     json += "  \"debugLogging\": " + std::string(m_settings.debugLogging ? "true" : "false") + ",\n";
+
+    // Home page settings
+    json += "  \"disableHome\": " + std::string(m_settings.disableHome ? "true" : "false") + ",\n";
+    json += "  \"maxRecentEpisodes\": " + std::to_string(m_settings.maxRecentEpisodes) + ",\n";
 
     // Content display settings
     json += "  \"showCollections\": " + std::string(m_settings.showCollections ? "true" : "false") + ",\n";
