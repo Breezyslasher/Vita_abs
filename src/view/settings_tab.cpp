@@ -381,54 +381,6 @@ void SettingsTab::createStreamingSection() {
     descLabel->setMarginBottom(8);
     m_contentBox->addView(descLabel);
 
-    // Max temp files selector
-    auto* maxFilesSelector = new brls::SelectorCell();
-    int maxFilesIndex = 0;
-    if (settings.maxTempFiles == 3) maxFilesIndex = 0;
-    else if (settings.maxTempFiles == 5) maxFilesIndex = 1;
-    else if (settings.maxTempFiles == 10) maxFilesIndex = 2;
-    else if (settings.maxTempFiles == 20) maxFilesIndex = 3;
-    else maxFilesIndex = 1; // Default to 5
-
-    maxFilesSelector->init("Max Cached Files",
-        {"3 files", "5 files", "10 files", "20 files"},
-        maxFilesIndex,
-        [&settings](int index) {
-            switch (index) {
-                case 0: settings.maxTempFiles = 3; break;
-                case 1: settings.maxTempFiles = 5; break;
-                case 2: settings.maxTempFiles = 10; break;
-                case 3: settings.maxTempFiles = 20; break;
-            }
-            Application::getInstance().saveSettings();
-        });
-    m_contentBox->addView(maxFilesSelector);
-
-    // Max temp size selector
-    auto* maxSizeSelector = new brls::SelectorCell();
-    int maxSizeIndex = 0;
-    if (settings.maxTempSizeMB == 100) maxSizeIndex = 0;
-    else if (settings.maxTempSizeMB == 250) maxSizeIndex = 1;
-    else if (settings.maxTempSizeMB == 500) maxSizeIndex = 2;
-    else if (settings.maxTempSizeMB == 1000) maxSizeIndex = 3;
-    else if (settings.maxTempSizeMB == 0) maxSizeIndex = 4;
-    else maxSizeIndex = 2; // Default to 500 MB
-
-    maxSizeSelector->init("Max Cache Size",
-        {"100 MB", "250 MB", "500 MB", "1 GB", "Unlimited"},
-        maxSizeIndex,
-        [&settings](int index) {
-            switch (index) {
-                case 0: settings.maxTempSizeMB = 100; break;
-                case 1: settings.maxTempSizeMB = 250; break;
-                case 2: settings.maxTempSizeMB = 500; break;
-                case 3: settings.maxTempSizeMB = 1000; break;
-                case 4: settings.maxTempSizeMB = 0; break; // 0 = unlimited
-            }
-            Application::getInstance().saveSettings();
-        });
-    m_contentBox->addView(maxSizeSelector);
-
     // ================================================================
     // Streaming Settings
     // ================================================================
