@@ -184,16 +184,12 @@ bool AvPlayer::init() {
     initData.memoryReplacement.allocateTexture = playerAllocate;
     initData.memoryReplacement.deallocateTexture = playerDeallocate;
 
-    // Memory alignment requirements
-    initData.memoryReplacement.generalPurposeAlignment = 0x40;  // 64-byte alignment
-    initData.memoryReplacement.textureAlignment = 0x1000;       // 4KB alignment for textures
-
     // Event callback
     initData.eventReplacement.eventCallback = playerEventCallback;
     initData.eventReplacement.objectPointer = this;
 
-    // Default language (required)
-    strncpy(initData.defaultLanguage, "en", 3);
+    // Default language (pointer to static string)
+    initData.defaultLanguage = "en";
 
     // Thread priority and settings
     initData.basePriority = 160;  // 0xA0
