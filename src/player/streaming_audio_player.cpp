@@ -64,7 +64,7 @@ bool StreamingAudioPlayer::init() {
 
     // Set initial volume (max)
     int vol[2] = {SCE_AUDIO_VOLUME_0DB, SCE_AUDIO_VOLUME_0DB};
-    sceAudioOutSetVolume(m_audioPort, SCE_AUDIO_VOLUME_FLAG_L_CH | SCE_AUDIO_VOLUME_FLAG_R_CH, vol);
+    sceAudioOutSetVolume(m_audioPort, static_cast<SceAudioOutChannelFlag>(SCE_AUDIO_VOLUME_FLAG_L_CH | SCE_AUDIO_VOLUME_FLAG_R_CH), vol);
 
     m_initialized = true;
     brls::Logger::info("StreamingAudioPlayer: Initialized successfully");
@@ -113,6 +113,9 @@ bool StreamingAudioPlayer::startStreaming(const std::string& url, float startPos
     bufferClear();
 
 #ifdef __vita__
+    // Store this pointer for thread arguments
+    StreamingAudioPlayer* self = this;
+
     // Start download/decode thread
     m_downloadThread = sceKernelCreateThread("StreamDownload", downloadThreadFunc,
                                               0x10000100, 0x10000, 0, 0, nullptr);
@@ -120,7 +123,7 @@ bool StreamingAudioPlayer::startStreaming(const std::string& url, float startPos
         brls::Logger::error("StreamingAudioPlayer: Failed to create download thread");
         return false;
     }
-    sceKernelStartThread(m_downloadThread, sizeof(this), &this);
+    sceKernelStartThread(m_downloadThread, sizeof(self), &self);
 
     // Start audio output thread
     m_audioThread = sceKernelCreateThread("StreamAudio", audioThreadFunc,
@@ -132,7 +135,7 @@ bool StreamingAudioPlayer::startStreaming(const std::string& url, float startPos
         sceKernelDeleteThread(m_downloadThread);
         return false;
     }
-    sceKernelStartThread(m_audioThread, sizeof(this), &this);
+    sceKernelStartThread(m_audioThread, sizeof(self), &self);
 
     m_isStreaming = true;
     m_isPlaying = true;
@@ -202,7 +205,7 @@ void StreamingAudioPlayer::setVolume(float volume) {
     if (m_audioPort >= 0) {
         int scaledVol = static_cast<int>(m_volume * SCE_AUDIO_VOLUME_0DB);
         int vol[2] = {scaledVol, scaledVol};
-        sceAudioOutSetVolume(m_audioPort, SCE_AUDIO_VOLUME_FLAG_L_CH | SCE_AUDIO_VOLUME_FLAG_R_CH, vol);
+        sceAudioOutSetVolume(m_audioPort, static_cast<SceAudioOutChannelFlag>(SCE_AUDIO_VOLUME_FLAG_L_CH | SCE_AUDIO_VOLUME_FLAG_R_CH), vol);
     }
 #endif
 }
@@ -482,7 +485,7 @@ bool StreamingAudioPlayer::initDecoder(const std::string& url) {
     AVCodecParameters* codecPar = formatCtx->streams[m_audioStreamIndex]->codecpar;
     const AVCodec* codec = avcodec_find_decoder(codecPar->codec_id);
     if (!codec) {
-        brls::Logger::error("StreamingAudioPlayer: Decoder not found for codec {}", codecPar->codec_id);
+        brls::Logger::error("StreamingAudioPlayer: Decoder not found for codec {}", static_cast<int>(codecPar->codec_id));
         avformat_close_input(&formatCtx);
         return false;
     }
