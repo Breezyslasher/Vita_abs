@@ -696,39 +696,16 @@ void PlayerActivity::loadMedia() {
             tempMgr.cleanupTempFiles();
         }
 
-        // Check if we have a cached version (in temp or downloads)
-        std::string cachedPath;
-        bool needsDownload = true;
+        // Check if we can use HTTP streaming
+        bool canUseStreaming = settings.useHttpStreaming;
 
-        if (useDownloads) {
-            // Check downloads folder first
-            if (downloadsMgr.isDownloaded(m_itemId)) {
-                cachedPath = downloadsMgr.getPlaybackPath(m_itemId);
-                if (!cachedPath.empty()) {
-                    brls::Logger::info("PlayerActivity: Using downloaded file: {}", cachedPath);
-                    needsDownload = false;
-                }
-            }
-        } else {
-            // Check temp cache
-            cachedPath = tempMgr.getCachedFilePath(m_itemId, m_episodeId);
-            if (!cachedPath.empty()) {
-                brls::Logger::info("PlayerActivity: Using cached file: {}", cachedPath);
-                tempMgr.touchTempFile(m_itemId, m_episodeId);
-                needsDownload = false;
-            }
-        }
+        // Debug logging
+        brls::Logger::info("PlayerActivity: useHttpStreaming={}, saveToDownloads={}, canUseStreaming={}",
+                          settings.useHttpStreaming, useDownloads, canUseStreaming);
 
-        // Check if we can use HTTP streaming (enabled for both single and multi-file audiobooks)
-        bool canUseStreaming = settings.useHttpStreaming && !useDownloads;
-
-        if (!needsDownload) {
-            // Using cached/downloaded file
-            m_tempFilePath = cachedPath;
-            if (chapterInfoLabel) {
-                chapterInfoLabel->setText("Using cached file...");
-            }
-        } else if (canUseStreaming) {
+        // When streaming is enabled, skip cache check and stream directly
+        // This ensures streaming always works when the setting is on
+        if (canUseStreaming) {
             // ================================================================
             // HTTP STREAMING MODE - Stream directly without downloading first
             // Supports both single-file and multi-file audiobooks via playlist
@@ -839,11 +816,42 @@ void PlayerActivity::loadMedia() {
         } else {
             // ================================================================
             // DOWNLOAD MODE - Download file first, then play locally
-            // Required for: multi-file audiobooks, saveToDownloads enabled,
-            // or useHttpStreaming disabled
+            // Only used when HTTP Streaming is disabled in settings
             // ================================================================
 
-            // Determine final destination path
+            brls::Logger::info("PlayerActivity: Download mode (streaming disabled)");
+
+            // Check for cached version first
+            std::string cachedPath;
+            bool needsDownload = true;
+
+            if (useDownloads) {
+                // Check downloads folder
+                if (downloadsMgr.isDownloaded(m_itemId)) {
+                    cachedPath = downloadsMgr.getPlaybackPath(m_itemId);
+                    if (!cachedPath.empty()) {
+                        brls::Logger::info("PlayerActivity: Using downloaded file: {}", cachedPath);
+                        needsDownload = false;
+                    }
+                }
+            } else {
+                // Check temp cache
+                cachedPath = tempMgr.getCachedFilePath(m_itemId, m_episodeId);
+                if (!cachedPath.empty()) {
+                    brls::Logger::info("PlayerActivity: Using cached file: {}", cachedPath);
+                    tempMgr.touchTempFile(m_itemId, m_episodeId);
+                    needsDownload = false;
+                }
+            }
+
+            if (!needsDownload) {
+                // Use cached/downloaded file
+                m_tempFilePath = cachedPath;
+                if (chapterInfoLabel) {
+                    chapterInfoLabel->setText("Using cached file...");
+                }
+            } else {
+                // Need to download - determine destination path
             if (useDownloads) {
                 std::string filename = m_itemId;
                 if (!m_episodeId.empty()) {
@@ -1063,63 +1071,64 @@ void PlayerActivity::loadMedia() {
                 chapterInfoLabel->setText("");  // Clear download status
             }
 
-            // Register the downloaded file
-            if (useDownloads) {
-                downloadsMgr.registerCompletedDownload(m_itemId, m_episodeId, item.title,
-                    item.authorName, m_tempFilePath, totalDownloaded, item.duration, item.type);
-            } else {
-                tempMgr.registerTempFile(m_itemId, m_episodeId, m_tempFilePath, item.title, totalDownloaded);
-            }
+                // Register the downloaded file
+                if (useDownloads) {
+                    downloadsMgr.registerCompletedDownload(m_itemId, m_episodeId, item.title,
+                        item.authorName, m_tempFilePath, totalDownloaded, item.duration, item.type);
+                } else {
+                    tempMgr.registerTempFile(m_itemId, m_episodeId, m_tempFilePath, item.title, totalDownloaded);
+                }
 #else
-            // Non-Vita: just use the first stream URL directly (streaming always works)
-            if (!session.audioTracks.empty() && !session.audioTracks[0].contentUrl.empty()) {
-                m_tempFilePath = client.getStreamUrl(session.audioTracks[0].contentUrl, "");
-            } else {
-                m_tempFilePath = client.getDirectStreamUrl(m_itemId, 0);
-            }
+                // Non-Vita: just use the first stream URL directly (streaming always works)
+                if (!session.audioTracks.empty() && !session.audioTracks[0].contentUrl.empty()) {
+                    m_tempFilePath = client.getStreamUrl(session.audioTracks[0].contentUrl, "");
+                } else {
+                    m_tempFilePath = client.getDirectStreamUrl(m_itemId, 0);
+                }
 #endif
-        }
+            }  // End of else { // Need to download }
 
-        // Now play the local/cached file (for download mode or cached files)
-        MpvPlayer& player = MpvPlayer::getInstance();
+            // Now play the local/cached file (for download mode or cached files)
+            MpvPlayer& player = MpvPlayer::getInstance();
 
-        if (!player.isInitialized()) {
-            brls::Logger::info("PlayerActivity: Initializing MPV player...");
-            if (!player.init()) {
-                brls::Logger::error("Failed to initialize MPV player");
+            if (!player.isInitialized()) {
+                brls::Logger::info("PlayerActivity: Initializing MPV player...");
+                if (!player.init()) {
+                    brls::Logger::error("Failed to initialize MPV player");
+                    tempMgr.deleteTempFile(m_itemId, m_episodeId);
+                    m_tempFilePath.clear();
+                    m_loadingMedia = false;
+                    return;
+                }
+                brls::Logger::info("PlayerActivity: MPV player initialized successfully");
+            }
+
+            brls::Logger::info("PlayerActivity: Loading file: {} (startTime={}s)", m_tempFilePath, startTime);
+            // Pass start time directly for more reliable seeking
+            if (!player.loadUrl(m_tempFilePath, item.title, startTime > 0 ? static_cast<double>(startTime) : -1.0)) {
+                brls::Logger::error("Failed to load file: {}", m_tempFilePath);
                 tempMgr.deleteTempFile(m_itemId, m_episodeId);
                 m_tempFilePath.clear();
                 m_loadingMedia = false;
                 return;
             }
-            brls::Logger::info("PlayerActivity: MPV player initialized successfully");
-        }
+            brls::Logger::info("PlayerActivity: MPV loadUrl succeeded, waiting for playback to start...");
 
-        brls::Logger::info("PlayerActivity: Loading file: {} (startTime={}s)", m_tempFilePath, startTime);
-        // Pass start time directly for more reliable seeking
-        if (!player.loadUrl(m_tempFilePath, item.title, startTime > 0 ? static_cast<double>(startTime) : -1.0)) {
-            brls::Logger::error("Failed to load file: {}", m_tempFilePath);
-            tempMgr.deleteTempFile(m_itemId, m_episodeId);
-            m_tempFilePath.clear();
-            m_loadingMedia = false;
-            return;
-        }
-        brls::Logger::info("PlayerActivity: MPV loadUrl succeeded, waiting for playback to start...");
+            // Apply saved playback speed
+            AppSettings& playSettings = Application::getInstance().getSettings();
+            float speed = getSpeedValue(static_cast<int>(playSettings.playbackSpeed));
+            if (speed != 1.0f) {
+                player.setSpeed(speed);
+            }
 
-        // Apply saved playback speed
-        AppSettings& playSettings = Application::getInstance().getSettings();
-        float speed = getSpeedValue(static_cast<int>(playSettings.playbackSpeed));
-        if (speed != 1.0f) {
-            player.setSpeed(speed);
-        }
+            // Show video view for audio playback (shows progress/controls)
+            if (videoView) {
+                videoView->setVisibility(brls::Visibility::VISIBLE);
+                videoView->setVideoVisible(true);
+            }
 
-        // Show video view for audio playback (shows progress/controls)
-        if (videoView) {
-            videoView->setVisibility(brls::Visibility::VISIBLE);
-            videoView->setVideoVisible(true);
-        }
-
-        m_isPlaying = true;
+            m_isPlaying = true;
+        }  // End of else { // Download mode }
     } else {
         brls::Logger::error("Failed to fetch item details for: {}", m_itemId);
     }
