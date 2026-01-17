@@ -26,7 +26,7 @@ namespace vitaabs {
 // Callback for playback state changes
 using PlaybackStateCallback = std::function<void(bool playing, float position, float duration)>;
 using PlaybackErrorCallback = std::function<void(const std::string& error)>;
-using DownloadProgressCallback = std::function<void(int64_t downloaded, int64_t total)>;
+using StreamingProgressCallback = std::function<void(int64_t downloaded, int64_t total)>;
 
 class StreamingAudioPlayer {
 public:
@@ -64,7 +64,7 @@ public:
     // Callbacks
     void setStateCallback(PlaybackStateCallback callback) { m_stateCallback = callback; }
     void setErrorCallback(PlaybackErrorCallback callback) { m_errorCallback = callback; }
-    void setDownloadCallback(DownloadProgressCallback callback) { m_downloadCallback = callback; }
+    void setStreamingProgressCallback(StreamingProgressCallback callback) { m_streamingCallback = callback; }
 
 private:
     StreamingAudioPlayer() = default;
@@ -134,7 +134,7 @@ private:
     // Callbacks
     PlaybackStateCallback m_stateCallback;
     PlaybackErrorCallback m_errorCallback;
-    DownloadProgressCallback m_downloadCallback;
+    StreamingProgressCallback m_streamingCallback;
 
     // Download progress
     std::atomic<int64_t> m_downloadedBytes{0};
