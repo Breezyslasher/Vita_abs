@@ -187,65 +187,10 @@ void TempFileManager::touchTempFile(const std::string& itemId, const std::string
 int TempFileManager::cleanupTempFiles() {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    Application& app = Application::getInstance();
-    AppSettings& settings = app.getSettings();
-
-    int deletedCount = 0;
-
-    // Sort by last accessed time (oldest first)
-    std::sort(m_tempFiles.begin(), m_tempFiles.end(),
-              [](const TempFileInfo& a, const TempFileInfo& b) {
-                  return a.lastAccessed < b.lastAccessed;
-              });
-
-    // Delete oldest files if we exceed max count
-    while ((int)m_tempFiles.size() > settings.maxTempFiles && !m_tempFiles.empty()) {
-        TempFileInfo& oldest = m_tempFiles.front();
-        brls::Logger::info("TempFileManager: Deleting old temp file: {} (max {} files)",
-                          oldest.filePath, settings.maxTempFiles);
-
-#ifdef __vita__
-        sceIoRemove(oldest.filePath.c_str());
-#else
-        unlink(oldest.filePath.c_str());
-#endif
-
-        m_tempFiles.erase(m_tempFiles.begin());
-        deletedCount++;
-    }
-
-    // Delete oldest files if we exceed max size
-    if (settings.maxTempSizeMB > 0) {
-        int64_t maxBytes = settings.maxTempSizeMB * 1024 * 1024;
-        int64_t totalSize = 0;
-
-        for (const auto& file : m_tempFiles) {
-            totalSize += file.fileSize;
-        }
-
-        while (totalSize > maxBytes && !m_tempFiles.empty()) {
-            TempFileInfo& oldest = m_tempFiles.front();
-            brls::Logger::info("TempFileManager: Deleting temp file for size limit: {} ({} MB > {} MB)",
-                              oldest.filePath, totalSize / (1024 * 1024), settings.maxTempSizeMB);
-
-            totalSize -= oldest.fileSize;
-
-#ifdef __vita__
-            sceIoRemove(oldest.filePath.c_str());
-#else
-            unlink(oldest.filePath.c_str());
-#endif
-
-            m_tempFiles.erase(m_tempFiles.begin());
-            deletedCount++;
-        }
-    }
-
-    if (deletedCount > 0) {
-        saveState();
-    }
-
-    return deletedCount;
+    // Temp file caching is disabled - this function is a no-op
+    // All temp files are cleaned up immediately when no longer needed
+    // To clear any legacy temp files, use clearAllTempFiles()
+    return 0;
 }
 
 bool TempFileManager::deleteTempFile(const std::string& itemId, const std::string& episodeId) {
