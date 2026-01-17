@@ -251,7 +251,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         m_mainContent->addView(episodesLabel);
 
         auto* episodesScroll = new brls::HScrollingFrame();
-        episodesScroll->setHeight(180);
+        episodesScroll->setHeight(200);
         episodesScroll->setMarginBottom(20);
 
         m_childrenBox = new brls::Box();
@@ -526,9 +526,9 @@ void MediaDetailView::loadChildren() {
         for (const auto& child : m_children) {
             auto* cell = new MediaItemCell();
             cell->setItem(child);
-            cell->setWidth(120);
-            cell->setHeight(150);
-            cell->setMarginRight(10);
+            cell->setWidth(150);
+            cell->setHeight(180);
+            cell->setMarginRight(20);  // More space between episodes
 
             cell->registerClickAction([this, child](brls::View* view) {
                 // Navigate to episode detail or play directly
@@ -903,6 +903,71 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
         float startTime = (requestedStartTime >= 0) ? requestedStartTime : session.currentTime;
         brls::Logger::info("Using startTime={}s (requested={}, session={}s)",
                           startTime, requestedStartTime, session.currentTime);
+
+        // For single-file content (podcasts) and not download-only mode: stream immediately while downloading
+        if (!isMultiFile && !downloadOnly && !session.audioTracks.empty()) {
+            // Build streaming URL for immediate playback
+            std::string streamUrl = client.getStreamUrl(session.audioTracks[0].contentUrl, "");
+            brls::Logger::info("Starting streaming playback: {}", streamUrl);
+
+            // Push player immediately with streaming URL
+            brls::sync([progressDialog, itemId, episodeId, streamUrl, startTime]() {
+                progressDialog->dismiss();
+                Application::getInstance().pushPlayerActivityWithFile(itemId, episodeId, streamUrl, startTime);
+            });
+
+            // Now download in background for future offline playback
+            brls::Logger::info("Starting background download to: {}", destPath);
+
+            std::string downloadUrl = client.getFileDownloadUrl(itemId, episodeId);
+            if (downloadUrl.empty()) {
+                brls::Logger::error("Failed to get download URL, streaming only");
+                return;
+            }
+
+#ifdef __vita__
+            HttpClient httpClient;
+            httpClient.setTimeout(300);
+
+            SceUID fd = sceIoOpen(destPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
+            if (fd < 0) {
+                brls::Logger::error("Failed to create file for background download: {}", destPath);
+                return;
+            }
+
+            int64_t totalDownloaded = 0;
+            bool downloadSuccess = httpClient.downloadToFile(downloadUrl, fd, [&totalDownloaded](int64_t downloaded, int64_t total) {
+                totalDownloaded = downloaded;
+                // Silent background download - no UI updates
+                return true;
+            });
+
+            sceIoClose(fd);
+
+            if (downloadSuccess && totalDownloaded > 0) {
+                brls::Logger::info("Background download complete: {} bytes", totalDownloaded);
+
+                // Register the downloaded file for future offline playback
+                if (useDownloads) {
+                    downloadsMgr.registerCompletedDownload(itemId, episodeId, title, authorName,
+                        destPath, totalDownloaded, duration, itemType, coverUrl, description, downloadChapters);
+                    if (!coverUrl.empty()) {
+                        downloadsMgr.downloadCoverImage(episodeId.empty() ? itemId : episodeId, coverUrl);
+                    }
+                } else {
+                    tempMgr.registerTempFile(itemId, episodeId, destPath, title, totalDownloaded);
+                }
+
+                brls::sync([]() {
+                    brls::Application::notify("Downloaded for offline playback");
+                });
+            } else {
+                brls::Logger::error("Background download failed");
+                sceIoRemove(destPath.c_str());
+            }
+#endif
+            return;  // Exit early - we already started playback
+        }
 
 #ifdef __vita__
         HttpClient httpClient;
