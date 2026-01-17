@@ -44,13 +44,17 @@ HomeTab::HomeTab() {
     m_continueLabel->setVisibility(brls::Visibility::GONE);  // Hidden until loaded
     m_contentBox->addView(m_continueLabel);
 
-    // Horizontal box for Continue Listening (no ScrollingFrame - use focus-based scrolling)
+    // Horizontal scrolling container for Continue Listening
+    m_continueScroll = new brls::HScrollingFrame();
+    m_continueScroll->setHeight(200);
+    m_continueScroll->setVisibility(brls::Visibility::GONE);
+
     m_continueBox = new brls::Box();
     m_continueBox->setAxis(brls::Axis::ROW);  // Horizontal layout
     m_continueBox->setJustifyContent(brls::JustifyContent::FLEX_START);
-    m_continueBox->setHeight(200);
-    m_continueBox->setVisibility(brls::Visibility::GONE);
-    m_contentBox->addView(m_continueBox);
+
+    m_continueScroll->setContentView(m_continueBox);
+    m_contentBox->addView(m_continueScroll);
 
     // Recently Added Episodes section
     m_recentEpisodesLabel = new brls::Label();
@@ -61,13 +65,17 @@ HomeTab::HomeTab() {
     m_recentEpisodesLabel->setVisibility(brls::Visibility::GONE);  // Hidden until loaded
     m_contentBox->addView(m_recentEpisodesLabel);
 
-    // Horizontal box for Recently Added Episodes (no ScrollingFrame - use focus-based scrolling)
+    // Horizontal scrolling container for Recently Added Episodes
+    m_recentEpisodesScroll = new brls::HScrollingFrame();
+    m_recentEpisodesScroll->setHeight(200);
+    m_recentEpisodesScroll->setVisibility(brls::Visibility::GONE);
+
     m_recentEpisodesBox = new brls::Box();
     m_recentEpisodesBox->setAxis(brls::Axis::ROW);  // Horizontal layout
     m_recentEpisodesBox->setJustifyContent(brls::JustifyContent::FLEX_START);
-    m_recentEpisodesBox->setHeight(200);
-    m_recentEpisodesBox->setVisibility(brls::Visibility::GONE);
-    m_contentBox->addView(m_recentEpisodesBox);
+
+    m_recentEpisodesScroll->setContentView(m_recentEpisodesBox);
+    m_contentBox->addView(m_recentEpisodesScroll);
 
     m_scrollView->setContentView(m_contentBox);
     this->addView(m_scrollView);
@@ -168,14 +176,14 @@ void HomeTab::loadContent() {
             // Show Continue Listening section if we have items
             if (!m_continueItems.empty()) {
                 m_continueLabel->setVisibility(brls::Visibility::VISIBLE);
-                m_continueBox->setVisibility(brls::Visibility::VISIBLE);
+                m_continueScroll->setVisibility(brls::Visibility::VISIBLE);
                 populateHorizontalRow(m_continueBox, m_continueItems);
             }
 
             // Show Recently Added Episodes section if we have items
             if (!m_recentEpisodes.empty()) {
                 m_recentEpisodesLabel->setVisibility(brls::Visibility::VISIBLE);
-                m_recentEpisodesBox->setVisibility(brls::Visibility::VISIBLE);
+                m_recentEpisodesScroll->setVisibility(brls::Visibility::VISIBLE);
                 populateHorizontalRow(m_recentEpisodesBox, m_recentEpisodes);
             }
 
