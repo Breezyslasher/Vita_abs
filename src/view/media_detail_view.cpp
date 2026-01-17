@@ -14,6 +14,7 @@
 #include "utils/audio_utils.hpp"
 #include "utils/async.hpp"
 #include "player/streaming_audio_player.hpp"
+#include "player/mpv_player.hpp"
 #include <thread>
 #include <algorithm>
 #include <fstream>
@@ -915,6 +916,9 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
 
                 brls::sync([progressDialog, streamUrl, startTime, title]() {
                     progressDialog->dismiss();
+
+                    // Stop any existing MPV playback to free audio ports
+                    MpvPlayer::getInstance().stop();
 
                     // Initialize and start streaming player
                     StreamingAudioPlayer& player = StreamingAudioPlayer::getInstance();

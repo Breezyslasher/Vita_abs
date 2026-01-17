@@ -50,6 +50,13 @@ bool StreamingAudioPlayer::init() {
 #ifdef __vita__
     brls::Logger::info("StreamingAudioPlayer: Initializing...");
 
+    // Release any existing port first (in case of re-init)
+    if (m_audioPort >= 0) {
+        sceAudioOutReleasePort(m_audioPort);
+        m_audioPort = -1;
+        sceKernelDelayThread(50000);  // 50ms delay to ensure port is released
+    }
+
     // Allocate circular buffer
     m_circularBuffer.resize(BUFFER_SIZE);
     bufferClear();
@@ -59,7 +66,14 @@ bool StreamingAudioPlayer::init() {
                                        SAMPLE_RATE, SCE_AUDIO_OUT_MODE_STEREO);
     if (m_audioPort < 0) {
         brls::Logger::error("StreamingAudioPlayer: Failed to open audio port: {:#x}", m_audioPort);
-        return false;
+        // Try again after a longer delay - another component might be releasing
+        sceKernelDelayThread(100000);  // 100ms
+        m_audioPort = sceAudioOutOpenPort(SCE_AUDIO_OUT_PORT_TYPE_MAIN, AUDIO_GRAIN,
+                                           SAMPLE_RATE, SCE_AUDIO_OUT_MODE_STEREO);
+        if (m_audioPort < 0) {
+            brls::Logger::error("StreamingAudioPlayer: Retry failed, port still unavailable");
+            return false;
+        }
     }
 
     // Set initial volume (max)
