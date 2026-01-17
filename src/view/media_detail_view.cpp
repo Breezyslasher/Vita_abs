@@ -814,8 +814,8 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
         downloadChapters.push_back(dch);
     }
 
-    // Run download in background
-    asyncRun([this, progressDialog, itemId, episodeId, title, authorName, itemType, duration, useDownloads, requestedStartTime, coverUrl, description, downloadChapters, downloadOnly]() {
+    // Run download in background (always saves to downloads - temp caching removed)
+    asyncRun([this, progressDialog, itemId, episodeId, title, authorName, itemType, duration, requestedStartTime, coverUrl, description, downloadChapters, downloadOnly]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
         // Start playback session
@@ -856,22 +856,16 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
             finalExt = ".m4b";  // Only use m4b for m4a sources
         }
 
-        // Determine destination path
+        // Determine destination path (always save to downloads)
         TempFileManager& tempMgr = TempFileManager::getInstance();
         DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
-        std::string destPath;
 
-        if (useDownloads) {
-            std::string filename = itemId;
-            if (!episodeId.empty()) {
-                filename += "_" + episodeId;
-            }
-            filename += finalExt;
-            destPath = downloadsMgr.getDownloadsPath() + "/" + filename;
-        } else {
-            tempMgr.cleanupTempFiles();  // Clean up before downloading
-            destPath = tempMgr.getTempFilePath(itemId, episodeId, finalExt);
+        std::string filename = itemId;
+        if (!episodeId.empty()) {
+            filename += "_" + episodeId;
         }
+        filename += finalExt;
+        std::string destPath = downloadsMgr.getDownloadsPath() + "/" + filename;
 
         // Use requested start time if specified, otherwise use session's current time
         float startTime = (requestedStartTime >= 0) ? requestedStartTime : session.currentTime;
@@ -890,24 +884,15 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
             std::vector<std::string> trackFiles;
 
             // Check if combined file already exists on disk (from previous incomplete registration)
-            std::string combinedPath;
-            if (useDownloads) {
-                combinedPath = downloadsMgr.getDownloadsPath() + "/" + itemId + finalExt;
-            } else {
-                combinedPath = tempMgr.getTempFilePath(itemId, episodeId, finalExt);
-            }
+            std::string combinedPath = downloadsMgr.getDownloadsPath() + "/" + itemId + finalExt;
 
             SceIoStat existingStat;
             if (sceIoGetstat(combinedPath.c_str(), &existingStat) >= 0 && existingStat.st_size > 0) {
                 brls::Logger::info("Found existing combined file: {} ({} bytes)", combinedPath, existingStat.st_size);
 
                 // Register it if not already registered
-                if (useDownloads) {
-                    downloadsMgr.registerCompletedDownload(itemId, episodeId, title, authorName,
-                        combinedPath, existingStat.st_size, duration, itemType, coverUrl, description, downloadChapters);
-                } else {
-                    tempMgr.registerTempFile(itemId, episodeId, combinedPath, title, existingStat.st_size);
-                }
+                downloadsMgr.registerCompletedDownload(itemId, episodeId, title, authorName,
+                    combinedPath, existingStat.st_size, duration, itemType, coverUrl, description, downloadChapters);
 
                 // Play the existing file
                 float seekTime = (requestedStartTime >= 0) ? requestedStartTime : session.currentTime;
@@ -1144,11 +1129,9 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                     std::vector<AudioTrack> allTracks = session.audioTracks;
                     std::string baseExt = ext;
                     std::string combinedExt = finalExt;  // Use the correct extension based on source format
-                    std::string finalPath = useDownloads
-                        ? downloadsMgr.getDownloadsPath() + "/" + itemId + combinedExt
-                        : tempMgr.getTempFilePath(itemId, episodeId, combinedExt);
+                    std::string finalPath = downloadsMgr.getDownloadsPath() + "/" + itemId + combinedExt;
 
-                    asyncRunLargeStack([allTracks, currentTrackIdx, currentTrackPath, itemId, episodeId, baseExt, finalPath, title, authorName, duration, itemType, useDownloads, coverUrl, description, downloadChapters]() {
+                    asyncRunLargeStack([allTracks, currentTrackIdx, currentTrackPath, itemId, episodeId, baseExt, finalPath, title, authorName, duration, itemType, coverUrl, description, downloadChapters]() {
                         brls::Logger::info("Background: Downloading remaining tracks...");
 
                         HttpClient bgHttpClient;
@@ -1274,14 +1257,10 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                                     totalSize = stat.st_size;
                                 }
 
-                                // Register the combined file
-                                if (useDownloads) {
-                                    bgDownloadsMgr.registerCompletedDownload(itemId, episodeId, title,
-                                        authorName, finalPath, totalSize, duration, itemType,
-                                        coverUrl, description, downloadChapters);
-                                } else {
-                                    bgTempMgr.registerTempFile(itemId, episodeId, finalPath, title, totalSize);
-                                }
+                                // Register the combined file in downloads
+                                bgDownloadsMgr.registerCompletedDownload(itemId, episodeId, title,
+                                    authorName, finalPath, totalSize, duration, itemType,
+                                    coverUrl, description, downloadChapters);
 
                                 // Clean up individual track files
                                 for (const auto& trackFile : allTrackFiles) {
@@ -1365,14 +1344,10 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
 
         // Handle result
         if (downloadSuccess) {
-            // Register the file
-            if (useDownloads) {
-                downloadsMgr.registerCompletedDownload(itemId, episodeId, title,
-                    authorName, destPath, totalDownloaded, duration, itemType,
-                    coverUrl, description, downloadChapters);
-            } else {
-                tempMgr.registerTempFile(itemId, episodeId, destPath, title, totalDownloaded);
-            }
+            // Register the file in downloads
+            downloadsMgr.registerCompletedDownload(itemId, episodeId, title,
+                authorName, destPath, totalDownloaded, duration, itemType,
+                coverUrl, description, downloadChapters);
 
             brls::Logger::info("Download complete: {}", destPath);
 
