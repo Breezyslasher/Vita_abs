@@ -256,6 +256,53 @@ void SettingsTab::createContentDisplaySection() {
     downloadedInfoLabel->setMarginLeft(16);
     downloadedInfoLabel->setMarginTop(4);
     m_contentBox->addView(downloadedInfoLabel);
+
+    // Home Tab section header
+    auto* homeHeader = new brls::Header();
+    homeHeader->setTitle("Home Tab");
+    m_contentBox->addView(homeHeader);
+
+    // Show Home Tab toggle
+    auto* homeTabToggle = new brls::BooleanCell();
+    homeTabToggle->init("Show Home Tab", settings.showHomeTab, [&settings](bool value) {
+        settings.showHomeTab = value;
+        Application::getInstance().saveSettings();
+        brls::Application::notify("Restart app to apply changes");
+    });
+    m_contentBox->addView(homeTabToggle);
+
+    // Max Recent Episodes selector
+    auto* maxEpisodesSelector = new brls::SelectorCell();
+    int maxEpisodesIndex = 0;
+    if (settings.maxRecentEpisodes == 5) maxEpisodesIndex = 0;
+    else if (settings.maxRecentEpisodes == 10) maxEpisodesIndex = 1;
+    else if (settings.maxRecentEpisodes == 15) maxEpisodesIndex = 2;
+    else if (settings.maxRecentEpisodes == 20) maxEpisodesIndex = 3;
+    else if (settings.maxRecentEpisodes == 0) maxEpisodesIndex = 4;
+    else maxEpisodesIndex = 1; // Default to 10
+
+    maxEpisodesSelector->init("Max Recent Episodes",
+        {"5", "10", "15", "20", "Unlimited"},
+        maxEpisodesIndex,
+        [&settings](int index) {
+            switch (index) {
+                case 0: settings.maxRecentEpisodes = 5; break;
+                case 1: settings.maxRecentEpisodes = 10; break;
+                case 2: settings.maxRecentEpisodes = 15; break;
+                case 3: settings.maxRecentEpisodes = 20; break;
+                case 4: settings.maxRecentEpisodes = 0; break; // 0 = unlimited
+            }
+            Application::getInstance().saveSettings();
+        });
+    m_contentBox->addView(maxEpisodesSelector);
+
+    // Info label for max episodes
+    auto* maxEpisodesInfoLabel = new brls::Label();
+    maxEpisodesInfoLabel->setText("Number of recently added episodes shown on Home tab");
+    maxEpisodesInfoLabel->setFontSize(14);
+    maxEpisodesInfoLabel->setMarginLeft(16);
+    maxEpisodesInfoLabel->setMarginTop(4);
+    m_contentBox->addView(maxEpisodesInfoLabel);
 }
 
 void SettingsTab::createPlaybackSection() {

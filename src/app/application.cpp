@@ -344,6 +344,11 @@ bool Application::loadSettings() {
     m_settings.showProgress = extractBool("showProgress", true);
     m_settings.showOnlyDownloaded = extractBool("showOnlyDownloaded", false);
 
+    // Load home tab settings
+    m_settings.showHomeTab = extractBool("showHomeTab", true);
+    m_settings.maxRecentEpisodes = extractInt("maxRecentEpisodes");
+    if (m_settings.maxRecentEpisodes <= 0) m_settings.maxRecentEpisodes = 10;
+
     // Load playback settings
     m_settings.resumePlayback = extractBool("resumePlayback", true);
     m_settings.playbackSpeed = static_cast<PlaybackSpeed>(extractInt("playbackSpeed"));
@@ -433,6 +438,10 @@ bool Application::saveSettings() {
     json += "  \"showAuthors\": " + std::string(m_settings.showAuthors ? "true" : "false") + ",\n";
     json += "  \"showProgress\": " + std::string(m_settings.showProgress ? "true" : "false") + ",\n";
     json += "  \"showOnlyDownloaded\": " + std::string(m_settings.showOnlyDownloaded ? "true" : "false") + ",\n";
+
+    // Home tab settings
+    json += "  \"showHomeTab\": " + std::string(m_settings.showHomeTab ? "true" : "false") + ",\n";
+    json += "  \"maxRecentEpisodes\": " + std::to_string(m_settings.maxRecentEpisodes) + ",\n";
 
     // Playback settings
     json += "  \"resumePlayback\": " + std::string(m_settings.resumePlayback ? "true" : "false") + ",\n";

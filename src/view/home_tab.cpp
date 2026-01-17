@@ -184,7 +184,14 @@ void HomeTab::loadContent() {
             if (!m_recentEpisodes.empty()) {
                 m_recentEpisodesLabel->setVisibility(brls::Visibility::VISIBLE);
                 m_recentEpisodesScroll->setVisibility(brls::Visibility::VISIBLE);
-                populateHorizontalRow(m_recentEpisodesBox, m_recentEpisodes);
+
+                // Apply max episodes limit from settings
+                int maxEpisodes = Application::getInstance().getSettings().maxRecentEpisodes;
+                std::vector<MediaItem> limitedEpisodes = m_recentEpisodes;
+                if (maxEpisodes > 0 && limitedEpisodes.size() > static_cast<size_t>(maxEpisodes)) {
+                    limitedEpisodes.resize(maxEpisodes);
+                }
+                populateHorizontalRow(m_recentEpisodesBox, limitedEpisodes);
             }
 
             // Show message if nothing to display

@@ -142,8 +142,10 @@ void MainActivity::onContentAvailable() {
         }
 
         // Add Home tab first (Continue Listening + Recently Added Episodes)
-        tabFrame->addTab("Home", []() { return new HomeTab(); });
-        brls::Logger::debug("MainActivity: Added Home tab");
+        if (Application::getInstance().getSettings().showHomeTab) {
+            tabFrame->addTab("Home", []() { return new HomeTab(); });
+            brls::Logger::debug("MainActivity: Added Home tab");
+        }
 
         // Add library tabs directly (no Home/Library intermediate screens)
         // Sort by type: Audiobooks first, then Podcasts
