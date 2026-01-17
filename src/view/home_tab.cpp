@@ -203,17 +203,17 @@ void HomeTab::populateHorizontalRow(brls::Box* container, const std::vector<Medi
     // Clear existing items
     container->clearViews();
 
-    // Set container width to fit all items (160px per item: 150 width + 10 margin)
-    float totalWidth = items.size() * 160.0f;
+    // Set container width to fit all items (180px per item: 160 width + 20 margin)
+    float totalWidth = items.size() * 180.0f;
     container->setWidth(totalWidth);
 
     // Add cells for each item
     for (size_t i = 0; i < items.size(); i++) {
         auto* cell = new MediaItemCell();
         cell->setItem(items[i]);
-        cell->setWidth(150);
-        cell->setHeight(185);  // Square cover (140) + labels (~45)
-        cell->setMarginRight(10);
+        cell->setWidth(160);
+        cell->setHeight(195);  // Square cover (140) + labels (~55)
+        cell->setMarginRight(20);  // More space between items
 
         // Store the item for click handler
         MediaItem itemCopy = items[i];

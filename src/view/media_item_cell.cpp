@@ -102,23 +102,37 @@ void MediaItemCell::setItem(const MediaItem& item) {
     m_thumbnailImage->setWidth(140);
     m_thumbnailImage->setHeight(140);
 
-    // Set title
+    // Set title and subtitle
     if (m_titleLabel) {
-        std::string title = item.title;
-        // Truncate long titles
-        if (title.length() > 18) {
-            title = title.substr(0, 16) + "...";
+        std::string displayTitle = item.title;
+
+        // For podcast episodes, show episode number if available
+        if (item.mediaType == MediaType::PODCAST_EPISODE && item.episodeNumber > 0) {
+            displayTitle = "Ep " + std::to_string(item.episodeNumber) + ": " + item.title;
         }
-        m_originalTitle = title;  // Store truncated title for focus restore
-        m_titleLabel->setText(title);
+
+        // Truncate long titles (allow more chars now that cells are wider)
+        if (displayTitle.length() > 22) {
+            displayTitle = displayTitle.substr(0, 20) + "...";
+        }
+        m_originalTitle = displayTitle;  // Store truncated title for focus restore
+        m_titleLabel->setText(displayTitle);
     }
 
-    // Set subtitle for podcast episodes
+    // Set subtitle for podcast episodes (show podcast name as subtitle)
     if (m_subtitleLabel) {
         if (item.mediaType == MediaType::PODCAST_EPISODE) {
-            // Show subtitle or episode title
-            if (!item.subtitle.empty()) {
-                m_subtitleLabel->setText(item.subtitle);
+            // Show the podcast name (authorName often contains it) or subtitle
+            std::string subtitle = item.subtitle;
+            if (subtitle.empty() && !item.authorName.empty()) {
+                subtitle = item.authorName;
+            }
+            if (!subtitle.empty()) {
+                // Truncate subtitle too
+                if (subtitle.length() > 20) {
+                    subtitle = subtitle.substr(0, 18) + "...";
+                }
+                m_subtitleLabel->setText(subtitle);
                 m_subtitleLabel->setVisibility(brls::Visibility::VISIBLE);
             } else {
                 m_subtitleLabel->setVisibility(brls::Visibility::GONE);
@@ -194,8 +208,12 @@ void MediaItemCell::updateFocusInfo(bool focused) {
     // For podcast episodes, show extended info on focus
     if (m_item.mediaType == MediaType::PODCAST_EPISODE) {
         if (focused) {
-            // Show full title
-            m_titleLabel->setText(m_item.title);
+            // Show full title with episode number
+            std::string fullTitle = m_item.title;
+            if (m_item.episodeNumber > 0) {
+                fullTitle = "Ep " + std::to_string(m_item.episodeNumber) + ": " + m_item.title;
+            }
+            m_titleLabel->setText(fullTitle);
 
             // Show duration and other info
             std::string info;
