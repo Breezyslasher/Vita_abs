@@ -738,7 +738,7 @@ void MediaDetailView::onPlay(bool resume) {
 
         // Check if already downloaded (if checkDownloadsFirst is enabled)
         if (settings.checkDownloadsFirst && downloadsMgr.isDownloaded(podcastId, episodeId)) {
-            std::string downloadedPath = downloadsMgr.getPlaybackPath(podcastId, episodeId);
+            std::string downloadedPath = downloadsMgr.getPlaybackPath(podcastId);
             if (!downloadedPath.empty()) {
                 brls::Logger::info("Playing downloaded podcast episode: {}", downloadedPath);
                 Application::getInstance().pushPlayerActivityWithFile(podcastId, episodeId, downloadedPath, -1.0f);
@@ -762,7 +762,7 @@ void MediaDetailView::onPlay(bool resume) {
 
     // Check if already downloaded (if checkDownloadsFirst is enabled)
     if (settings.checkDownloadsFirst && downloadsMgr.isDownloaded(itemId, episodeId)) {
-        std::string downloadedPath = downloadsMgr.getPlaybackPath(itemId, episodeId);
+        std::string downloadedPath = downloadsMgr.getPlaybackPath(itemId);
         if (!downloadedPath.empty()) {
             brls::Logger::info("Playing downloaded file: {}", downloadedPath);
             Application::getInstance().pushPlayerActivityWithFile(itemId, episodeId, downloadedPath, -1.0f);
