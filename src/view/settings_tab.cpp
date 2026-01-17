@@ -429,6 +429,22 @@ void SettingsTab::createStreamingSection() {
         });
     m_contentBox->addView(maxSizeSelector);
 
+    // HTTP Streaming toggle
+    auto* httpStreamingToggle = new brls::BooleanCell();
+    httpStreamingToggle->init("HTTP Streaming", settings.useHttpStreaming, [&settings](bool value) {
+        settings.useHttpStreaming = value;
+        Application::getInstance().saveSettings();
+    });
+    m_contentBox->addView(httpStreamingToggle);
+
+    // HTTP Streaming description
+    auto* streamingInfoLabel = new brls::Label();
+    streamingInfoLabel->setText("Stream audio directly without downloading first (recommended)");
+    streamingInfoLabel->setFontSize(14);
+    streamingInfoLabel->setMarginLeft(16);
+    streamingInfoLabel->setMarginTop(4);
+    m_contentBox->addView(streamingInfoLabel);
+
     // Save to downloads toggle
     auto* saveToDownloadsToggle = new brls::BooleanCell();
     saveToDownloadsToggle->init("Save to Downloads", settings.saveToDownloads, [&settings](bool value) {
