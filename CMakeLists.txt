@@ -89,6 +89,7 @@ set(APP_SOURCES
     # Player
     src/player/mpv_player.cpp
     src/player/streaming_buffer.cpp
+    src/player/av_player.cpp
 
     # Utils
     src/utils/http_client.cpp
@@ -162,6 +163,7 @@ target_link_libraries(${PROJECT_NAME}
     SceAvcodec_stub
     SceCodecEngine_stub
     SceAudio_stub
+    SceAvPlayer_stub
     SceVshBridge_stub
     SceAppMgr_stub
 

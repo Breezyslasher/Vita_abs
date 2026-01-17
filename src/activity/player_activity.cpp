@@ -9,6 +9,7 @@
 #include "app/temp_file_manager.hpp"
 #include "player/mpv_player.hpp"
 #include "player/streaming_buffer.hpp"
+#include "player/av_player.hpp"
 #include "utils/http_client.hpp"
 #include "utils/image_loader.hpp"
 #include "utils/audio_utils.hpp"
@@ -225,7 +226,40 @@ void PlayerActivity::willDisappear(bool resetState) {
         return;
     }
 
-    // Stop playback and save progress
+#ifdef __vita__
+    // Handle AvPlayer cleanup (for HTTP streaming on Vita)
+    if (m_useAvPlayer) {
+        AvPlayer& avPlayer = AvPlayer::getInstance();
+        double position = avPlayer.getPosition();
+        double duration = avPlayer.getDuration();
+
+        if (position > 0) {
+            float currentTime = static_cast<float>(position);
+            float totalDuration = static_cast<float>(duration);
+
+            // Close session and save progress
+            if (!m_sessionId.empty()) {
+                float timeListened = currentTime - m_lastSyncedTime;
+                if (timeListened < 0) timeListened = 0;
+                AudiobookshelfClient::getInstance().closePlaybackSession(
+                    m_sessionId, currentTime, totalDuration, timeListened);
+                brls::Logger::info("PlayerActivity: Closed AvPlayer session {} at {}s", m_sessionId, currentTime);
+            } else {
+                bool isPodcast = !m_episodeId.empty();
+                bool isFinished = shouldMarkAsFinished(currentTime, totalDuration, isPodcast);
+                AudiobookshelfClient::getInstance().updateProgress(m_itemId, currentTime, totalDuration, isFinished, m_episodeId);
+            }
+        }
+
+        // Stop AvPlayer
+        avPlayer.stop();
+        avPlayer.setStateCallback(nullptr);  // Clear callback
+        m_isPlaying = false;
+        return;
+    }
+#endif
+
+    // Stop playback and save progress (MPV player)
     MpvPlayer& player = MpvPlayer::getInstance();
 
     // Only try to save progress if player is in a valid state
@@ -799,9 +833,8 @@ void PlayerActivity::loadMedia() {
 
             } else {
                 // ================================================================
-                // SINGLE-FILE STREAMING - Use native HTTP + buffer for Vita
-                // Downloads to temp cache using native Vita HTTP, plays once buffered
-                // Temp file is deleted when player exits (not a permanent download)
+                // SINGLE-FILE STREAMING - Use sceAvPlayer for true HTTP streaming
+                // Direct streaming without downloading - uses Vita's native media player
                 // ================================================================
                 std::string streamUrl;
                 if (!session.audioTracks.empty() && !session.audioTracks[0].contentUrl.empty()) {
@@ -816,8 +849,97 @@ void PlayerActivity::loadMedia() {
                     return;
                 }
 
-                brls::Logger::info("PlayerActivity: Using streaming mode (native HTTP + buffer)");
+                brls::Logger::info("PlayerActivity: Using sceAvPlayer for true HTTP streaming");
                 brls::Logger::info("PlayerActivity: Stream URL: {}", streamUrl);
+
+                if (chapterInfoLabel) {
+                    chapterInfoLabel->setText("Connecting...");
+                }
+
+#ifdef __vita__
+                // Use sceAvPlayer for true streaming on Vita
+                AvPlayer& avPlayer = AvPlayer::getInstance();
+
+                // Set up state callback for UI updates
+                avPlayer.setStateCallback([this](AvPlayerState state) {
+                    brls::sync([this, state]() {
+                        switch (state) {
+                            case AvPlayerState::LOADING:
+                            case AvPlayerState::BUFFERING:
+                                if (chapterInfoLabel) {
+                                    chapterInfoLabel->setText("Buffering...");
+                                }
+                                break;
+
+                            case AvPlayerState::PLAYING:
+                                if (chapterInfoLabel) {
+                                    chapterInfoLabel->setText("");
+                                }
+                                m_isPlaying = true;
+                                break;
+
+                            case AvPlayerState::PAUSED:
+                                m_isPlaying = false;
+                                break;
+
+                            case AvPlayerState::ENDED:
+                                brls::Logger::info("PlayerActivity: AvPlayer playback ended");
+                                m_isPlaying = false;
+                                brls::Application::popActivity();
+                                break;
+
+                            case AvPlayerState::ERROR:
+                                brls::Logger::error("PlayerActivity: AvPlayer error: {}",
+                                                  avPlayer.getErrorMessage());
+                                if (chapterInfoLabel) {
+                                    chapterInfoLabel->setText("Playback error");
+                                }
+                                m_isPlaying = false;
+                                break;
+
+                            default:
+                                break;
+                        }
+                        updatePlayPauseButton();
+                    });
+                });
+
+                // Load the stream URL
+                if (!avPlayer.loadUrl(streamUrl, item.title)) {
+                    brls::Logger::error("Failed to load stream with AvPlayer");
+                    if (chapterInfoLabel) {
+                        chapterInfoLabel->setText("Failed to start stream");
+                    }
+                    m_loadingMedia = false;
+                    return;
+                }
+
+                // Seek to resume position if needed
+                if (startTime > 0) {
+                    avPlayer.seek(static_cast<double>(startTime));
+                }
+
+                // Apply playback speed
+                float speed = getSpeedValue(static_cast<int>(settings.playbackSpeed));
+                if (speed != 1.0f) {
+                    avPlayer.setSpeed(speed);
+                }
+
+                // Mark as using AvPlayer
+                m_useAvPlayer = true;
+                m_isPlaying = true;
+
+                // Show video view for controls
+                if (videoView) {
+                    videoView->setVisibility(brls::Visibility::VISIBLE);
+                    videoView->setVideoVisible(true);
+                }
+
+                m_loadingMedia = false;
+                return;  // Early return - AvPlayer handles streaming
+#else
+                // Non-Vita: fall back to MPV with streaming buffer
+                brls::Logger::info("PlayerActivity: Non-Vita platform, using streaming buffer");
 
                 if (chapterInfoLabel) {
                     chapterInfoLabel->setText("Buffering...");
@@ -922,9 +1044,8 @@ void PlayerActivity::loadMedia() {
                 }
 
                 brls::Logger::info("PlayerActivity: Streaming buffer started, waiting for data...");
-                // Don't return yet - we need to continue to the background download section
-                // But mark that we're in streaming mode
                 return;  // Early return - callback will handle playback start
+#endif
             }
 
             // ================================================================
@@ -1030,6 +1151,58 @@ void PlayerActivity::loadMedia() {
 void PlayerActivity::updateProgress() {
     // Don't update if destroying or showing photo
     if (m_destroying || m_isPhoto) return;
+
+#ifdef __vita__
+    // Handle AvPlayer progress updates (for HTTP streaming on Vita)
+    if (m_useAvPlayer) {
+        AvPlayer& avPlayer = AvPlayer::getInstance();
+        avPlayer.update();
+
+        // Update play/pause button state
+        updatePlayPauseButton();
+
+        // Get position and duration
+        double position = avPlayer.getPosition();
+        double duration = avPlayer.getDuration();
+
+        // Store duration for later use
+        if (duration > 0) {
+            m_totalDuration = duration;
+        }
+
+        if (duration > 0) {
+            // Update progress slider
+            if (progressSlider) {
+                progressSlider->setProgress((float)(position / duration));
+            }
+
+            // Update elapsed time label
+            if (timeElapsedLabel) {
+                timeElapsedLabel->setText(formatTime(position));
+            }
+
+            // Update remaining time label
+            if (timeRemainingLabel) {
+                double remaining = duration - position;
+                timeRemainingLabel->setText(formatTimeRemaining(remaining));
+            }
+        }
+
+        // Periodic progress sync (every 30 seconds while playing)
+        if (m_isPlaying) {
+            m_syncCounter++;
+            if (m_syncCounter >= 30) {
+                m_syncCounter = 0;
+                float currentPos = static_cast<float>(position);
+                if (std::abs(currentPos - m_lastSyncedTime) > 5.0f) {
+                    syncProgressToServer();
+                }
+            }
+        }
+
+        return;
+    }
+#endif
 
     MpvPlayer& player = MpvPlayer::getInstance();
 
@@ -1198,6 +1371,16 @@ void PlayerActivity::updateProgress() {
 }
 
 void PlayerActivity::togglePlayPause() {
+#ifdef __vita__
+    if (m_useAvPlayer) {
+        AvPlayer& avPlayer = AvPlayer::getInstance();
+        avPlayer.togglePlayPause();
+        m_isPlaying = avPlayer.isPlaying();
+        updatePlayPauseButton();
+        return;
+    }
+#endif
+
     MpvPlayer& player = MpvPlayer::getInstance();
 
     if (player.isPlaying()) {
@@ -1215,6 +1398,18 @@ void PlayerActivity::togglePlayPause() {
 void PlayerActivity::updatePlayPauseButton() {
     if (!playPauseIcon) return;
 
+#ifdef __vita__
+    if (m_useAvPlayer) {
+        AvPlayer& avPlayer = AvPlayer::getInstance();
+        if (avPlayer.isPlaying()) {
+            playPauseIcon->setText("||");
+        } else {
+            playPauseIcon->setText(">");
+        }
+        return;
+    }
+#endif
+
     MpvPlayer& player = MpvPlayer::getInstance();
 
     if (player.isPlaying()) {
@@ -1225,6 +1420,14 @@ void PlayerActivity::updatePlayPauseButton() {
 }
 
 void PlayerActivity::seek(int seconds) {
+#ifdef __vita__
+    if (m_useAvPlayer) {
+        AvPlayer& avPlayer = AvPlayer::getInstance();
+        avPlayer.seekRelative(static_cast<double>(seconds));
+        return;
+    }
+#endif
+
     MpvPlayer& player = MpvPlayer::getInstance();
     player.seekRelative(seconds);
 }
@@ -1351,10 +1554,20 @@ void PlayerActivity::cyclePlaybackSpeed() {
     settings.playbackSpeed = static_cast<PlaybackSpeed>(nextIndex);
     Application::getInstance().saveSettings();
 
-    // Apply new speed to player
-    MpvPlayer& player = MpvPlayer::getInstance();
     float speed = getSpeedValue(nextIndex);
+
+#ifdef __vita__
+    if (m_useAvPlayer) {
+        AvPlayer& avPlayer = AvPlayer::getInstance();
+        avPlayer.setSpeed(speed);
+    } else {
+        MpvPlayer& player = MpvPlayer::getInstance();
+        player.setSpeed(speed);
+    }
+#else
+    MpvPlayer& player = MpvPlayer::getInstance();
     player.setSpeed(speed);
+#endif
 
     // Update the label
     updateSpeedLabel();
@@ -1363,11 +1576,26 @@ void PlayerActivity::cyclePlaybackSpeed() {
 }
 
 void PlayerActivity::syncProgressToServer() {
+    float currentTime = 0.0f;
+    float duration = 0.0f;
+
+#ifdef __vita__
+    if (m_useAvPlayer) {
+        AvPlayer& avPlayer = AvPlayer::getInstance();
+        currentTime = static_cast<float>(avPlayer.getPosition());
+        duration = static_cast<float>(avPlayer.getDuration());
+    } else {
+        MpvPlayer& player = MpvPlayer::getInstance();
+        if (!player.isInitialized()) return;
+        currentTime = static_cast<float>(player.getPosition());
+        duration = static_cast<float>(player.getDuration());
+    }
+#else
     MpvPlayer& player = MpvPlayer::getInstance();
     if (!player.isInitialized()) return;
-
-    float currentTime = static_cast<float>(player.getPosition());
-    float duration = static_cast<float>(player.getDuration());
+    currentTime = static_cast<float>(player.getPosition());
+    duration = static_cast<float>(player.getDuration());
+#endif
 
     if (duration <= 0 || currentTime < 0) return;
 
