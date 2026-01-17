@@ -142,7 +142,6 @@ void MainActivity::onContentAvailable() {
         }
 
         // Add Home tab first (Continue Listening + Recently Added Episodes) unless disabled
-        AppSettings& settings = Application::getInstance().getSettings();
         if (!settings.disableHome) {
             tabFrame->addTab("Home", []() { return new HomeTab(); });
             brls::Logger::debug("MainActivity: Added Home tab");
