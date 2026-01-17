@@ -99,7 +99,6 @@ struct AppSettings {
     bool showOnlyDownloaded = false;   // Show only downloaded items in library
 
     // Playback Settings
-    bool autoPlayNext = false;         // Auto-play next chapter
     bool resumePlayback = true;        // Resume from last position
     PlaybackSpeed playbackSpeed = PlaybackSpeed::SPEED_1X;
     SleepTimer sleepTimer = SleepTimer::OFF;
@@ -169,8 +168,17 @@ public:
     bool isLoggedIn() const { return !m_authToken.empty(); }
     const std::string& getAuthToken() const { return m_authToken; }
     void setAuthToken(const std::string& token) { m_authToken = token; }
+
+    // Server URL management (supports local and remote URLs)
     const std::string& getServerUrl() const { return m_serverUrl; }
     void setServerUrl(const std::string& url) { m_serverUrl = url; }
+    const std::string& getLocalServerUrl() const { return m_localServerUrl; }
+    void setLocalServerUrl(const std::string& url) { m_localServerUrl = url; }
+    const std::string& getRemoteServerUrl() const { return m_remoteServerUrl; }
+    void setRemoteServerUrl(const std::string& url) { m_remoteServerUrl = url; }
+    bool isUsingLocalUrl() const { return m_useLocalUrl; }
+    void setUseLocalUrl(bool useLocal);
+    bool tryConnectToServer(); // Try to connect, auto-switching URLs if needed
 
     // Settings persistence
     bool loadSettings();
@@ -218,7 +226,10 @@ private:
 
     bool m_initialized = false;
     std::string m_authToken;
-    std::string m_serverUrl;
+    std::string m_serverUrl;          // Currently active URL
+    std::string m_localServerUrl;     // Local network URL (e.g., http://192.168.1.100:13378)
+    std::string m_remoteServerUrl;    // Remote URL (e.g., https://abs.example.com)
+    bool m_useLocalUrl = true;        // Whether currently using local URL
     std::string m_username;
     std::string m_currentLibraryId;
     AppSettings m_settings;
