@@ -6,6 +6,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #ifdef __vita__
 #include <mpv/client.h>
@@ -20,6 +21,14 @@ typedef struct mpv_render_context mpv_render_context;
 #endif
 
 namespace vitaabs {
+
+// Track info for multi-file playback
+struct PlaylistTrack {
+    std::string url;
+    std::string title;
+    double startOffset;  // Start offset in combined timeline
+    double duration;
+};
 
 // Player states
 enum class MpvPlayerState {
@@ -69,6 +78,19 @@ public:
     // Playback control
     bool loadUrl(const std::string& url, const std::string& title = "", double startTime = -1.0);
     bool loadFile(const std::string& path, double startTime = -1.0);
+
+    // Multi-file playlist support for audiobooks with multiple tracks
+    // Streams each track sequentially without downloading first
+    bool loadPlaylist(const std::vector<PlaylistTrack>& tracks, const std::string& title = "", double startTime = -1.0);
+
+    // Get current track index in playlist (0-based, -1 if not in playlist mode)
+    int getCurrentTrackIndex() const { return m_currentTrackIndex; }
+    int getTrackCount() const { return static_cast<int>(m_playlist.size()); }
+
+    // Get combined position across all tracks
+    double getCombinedPosition() const;
+    double getCombinedDuration() const;
+
     void play();
     void pause();
     void togglePause();
@@ -168,6 +190,12 @@ private:
     bool m_subtitlesVisible = true;
     bool m_stopping = false;        // Shutdown in progress
     bool m_commandPending = false;  // Async command pending
+
+    // Multi-file playlist support
+    std::vector<PlaylistTrack> m_playlist;
+    int m_currentTrackIndex = -1;   // -1 = not in playlist mode
+    double m_combinedDuration = 0.0;
+    bool m_playlistMode = false;
 
 #ifdef __vita__
     // GXM render resources

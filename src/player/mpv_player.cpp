@@ -280,6 +280,76 @@ bool MpvPlayer::loadFile(const std::string& path, double startTime) {
     return loadUrl(path, "", startTime);
 }
 
+bool MpvPlayer::loadPlaylist(const std::vector<PlaylistTrack>& tracks, const std::string& title, double startTime) {
+    if (tracks.empty()) {
+        brls::Logger::error("MpvPlayer: Cannot load empty playlist");
+        return false;
+    }
+
+    if (!m_mpv) {
+        if (!init()) {
+            return false;
+        }
+    }
+
+    // Store playlist info
+    m_playlist = tracks;
+    m_playlistMode = true;
+    m_combinedDuration = 0.0;
+
+    // Calculate combined duration and find which track to start on
+    for (const auto& track : m_playlist) {
+        m_combinedDuration += track.duration;
+    }
+
+    brls::Logger::info("MpvPlayer: Loading playlist with {} tracks, total duration: {}s, startTime: {}s",
+                      m_playlist.size(), m_combinedDuration, startTime);
+
+    // Find which track to start on based on startTime
+    m_currentTrackIndex = 0;
+    double trackStartTime = 0.0;
+
+    if (startTime > 0) {
+        double accumulated = 0.0;
+        for (size_t i = 0; i < m_playlist.size(); i++) {
+            if (startTime < accumulated + m_playlist[i].duration) {
+                m_currentTrackIndex = static_cast<int>(i);
+                trackStartTime = startTime - accumulated;
+                break;
+            }
+            accumulated += m_playlist[i].duration;
+        }
+    }
+
+    brls::Logger::info("MpvPlayer: Starting at track {}/{} at {}s within track",
+                      m_currentTrackIndex + 1, m_playlist.size(), trackStartTime);
+
+    // Load the first/current track
+    const PlaylistTrack& currentTrack = m_playlist[m_currentTrackIndex];
+    return loadUrl(currentTrack.url, title.empty() ? currentTrack.title : title, trackStartTime);
+}
+
+double MpvPlayer::getCombinedPosition() const {
+    if (!m_playlistMode || m_currentTrackIndex < 0) {
+        return getPosition();
+    }
+
+    // Calculate position across all tracks
+    double combinedPos = 0.0;
+    for (int i = 0; i < m_currentTrackIndex && i < static_cast<int>(m_playlist.size()); i++) {
+        combinedPos += m_playlist[i].duration;
+    }
+    combinedPos += getPosition();
+    return combinedPos;
+}
+
+double MpvPlayer::getCombinedDuration() const {
+    if (!m_playlistMode) {
+        return getDuration();
+    }
+    return m_combinedDuration;
+}
+
 void MpvPlayer::play() {
     if (!m_mpv || m_stopping) return;
 
@@ -311,6 +381,13 @@ void MpvPlayer::stop() {
 
     m_currentUrl.clear();
     m_playbackInfo = MpvPlaybackInfo();
+
+    // Reset playlist mode
+    m_playlist.clear();
+    m_playlistMode = false;
+    m_currentTrackIndex = -1;
+    m_combinedDuration = 0.0;
+
     setState(MpvPlayerState::IDLE);
 }
 
@@ -626,7 +703,32 @@ void MpvPlayer::eventMainLoop() {
                     // MPV_END_FILE_REASON_STOP = 2
                     // MPV_END_FILE_REASON_ERROR = 4
                     if (end->reason == 0) {
-                        setState(MpvPlayerState::ENDED);
+                        // EOF reached - check if we're in playlist mode and have more tracks
+                        if (m_playlistMode && m_currentTrackIndex >= 0 &&
+                            m_currentTrackIndex < static_cast<int>(m_playlist.size()) - 1) {
+                            // Load next track in playlist
+                            m_currentTrackIndex++;
+                            brls::Logger::info("MpvPlayer: Loading next track {}/{}",
+                                             m_currentTrackIndex + 1, m_playlist.size());
+
+                            const PlaylistTrack& nextTrack = m_playlist[m_currentTrackIndex];
+                            m_currentUrl = nextTrack.url;
+                            m_commandPending = true;
+
+                            const char* cmd[] = {"loadfile", m_currentUrl.c_str(), "replace", nullptr};
+                            int result = mpv_command_async(m_mpv, CMD_LOADFILE, cmd);
+                            if (result < 0) {
+                                brls::Logger::error("MpvPlayer: Failed to load next track: {}",
+                                                   mpv_error_string(result));
+                                m_commandPending = false;
+                                setState(MpvPlayerState::ERROR);
+                            } else {
+                                setState(MpvPlayerState::LOADING);
+                            }
+                        } else {
+                            // No more tracks or not in playlist mode
+                            setState(MpvPlayerState::ENDED);
+                        }
                     } else if (end->reason == 4 || end->error < 0) {
                         if (end->error < 0) {
                             m_errorMessage = std::string("Playback error: ") + mpv_error_string(end->error);

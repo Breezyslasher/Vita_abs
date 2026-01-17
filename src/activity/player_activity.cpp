@@ -719,8 +719,8 @@ void PlayerActivity::loadMedia() {
             }
         }
 
-        // Check if we can use HTTP streaming (single-file audiobooks only)
-        bool canUseStreaming = settings.useHttpStreaming && !isMultiFile && !useDownloads;
+        // Check if we can use HTTP streaming (enabled for both single and multi-file audiobooks)
+        bool canUseStreaming = settings.useHttpStreaming && !useDownloads;
 
         if (!needsDownload) {
             // Using cached/downloaded file
@@ -731,26 +731,8 @@ void PlayerActivity::loadMedia() {
         } else if (canUseStreaming) {
             // ================================================================
             // HTTP STREAMING MODE - Stream directly without downloading first
+            // Supports both single-file and multi-file audiobooks via playlist
             // ================================================================
-            std::string streamUrl;
-            if (!session.audioTracks.empty() && !session.audioTracks[0].contentUrl.empty()) {
-                streamUrl = client.getStreamUrl(session.audioTracks[0].contentUrl, "");
-            } else {
-                streamUrl = client.getDirectStreamUrl(m_itemId, 0);
-            }
-
-            if (streamUrl.empty()) {
-                brls::Logger::error("Failed to get stream URL for: {}", m_itemId);
-                m_loadingMedia = false;
-                return;
-            }
-
-            brls::Logger::info("PlayerActivity: Using HTTP streaming mode");
-            brls::Logger::info("PlayerActivity: Stream URL: {}", streamUrl);
-
-            if (chapterInfoLabel) {
-                chapterInfoLabel->setText("Buffering...");
-            }
 
             // Initialize player for streaming
             MpvPlayer& player = MpvPlayer::getInstance();
@@ -764,14 +746,79 @@ void PlayerActivity::loadMedia() {
                 }
             }
 
-            brls::Logger::info("PlayerActivity: Loading HTTP stream (startTime={}s)", startTime);
-            // Load the HTTP stream URL directly - MPV will handle buffering
-            if (!player.loadUrl(streamUrl, item.title, startTime > 0 ? static_cast<double>(startTime) : -1.0)) {
-                brls::Logger::error("Failed to load HTTP stream: {}", streamUrl);
-                m_loadingMedia = false;
-                return;
+            if (isMultiFile) {
+                // ================================================================
+                // MULTI-FILE STREAMING - Use playlist to stream tracks sequentially
+                // ================================================================
+                brls::Logger::info("PlayerActivity: Multi-file streaming mode ({} tracks)", session.audioTracks.size());
+
+                if (chapterInfoLabel) {
+                    chapterInfoLabel->setText("Loading playlist...");
+                }
+
+                // Build playlist from audio tracks
+                std::vector<PlaylistTrack> playlist;
+                for (const auto& track : session.audioTracks) {
+                    PlaylistTrack pt;
+                    pt.url = client.getStreamUrl(track.contentUrl, "");
+                    pt.title = track.title;
+                    pt.startOffset = track.startOffset;
+                    pt.duration = track.duration;
+
+                    if (pt.url.empty()) {
+                        brls::Logger::error("Failed to get stream URL for track: {}", track.title);
+                        m_loadingMedia = false;
+                        return;
+                    }
+
+                    playlist.push_back(pt);
+                    brls::Logger::debug("PlayerActivity: Track {}: {} ({}s)", track.index, pt.title, pt.duration);
+                }
+
+                brls::Logger::info("PlayerActivity: Loading playlist (startTime={}s)", startTime);
+
+                // Load playlist - MPV will handle streaming each track
+                if (!player.loadPlaylist(playlist, item.title, startTime > 0 ? static_cast<double>(startTime) : -1.0)) {
+                    brls::Logger::error("Failed to load playlist");
+                    m_loadingMedia = false;
+                    return;
+                }
+
+                brls::Logger::info("PlayerActivity: Playlist streaming started");
+
+            } else {
+                // ================================================================
+                // SINGLE-FILE STREAMING - Stream directly
+                // ================================================================
+                std::string streamUrl;
+                if (!session.audioTracks.empty() && !session.audioTracks[0].contentUrl.empty()) {
+                    streamUrl = client.getStreamUrl(session.audioTracks[0].contentUrl, "");
+                } else {
+                    streamUrl = client.getDirectStreamUrl(m_itemId, 0);
+                }
+
+                if (streamUrl.empty()) {
+                    brls::Logger::error("Failed to get stream URL for: {}", m_itemId);
+                    m_loadingMedia = false;
+                    return;
+                }
+
+                brls::Logger::info("PlayerActivity: Using HTTP streaming mode");
+                brls::Logger::info("PlayerActivity: Stream URL: {}", streamUrl);
+
+                if (chapterInfoLabel) {
+                    chapterInfoLabel->setText("Buffering...");
+                }
+
+                brls::Logger::info("PlayerActivity: Loading HTTP stream (startTime={}s)", startTime);
+                // Load the HTTP stream URL directly - MPV will handle buffering
+                if (!player.loadUrl(streamUrl, item.title, startTime > 0 ? static_cast<double>(startTime) : -1.0)) {
+                    brls::Logger::error("Failed to load HTTP stream: {}", streamUrl);
+                    m_loadingMedia = false;
+                    return;
+                }
+                brls::Logger::info("PlayerActivity: HTTP streaming started, buffering...");
             }
-            brls::Logger::info("PlayerActivity: HTTP streaming started, buffering...");
 
             // Apply saved playback speed
             AppSettings& playSettings = Application::getInstance().getSettings();
@@ -1123,8 +1170,9 @@ void PlayerActivity::updateProgress() {
         }
     }
 
-    double position = player.getPosition();
-    double duration = player.getDuration();
+    // Use combined position/duration for playlist mode (multi-file audiobooks)
+    double position = player.getCombinedPosition();
+    double duration = player.getCombinedDuration();
 
     // Log position after seek to verify it worked
     if (justSeeked && position > 0) {
@@ -1135,6 +1183,17 @@ void PlayerActivity::updateProgress() {
     // Store duration for later use
     if (duration > 0) {
         m_totalDuration = duration;
+    }
+
+    // Show track info for multi-file audiobooks
+    if (player.getTrackCount() > 1 && chapterInfoLabel) {
+        char trackInfo[64];
+        snprintf(trackInfo, sizeof(trackInfo), "Track %d/%d",
+                 player.getCurrentTrackIndex() + 1, player.getTrackCount());
+        std::string currentText = chapterInfoLabel->getFullText();
+        if (currentText != trackInfo && currentText != "Buffering...") {
+            chapterInfoLabel->setText(trackInfo);
+        }
     }
 
     if (duration > 0) {
