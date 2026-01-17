@@ -380,13 +380,10 @@ bool Application::loadSettings() {
     m_settings.deleteAfterFinish = extractBool("deleteAfterFinish", false);
     m_settings.syncProgressOnConnect = extractBool("syncProgressOnConnect", true);
 
-    // Load streaming/temp file settings
+    // Load streaming settings
     m_settings.useHttpStreaming = extractBool("useHttpStreaming", true);  // Default: enabled
-    m_settings.saveToDownloads = extractBool("saveToDownloads", false);
-    m_settings.maxTempFiles = extractInt("maxTempFiles");
-    if (m_settings.maxTempFiles <= 0) m_settings.maxTempFiles = 5;
-    m_settings.maxTempSizeMB = extractInt("maxTempSizeMB");
-    if (m_settings.maxTempSizeMB <= 0) m_settings.maxTempSizeMB = 500;
+    m_settings.checkDownloadsFirst = extractBool("checkDownloadsFirst", true);  // Default: check downloads
+    m_settings.backgroundDownload = extractBool("backgroundDownload", false);  // Default: disabled
 
     // Load player UI settings
     m_settings.showDownloadProgress = extractBool("showDownloadProgress", true);
@@ -467,11 +464,10 @@ bool Application::saveSettings() {
     json += "  \"deleteAfterFinish\": " + std::string(m_settings.deleteAfterFinish ? "true" : "false") + ",\n";
     json += "  \"syncProgressOnConnect\": " + std::string(m_settings.syncProgressOnConnect ? "true" : "false") + ",\n";
 
-    // Streaming/temp file settings
+    // Streaming settings
     json += "  \"useHttpStreaming\": " + std::string(m_settings.useHttpStreaming ? "true" : "false") + ",\n";
-    json += "  \"saveToDownloads\": " + std::string(m_settings.saveToDownloads ? "true" : "false") + ",\n";
-    json += "  \"maxTempFiles\": " + std::to_string(m_settings.maxTempFiles) + ",\n";
-    json += "  \"maxTempSizeMB\": " + std::to_string(m_settings.maxTempSizeMB) + ",\n";
+    json += "  \"checkDownloadsFirst\": " + std::string(m_settings.checkDownloadsFirst ? "true" : "false") + ",\n";
+    json += "  \"backgroundDownload\": " + std::string(m_settings.backgroundDownload ? "true" : "false") + ",\n";
 
     // Player UI settings
     json += "  \"showDownloadProgress\": " + std::string(m_settings.showDownloadProgress ? "true" : "false") + ",\n";

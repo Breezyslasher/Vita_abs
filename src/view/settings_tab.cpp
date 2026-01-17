@@ -429,6 +429,10 @@ void SettingsTab::createStreamingSection() {
         });
     m_contentBox->addView(maxSizeSelector);
 
+    // ================================================================
+    // Streaming Settings
+    // ================================================================
+
     // HTTP Streaming toggle
     auto* httpStreamingToggle = new brls::BooleanCell();
     httpStreamingToggle->init("HTTP Streaming", settings.useHttpStreaming, [&settings](bool value) {
@@ -439,72 +443,43 @@ void SettingsTab::createStreamingSection() {
 
     // HTTP Streaming description
     auto* streamingInfoLabel = new brls::Label();
-    streamingInfoLabel->setText("Stream audio directly without downloading first (recommended)");
+    streamingInfoLabel->setText("Stream audio directly without downloading (recommended)");
     streamingInfoLabel->setFontSize(14);
     streamingInfoLabel->setMarginLeft(16);
     streamingInfoLabel->setMarginTop(4);
     m_contentBox->addView(streamingInfoLabel);
 
-    // Save to downloads toggle
-    auto* saveToDownloadsToggle = new brls::BooleanCell();
-    saveToDownloadsToggle->init("Save to Downloads", settings.saveToDownloads, [&settings](bool value) {
-        settings.saveToDownloads = value;
+    // Check Downloads First toggle
+    auto* checkDownloadsToggle = new brls::BooleanCell();
+    checkDownloadsToggle->init("Check Downloads First", settings.checkDownloadsFirst, [&settings](bool value) {
+        settings.checkDownloadsFirst = value;
         Application::getInstance().saveSettings();
     });
-    m_contentBox->addView(saveToDownloadsToggle);
+    m_contentBox->addView(checkDownloadsToggle);
 
-    // Save to downloads description
-    auto* saveInfoLabel = new brls::Label();
-    saveInfoLabel->setText("When enabled, streamed files are saved permanently");
-    saveInfoLabel->setFontSize(14);
-    saveInfoLabel->setMarginLeft(16);
-    saveInfoLabel->setMarginTop(4);
-    m_contentBox->addView(saveInfoLabel);
+    // Check Downloads First description
+    auto* checkDownloadsInfoLabel = new brls::Label();
+    checkDownloadsInfoLabel->setText("Use downloaded file if available before streaming");
+    checkDownloadsInfoLabel->setFontSize(14);
+    checkDownloadsInfoLabel->setMarginLeft(16);
+    checkDownloadsInfoLabel->setMarginTop(4);
+    m_contentBox->addView(checkDownloadsInfoLabel);
 
-    // Clear cache button
-    TempFileManager& tempMgr = TempFileManager::getInstance();
-    tempMgr.init();
-    int64_t cacheSize = tempMgr.getTotalTempSize();
-    int cacheCount = tempMgr.getTempFileCount();
-
-    auto* clearCacheCell = new brls::DetailCell();
-    clearCacheCell->setText("Clear Streaming Cache");
-
-    std::string cacheInfo;
-    if (cacheCount == 0) {
-        cacheInfo = "Empty";
-    } else {
-        // Format size
-        if (cacheSize >= 1024 * 1024) {
-            cacheInfo = std::to_string(cacheSize / (1024 * 1024)) + " MB (" + std::to_string(cacheCount) + " files)";
-        } else if (cacheSize >= 1024) {
-            cacheInfo = std::to_string(cacheSize / 1024) + " KB (" + std::to_string(cacheCount) + " files)";
-        } else {
-            cacheInfo = std::to_string(cacheSize) + " bytes (" + std::to_string(cacheCount) + " files)";
-        }
-    }
-    clearCacheCell->setDetailText(cacheInfo);
-
-    clearCacheCell->registerClickAction([clearCacheCell](brls::View* view) {
-        brls::Dialog* dialog = new brls::Dialog("Clear all cached streaming files?");
-
-        dialog->addButton("Cancel", [dialog]() {
-            dialog->close();
-        });
-
-        dialog->addButton("Clear", [dialog, clearCacheCell]() {
-            TempFileManager::getInstance().clearAllTempFiles();
-            if (clearCacheCell) {
-                clearCacheCell->setDetailText("Empty");
-            }
-            dialog->close();
-            brls::Application::notify("Streaming cache cleared");
-        });
-
-        dialog->open();
-        return true;
+    // Background Download toggle
+    auto* bgDownloadToggle = new brls::BooleanCell();
+    bgDownloadToggle->init("Background Download", settings.backgroundDownload, [&settings](bool value) {
+        settings.backgroundDownload = value;
+        Application::getInstance().saveSettings();
     });
-    m_contentBox->addView(clearCacheCell);
+    m_contentBox->addView(bgDownloadToggle);
+
+    // Background Download description
+    auto* bgDownloadInfoLabel = new brls::Label();
+    bgDownloadInfoLabel->setText("Download to library while streaming (saves for offline)");
+    bgDownloadInfoLabel->setFontSize(14);
+    bgDownloadInfoLabel->setMarginLeft(16);
+    bgDownloadInfoLabel->setMarginTop(4);
+    m_contentBox->addView(bgDownloadInfoLabel);
 }
 
 void SettingsTab::createDownloadsSection() {

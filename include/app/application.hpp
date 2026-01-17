@@ -130,14 +130,13 @@ struct AppSettings {
     bool deleteAfterFinish = false;    // Delete downloaded book after finishing
     bool syncProgressOnConnect = true;
 
-    // Streaming/Temp File Settings
+    // Streaming Settings
     bool useHttpStreaming = true;      // Use HTTP streaming instead of downloading first (default: enabled)
-    bool saveToDownloads = false;      // Save streamed files to downloads folder instead of temp
-    int maxTempFiles = 5;              // Maximum number of temp files to keep
-    int64_t maxTempSizeMB = 500;       // Maximum total temp size in MB (0 = unlimited)
+    bool checkDownloadsFirst = true;   // Check if file is downloaded before streaming (default: enabled)
+    bool backgroundDownload = false;   // Download in background while streaming (when enabled, saves to downloads)
 
     // Player UI Settings
-    bool showDownloadProgress = true;  // Show background download progress in player for multi-file books
+    bool showDownloadProgress = true;  // Show background download progress in player
 
     // Sleep/Power Settings
     bool preventSleep = true;          // Prevent screen sleep during playback
