@@ -8,9 +8,13 @@
 #include <borealis.hpp>
 #include <borealis/core/timer.hpp>
 #include <string>
+#include <memory>
 
-// Forward declaration
-namespace vitaabs { class VideoView; }
+// Forward declarations
+namespace vitaabs {
+    class VideoView;
+    class StreamingBufferManager;
+}
 
 namespace vitaabs {
 
@@ -71,6 +75,9 @@ private:
     int m_syncCounter = 0;        // Counter for periodic server sync (every 30 updates = 30 seconds)
     float m_lastSyncedTime = 0.0f; // Last position synced to server
     std::string m_sessionId;      // Active playback session ID (for server sync)
+
+    // Streaming buffer for progressive download+play (using native HTTP)
+    std::shared_ptr<StreamingBufferManager> m_streamingBuffer;
 
     // Main UI bindings
     BRLS_BIND(brls::Box, playerContainer, "player/container");

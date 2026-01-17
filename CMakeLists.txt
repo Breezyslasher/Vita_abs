@@ -88,6 +88,7 @@ set(APP_SOURCES
 
     # Player
     src/player/mpv_player.cpp
+    src/player/streaming_buffer.cpp
 
     # Utils
     src/utils/http_client.cpp

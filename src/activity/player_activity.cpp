@@ -8,6 +8,7 @@
 #include "app/downloads_manager.hpp"
 #include "app/temp_file_manager.hpp"
 #include "player/mpv_player.hpp"
+#include "player/streaming_buffer.hpp"
 #include "utils/http_client.hpp"
 #include "utils/image_loader.hpp"
 #include "utils/audio_utils.hpp"
@@ -206,6 +207,13 @@ void PlayerActivity::willDisappear(bool resetState) {
 
     // Stop update timer first
     m_updateTimer.stop();
+
+    // Stop and clean up streaming buffer (deletes temp cache file)
+    if (m_streamingBuffer) {
+        brls::Logger::debug("PlayerActivity: Cleaning up streaming buffer");
+        m_streamingBuffer->cancel();  // This deletes the temp file
+        m_streamingBuffer.reset();
+    }
 
     // Hide video view
     if (videoView) {
@@ -791,7 +799,9 @@ void PlayerActivity::loadMedia() {
 
             } else {
                 // ================================================================
-                // SINGLE-FILE STREAMING - Stream directly
+                // SINGLE-FILE STREAMING - Use native HTTP + buffer for Vita
+                // Downloads to temp cache using native Vita HTTP, plays once buffered
+                // Temp file is deleted when player exits (not a permanent download)
                 // ================================================================
                 std::string streamUrl;
                 if (!session.audioTracks.empty() && !session.audioTracks[0].contentUrl.empty()) {
@@ -806,24 +816,115 @@ void PlayerActivity::loadMedia() {
                     return;
                 }
 
-                brls::Logger::info("PlayerActivity: Using HTTP streaming mode");
+                brls::Logger::info("PlayerActivity: Using streaming mode (native HTTP + buffer)");
                 brls::Logger::info("PlayerActivity: Stream URL: {}", streamUrl);
 
                 if (chapterInfoLabel) {
                     chapterInfoLabel->setText("Buffering...");
                 }
 
-                brls::Logger::info("PlayerActivity: Loading HTTP stream (startTime={}s)", startTime);
-                brls::Logger::debug("PlayerActivity: Calling player.loadUrl...");
-                // Load the HTTP stream URL directly - MPV will handle buffering
-                bool loadResult = player.loadUrl(streamUrl, item.title, startTime > 0 ? static_cast<double>(startTime) : -1.0);
-                brls::Logger::debug("PlayerActivity: player.loadUrl returned: {}", loadResult);
-                if (!loadResult) {
-                    brls::Logger::error("Failed to load HTTP stream: {}", streamUrl);
+                // Create streaming buffer manager
+                m_streamingBuffer = std::make_shared<StreamingBufferManager>(m_itemId, m_episodeId);
+
+                // Capture needed values for callbacks
+                std::string itemTitle = item.title;
+                float resumeTime = startTime;
+
+                // Set up state callback for when buffer is ready
+                m_streamingBuffer->setStateCallback([this, itemTitle, resumeTime, &settings](BufferState state) {
+                    switch (state) {
+                        case BufferState::READY: {
+                            brls::Logger::info("PlayerActivity: Buffer ready, starting playback");
+
+                            // Initialize player if needed
+                            MpvPlayer& player = MpvPlayer::getInstance();
+                            if (!player.isInitialized()) {
+                                if (!player.init()) {
+                                    brls::Logger::error("Failed to initialize MPV player");
+                                    return;
+                                }
+                            }
+
+                            // Load the buffered temp file (local file, not HTTP)
+                            std::string tempPath = m_streamingBuffer->getTempPath();
+                            brls::Logger::info("PlayerActivity: Loading buffered file: {}", tempPath);
+
+                            if (!player.loadFile(tempPath, resumeTime > 0 ? static_cast<double>(resumeTime) : -1.0)) {
+                                brls::Logger::error("Failed to load buffered file");
+                                if (chapterInfoLabel) {
+                                    chapterInfoLabel->setText("Playback failed");
+                                }
+                                return;
+                            }
+
+                            // Apply playback speed
+                            float speed = getSpeedValue(static_cast<int>(settings.playbackSpeed));
+                            if (speed != 1.0f) {
+                                player.setSpeed(speed);
+                            }
+
+                            // Update UI
+                            if (chapterInfoLabel) {
+                                chapterInfoLabel->setText("");
+                            }
+                            if (videoView) {
+                                videoView->setVisibility(brls::Visibility::VISIBLE);
+                                videoView->setVideoVisible(true);
+                            }
+
+                            m_isPlaying = true;
+                            m_loadingMedia = false;
+                            break;
+                        }
+
+                        case BufferState::COMPLETE:
+                            brls::Logger::info("PlayerActivity: Stream buffer complete");
+                            break;
+
+                        case BufferState::ERROR:
+                            brls::Logger::error("PlayerActivity: Stream buffer error: {}",
+                                              m_streamingBuffer->getErrorMessage());
+                            if (chapterInfoLabel) {
+                                chapterInfoLabel->setText("Streaming error");
+                            }
+                            m_loadingMedia = false;
+                            break;
+
+                        default:
+                            break;
+                    }
+                });
+
+                // Set up progress callback
+                m_streamingBuffer->setProgressCallback([this](int64_t buffered, int64_t total) {
+                    if (chapterInfoLabel && !m_isPlaying) {
+                        if (total > 0) {
+                            double percent = (double)buffered / total * 100.0;
+                            char buf[64];
+                            snprintf(buf, sizeof(buf), "Buffering %.0f%%", percent);
+                            chapterInfoLabel->setText(buf);
+                        } else {
+                            char buf[64];
+                            snprintf(buf, sizeof(buf), "Buffering %dMB...", (int)(buffered / (1024 * 1024)));
+                            chapterInfoLabel->setText(buf);
+                        }
+                    }
+                });
+
+                // Start the download with appropriate extension
+                if (!m_streamingBuffer->startDownload(streamUrl, ext)) {
+                    brls::Logger::error("Failed to start streaming buffer");
+                    if (chapterInfoLabel) {
+                        chapterInfoLabel->setText("Failed to start stream");
+                    }
                     m_loadingMedia = false;
                     return;
                 }
-                brls::Logger::info("PlayerActivity: HTTP streaming started, buffering...");
+
+                brls::Logger::info("PlayerActivity: Streaming buffer started, waiting for data...");
+                // Don't return yet - we need to continue to the background download section
+                // But mark that we're in streaming mode
+                return;  // Early return - callback will handle playback start
             }
 
             // ================================================================
