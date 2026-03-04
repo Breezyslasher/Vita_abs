@@ -23,6 +23,29 @@
 #include <psp2/io/stat.h>
 #endif
 
+namespace {
+
+// Box subclass that shows/hides a square button hint on focus
+class FocusHintBox : public brls::Box {
+public:
+    void setHintImage(brls::Image* hint) { m_hint = hint; }
+
+    void onFocusGained() override {
+        brls::Box::onFocusGained();
+        if (m_hint) m_hint->setVisibility(brls::Visibility::VISIBLE);
+    }
+
+    void onFocusLost() override {
+        brls::Box::onFocusLost();
+        if (m_hint) m_hint->setVisibility(brls::Visibility::GONE);
+    }
+
+private:
+    brls::Image* m_hint = nullptr;
+};
+
+} // anonymous namespace
+
 namespace vitaabs {
 
 MediaDetailView::MediaDetailView(const MediaItem& item)
@@ -817,7 +840,7 @@ void MediaDetailView::populateChapters() {
     for (size_t i = 0; i < m_item.chapters.size(); ++i) {
         const auto& chapter = m_item.chapters[i];
 
-        auto* chapterRow = new brls::Box();
+        auto* chapterRow = new FocusHintBox();
         chapterRow->setAxis(brls::Axis::ROW);
         chapterRow->setAlignItems(brls::AlignItems::CENTER);
         chapterRow->setHeight(56);
@@ -825,6 +848,16 @@ void MediaDetailView::populateChapters() {
         chapterRow->setPadding(10, 14, 10, 14);
         chapterRow->setCornerRadius(8);
         chapterRow->setFocusable(true);
+
+        // Square button hint (visible on focus only)
+        auto* squareHint = new brls::Image();
+        squareHint->setSize(brls::Size(16, 16));
+        squareHint->setScalingType(brls::ImageScalingType::FIT);
+        squareHint->setImageFromFile("app0:resources/images/square_button.png");
+        squareHint->setMarginRight(8);
+        squareHint->setVisibility(brls::Visibility::GONE);
+        chapterRow->addView(squareHint);
+        chapterRow->setHintImage(squareHint);
 
         // Highlight current chapter
         bool isCurrentChapter = (currentTime >= chapter.start && currentTime < chapter.end);
@@ -993,7 +1026,7 @@ void MediaDetailView::applyFilters() {
     for (size_t i = 0; i < filtered.size(); ++i) {
         const auto& child = filtered[i];
 
-        auto* episodeRow = new brls::Box();
+        auto* episodeRow = new FocusHintBox();
         episodeRow->setAxis(brls::Axis::ROW);
         episodeRow->setAlignItems(brls::AlignItems::CENTER);
         episodeRow->setHeight(56);
@@ -1002,6 +1035,16 @@ void MediaDetailView::applyFilters() {
         episodeRow->setCornerRadius(8);
         episodeRow->setBackgroundColor(nvgRGBA(40, 40, 40, 255));
         episodeRow->setFocusable(true);
+
+        // Square button hint (visible on focus only)
+        auto* squareHint = new brls::Image();
+        squareHint->setSize(brls::Size(16, 16));
+        squareHint->setScalingType(brls::ImageScalingType::FIT);
+        squareHint->setImageFromFile("app0:resources/images/square_button.png");
+        squareHint->setMarginRight(8);
+        squareHint->setVisibility(brls::Visibility::GONE);
+        episodeRow->addView(squareHint);
+        episodeRow->setHintImage(squareHint);
 
         // Left side: title + duration
         auto* textBox = new brls::Box();
