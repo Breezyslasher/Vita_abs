@@ -1,6 +1,6 @@
 /**
  * VitaABS - Downloads Tab
- * View for managing active downloads (queued, downloading, paused, failed)
+ * View for managing local (Vita) and server (ABS) downloads
  */
 
 #pragma once
@@ -25,17 +25,24 @@ public:
 private:
     void refresh();
     void refreshServerQueue();
+    void refreshServerDownloads();
     void startAutoRefresh();
     void stopAutoRefresh();
 
-    // Server download queue section (items downloading from server)
+    // Local downloads section (items downloading from ABS server to Vita)
     brls::Box* m_serverSection = nullptr;
     brls::Label* m_serverHeader = nullptr;
     brls::ScrollingFrame* m_serverScroll = nullptr;
     brls::Box* m_serverContainer = nullptr;
     brls::Label* m_serverEmptyLabel = nullptr;
 
-    // Empty state (shown when queue is empty)
+    // Server downloads section (ABS server downloading podcast episodes)
+    brls::Box* m_absSection = nullptr;
+    brls::Label* m_absHeader = nullptr;
+    brls::Box* m_absContainer = nullptr;
+    brls::Label* m_absEmptyLabel = nullptr;
+
+    // Empty state (shown when both sections are empty)
     brls::Box* m_emptyStateBox = nullptr;
 
     // Top action buttons

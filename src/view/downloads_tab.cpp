@@ -7,6 +7,7 @@
 
 #include "view/downloads_tab.hpp"
 #include "app/downloads_manager.hpp"
+#include "app/audiobookshelf_client.hpp"
 #include "app/application.hpp"
 #include "activity/player_activity.hpp"
 #include "utils/image_loader.hpp"
@@ -290,24 +291,29 @@ DownloadsTab::DownloadsTab() {
     m_serverContainer->setAxis(brls::Axis::COLUMN);
     m_serverScroll->setContentView(m_serverContainer);
 
-    // === Server Downloads Section ===
-    auto* serverDlSection = new brls::Box();
-    serverDlSection->setAxis(brls::Axis::COLUMN);
-    serverDlSection->setMargins(0, 0, 15, 0);
-    this->addView(serverDlSection);
+    // === Server Downloads Section (ABS server downloading podcast episodes) ===
+    m_absSection = new brls::Box();
+    m_absSection->setAxis(brls::Axis::COLUMN);
+    m_absSection->setMargins(0, 0, 15, 0);
+    m_absSection->setVisibility(brls::Visibility::GONE);
+    this->addView(m_absSection);
 
-    auto* serverDlHeader = new brls::Label();
-    serverDlHeader->setText("Server Downloads");
-    serverDlHeader->setFontSize(18);
-    serverDlHeader->setMargins(0, 0, 10, 0);
-    serverDlSection->addView(serverDlHeader);
+    m_absHeader = new brls::Label();
+    m_absHeader->setText("Server Downloads");
+    m_absHeader->setFontSize(18);
+    m_absHeader->setMargins(0, 0, 10, 0);
+    m_absSection->addView(m_absHeader);
 
-    auto* serverDlHint = new brls::Label();
-    serverDlHint->setText("Manage server downloads from the Audiobookshelf web UI");
-    serverDlHint->setFontSize(14);
-    serverDlHint->setTextColor(nvgRGBA(120, 120, 120, 255));
-    serverDlHint->setMargins(10, 0, 10, 0);
-    serverDlSection->addView(serverDlHint);
+    m_absEmptyLabel = new brls::Label();
+    m_absEmptyLabel->setText("No server downloads");
+    m_absEmptyLabel->setFontSize(14);
+    m_absEmptyLabel->setTextColor(nvgRGBA(120, 120, 120, 255));
+    m_absEmptyLabel->setMargins(10, 0, 10, 0);
+    m_absSection->addView(m_absEmptyLabel);
+
+    m_absContainer = new brls::Box();
+    m_absContainer->setAxis(brls::Axis::COLUMN);
+    m_absSection->addView(m_absContainer);
 
     // Empty state
     m_emptyStateBox = new brls::Box();
@@ -415,6 +421,7 @@ void DownloadsTab::willDisappear(bool resetState) {
 
 void DownloadsTab::refresh() {
     refreshServerQueue();
+    refreshServerDownloads();
 }
 
 void DownloadsTab::refreshServerQueue() {
@@ -720,6 +727,106 @@ brls::Box* DownloadsTab::createServerRow(const std::string& itemId, const std::s
     });
 
     return row;
+}
+
+void DownloadsTab::refreshServerDownloads() {
+    std::weak_ptr<bool> aliveWeak = m_alive;
+
+    asyncRun([this, aliveWeak]() {
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+
+        // Get all libraries to find podcast libraries
+        std::vector<Library> libraries;
+        if (!client.fetchLibraries(libraries)) {
+            return;
+        }
+
+        // Collect server downloads from all podcast libraries
+        std::vector<ServerEpisodeDownload> allDownloads;
+        for (const auto& lib : libraries) {
+            if (lib.mediaType != "podcast") continue;
+
+            ServerEpisodeDownload current;
+            bool hasCurrent = false;
+            std::vector<ServerEpisodeDownload> queue;
+
+            if (client.fetchEpisodeDownloads(lib.id, current, hasCurrent, queue)) {
+                if (hasCurrent && !current.isFinished) {
+                    allDownloads.push_back(current);
+                }
+                for (const auto& dl : queue) {
+                    if (!dl.isFinished) {
+                        allDownloads.push_back(dl);
+                    }
+                }
+            }
+        }
+
+        brls::sync([this, aliveWeak, allDownloads]() {
+            auto alive = aliveWeak.lock();
+            if (!alive || !*alive) return;
+
+            // Clear existing rows
+            while (m_absContainer->getChildren().size() > 0) {
+                m_absContainer->removeView(m_absContainer->getChildren()[0]);
+            }
+
+            if (allDownloads.empty()) {
+                m_absSection->setVisibility(brls::Visibility::GONE);
+                return;
+            }
+
+            m_absSection->setVisibility(brls::Visibility::VISIBLE);
+            m_absEmptyLabel->setVisibility(brls::Visibility::GONE);
+
+            for (size_t i = 0; i < allDownloads.size(); i++) {
+                const auto& dl = allDownloads[i];
+
+                auto* row = new brls::Box();
+                row->setAxis(brls::Axis::ROW);
+                row->setAlignItems(brls::AlignItems::CENTER);
+                row->setPadding(8);
+                row->setMargins(0, 0, 6, 0);
+                row->setBackgroundColor(nvgRGBA(40, 40, 40, 200));
+                row->setCornerRadius(6);
+
+                auto* infoBox = new brls::Box();
+                infoBox->setAxis(brls::Axis::COLUMN);
+                infoBox->setGrow(1.0f);
+
+                auto* titleLabel = new brls::Label();
+                titleLabel->setText(dl.episodeTitle);
+                titleLabel->setFontSize(15);
+                titleLabel->setSingleLine(true);
+                infoBox->addView(titleLabel);
+
+                auto* podcastLabel = new brls::Label();
+                podcastLabel->setText(dl.podcastTitle);
+                podcastLabel->setFontSize(13);
+                podcastLabel->setTextColor(nvgRGBA(180, 180, 180, 255));
+                podcastLabel->setSingleLine(true);
+                infoBox->addView(podcastLabel);
+
+                row->addView(infoBox);
+
+                auto* statusLabel = new brls::Label();
+                statusLabel->setFontSize(13);
+                if (i == 0 && !dl.failed) {
+                    statusLabel->setText("Downloading");
+                    statusLabel->setTextColor(nvgRGBA(100, 200, 100, 255));
+                } else if (dl.failed) {
+                    statusLabel->setText("Failed");
+                    statusLabel->setTextColor(nvgRGBA(200, 100, 100, 255));
+                } else {
+                    statusLabel->setText("Queued");
+                    statusLabel->setTextColor(nvgRGBA(180, 180, 180, 255));
+                }
+                row->addView(statusLabel);
+
+                m_absContainer->addView(row);
+            }
+        });
+    });
 }
 
 void DownloadsTab::startAutoRefresh() {

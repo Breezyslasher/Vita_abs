@@ -2924,4 +2924,80 @@ bool AudiobookshelfClient::downloadAllNewEpisodes(const std::string& podcastId) 
     return downloadNewEpisodesToServer(podcastId, newEpisodes);
 }
 
+bool AudiobookshelfClient::fetchEpisodeDownloads(const std::string& libraryId,
+                                                  ServerEpisodeDownload& currentDownload, bool& hasCurrentDownload,
+                                                  std::vector<ServerEpisodeDownload>& queue) {
+    brls::Logger::debug("Fetching episode downloads for library: {}", libraryId);
+
+    HttpClient client;
+    HttpRequest req;
+    req.url = buildApiUrl("/api/libraries/" + libraryId + "/episode-downloads");
+    req.method = "GET";
+    req.headers["Accept"] = "application/json";
+    req.headers["Authorization"] = "Bearer " + m_authToken;
+
+    HttpResponse resp = client.request(req);
+
+    if (resp.statusCode != 200) {
+        brls::Logger::debug("Failed to fetch episode downloads: {}", resp.statusCode);
+        hasCurrentDownload = false;
+        queue.clear();
+        return false;
+    }
+
+    hasCurrentDownload = false;
+    queue.clear();
+
+    // Parse currentDownload object
+    std::string currentObj = extractJsonObject(resp.body, "currentDownload");
+    if (!currentObj.empty() && currentObj != "null") {
+        std::string dlId = extractJsonValue(currentObj, "id");
+        if (!dlId.empty()) {
+            currentDownload.id = dlId;
+            currentDownload.episodeTitle = extractJsonValue(currentObj, "episodeDisplayTitle");
+            currentDownload.podcastTitle = extractJsonValue(currentObj, "podcastTitle");
+            currentDownload.url = extractJsonValue(currentObj, "url");
+            currentDownload.isFinished = extractJsonBool(currentObj, "isFinished");
+            currentDownload.failed = extractJsonBool(currentObj, "failed");
+            hasCurrentDownload = true;
+        }
+    }
+
+    // Parse queue array
+    std::string queueArray = extractJsonArray(resp.body, "queue");
+    if (!queueArray.empty()) {
+        size_t pos = 0;
+        while ((pos = queueArray.find("\"id\"", pos)) != std::string::npos) {
+            size_t objStart = queueArray.rfind('{', pos);
+            if (objStart == std::string::npos) { pos++; continue; }
+
+            int braceCount = 1;
+            size_t objEnd = objStart + 1;
+            while (braceCount > 0 && objEnd < queueArray.length()) {
+                if (queueArray[objEnd] == '{') braceCount++;
+                else if (queueArray[objEnd] == '}') braceCount--;
+                objEnd++;
+            }
+
+            std::string obj = queueArray.substr(objStart, objEnd - objStart);
+            ServerEpisodeDownload dl;
+            dl.id = extractJsonValue(obj, "id");
+            dl.episodeTitle = extractJsonValue(obj, "episodeDisplayTitle");
+            dl.podcastTitle = extractJsonValue(obj, "podcastTitle");
+            dl.url = extractJsonValue(obj, "url");
+            dl.isFinished = extractJsonBool(obj, "isFinished");
+            dl.failed = extractJsonBool(obj, "failed");
+
+            if (!dl.id.empty()) {
+                queue.push_back(dl);
+            }
+
+            pos = objEnd;
+        }
+    }
+
+    brls::Logger::debug("Episode downloads: current={} queue={}", hasCurrentDownload ? 1 : 0, queue.size());
+    return true;
+}
+
 } // namespace vitaabs
