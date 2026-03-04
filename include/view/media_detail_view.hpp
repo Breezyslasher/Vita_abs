@@ -49,6 +49,10 @@ private:
     // Chapter display for audiobooks
     void populateChapters();
 
+    // Filter and sort
+    void showFilterMenu();
+    void applyFilters();
+
     brls::HScrollingFrame* createMediaRow(const std::string& title, brls::Box** contentOut);
 
     MediaItem m_item;
@@ -62,6 +66,7 @@ private:
     brls::Label* m_ratingLabel = nullptr;
     brls::Label* m_durationLabel = nullptr;
     brls::Label* m_summaryLabel = nullptr;
+    brls::Label* m_episodeCountLabel = nullptr;  // Shows episode/chapter count in header
     brls::Image* m_posterImage = nullptr;
     brls::Button* m_playButton = nullptr;
     brls::Button* m_downloadButton = nullptr;
@@ -73,6 +78,11 @@ private:
     // Description expand/collapse
     std::string m_fullDescription;
     bool m_descriptionExpanded = false;
+
+    // Filter/sort state
+    bool m_filterDownloaded = false;
+    bool m_filterUnheard = false;
+    bool m_sortDescending = true;  // newest first for episodes
 };
 
 } // namespace vitaabs

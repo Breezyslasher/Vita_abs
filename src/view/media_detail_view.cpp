@@ -244,6 +244,120 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         episodesLabel->setFontSize(16);
         episodesHeader->addView(episodesLabel);
 
+        m_episodeCountLabel = new brls::Label();
+        m_episodeCountLabel->setFontSize(13);
+        m_episodeCountLabel->setTextColor(nvgRGB(150, 150, 150));
+        m_episodeCountLabel->setGrow(1.0f);
+        m_episodeCountLabel->setMarginLeft(8);
+        episodesHeader->addView(m_episodeCountLabel);
+
+        // Action buttons row: Sort (R) | Filter (Y) | Downloads (Start)
+        auto* actionsRow = new brls::Box();
+        actionsRow->setAxis(brls::Axis::ROW);
+        actionsRow->setAlignItems(brls::AlignItems::CENTER);
+
+        // Sort button with R hint
+        auto* sortContainer = new brls::Box();
+        sortContainer->setAxis(brls::Axis::COLUMN);
+        sortContainer->setAlignItems(brls::AlignItems::CENTER);
+        sortContainer->setMarginRight(8);
+
+        auto* sortHint = new brls::Image();
+        sortHint->setWidth(20);
+        sortHint->setHeight(20);
+        sortHint->setScalingType(brls::ImageScalingType::FIT);
+        sortHint->setImageFromFile("app0:resources/images/r_button.png");
+        sortHint->setMarginBottom(2);
+        sortContainer->addView(sortHint);
+
+        auto* sortBtn = new brls::Button();
+        sortBtn->setWidth(36);
+        sortBtn->setHeight(32);
+        sortBtn->setCornerRadius(8);
+        sortBtn->setJustifyContent(brls::JustifyContent::CENTER);
+        sortBtn->setAlignItems(brls::AlignItems::CENTER);
+        auto* sortIcon = new brls::Image();
+        sortIcon->setWidth(20);
+        sortIcon->setHeight(20);
+        sortIcon->setScalingType(brls::ImageScalingType::FIT);
+        sortIcon->setImageFromFile("app0:resources/icons/sort-calendar-descending.png");
+        sortBtn->addView(sortIcon);
+        sortBtn->registerClickAction([this](brls::View*) {
+            m_sortDescending = !m_sortDescending;
+            brls::Application::notify(m_sortDescending ? "Newest first" : "Oldest first");
+            applyFilters();
+            return true;
+        });
+        sortContainer->addView(sortBtn);
+        actionsRow->addView(sortContainer);
+
+        // Filter button with Y (triangle) hint
+        auto* filterContainer = new brls::Box();
+        filterContainer->setAxis(brls::Axis::COLUMN);
+        filterContainer->setAlignItems(brls::AlignItems::CENTER);
+        filterContainer->setMarginRight(8);
+
+        auto* filterHint = new brls::Image();
+        filterHint->setWidth(20);
+        filterHint->setHeight(20);
+        filterHint->setScalingType(brls::ImageScalingType::FIT);
+        filterHint->setImageFromFile("app0:resources/images/triangle_button.png");
+        filterHint->setMarginBottom(2);
+        filterContainer->addView(filterHint);
+
+        auto* filterBtn = new brls::Button();
+        filterBtn->setWidth(36);
+        filterBtn->setHeight(32);
+        filterBtn->setCornerRadius(8);
+        filterBtn->setJustifyContent(brls::JustifyContent::CENTER);
+        filterBtn->setAlignItems(brls::AlignItems::CENTER);
+        auto* filterIcon = new brls::Image();
+        filterIcon->setWidth(20);
+        filterIcon->setHeight(20);
+        filterIcon->setScalingType(brls::ImageScalingType::FIT);
+        filterIcon->setImageFromFile("app0:resources/icons/filter-menu-outline.png");
+        filterBtn->addView(filterIcon);
+        filterBtn->registerClickAction([this](brls::View*) {
+            showFilterMenu();
+            return true;
+        });
+        filterContainer->addView(filterBtn);
+        actionsRow->addView(filterContainer);
+
+        // Downloads menu button with Start hint
+        auto* dlMenuContainer = new brls::Box();
+        dlMenuContainer->setAxis(brls::Axis::COLUMN);
+        dlMenuContainer->setAlignItems(brls::AlignItems::CENTER);
+
+        auto* dlMenuHint = new brls::Image();
+        dlMenuHint->setWidth(20);
+        dlMenuHint->setHeight(20);
+        dlMenuHint->setScalingType(brls::ImageScalingType::FIT);
+        dlMenuHint->setImageFromFile("app0:resources/images/start_button.png");
+        dlMenuHint->setMarginBottom(2);
+        dlMenuContainer->addView(dlMenuHint);
+
+        auto* dlMenuBtn = new brls::Button();
+        dlMenuBtn->setWidth(36);
+        dlMenuBtn->setHeight(32);
+        dlMenuBtn->setCornerRadius(8);
+        dlMenuBtn->setJustifyContent(brls::JustifyContent::CENTER);
+        dlMenuBtn->setAlignItems(brls::AlignItems::CENTER);
+        auto* dlMenuIcon = new brls::Image();
+        dlMenuIcon->setWidth(20);
+        dlMenuIcon->setHeight(20);
+        dlMenuIcon->setScalingType(brls::ImageScalingType::FIT);
+        dlMenuIcon->setImageFromFile("app0:resources/icons/download.png");
+        dlMenuBtn->addView(dlMenuIcon);
+        dlMenuBtn->registerClickAction([this](brls::View*) {
+            showDownloadOptions();
+            return true;
+        });
+        dlMenuContainer->addView(dlMenuBtn);
+        actionsRow->addView(dlMenuContainer);
+
+        episodesHeader->addView(actionsRow);
+
         rightPanel->addView(episodesHeader);
 
         // Scrollable vertical episodes list
@@ -313,6 +427,28 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         onPlay(true);
         return true;
     });
+
+    // Register Y (triangle) button for filter menu (podcasts)
+    if (m_item.mediaType == MediaType::PODCAST) {
+        this->registerAction("Filter", brls::ControllerButton::BUTTON_Y, [this](brls::View*) {
+            showFilterMenu();
+            return true;
+        });
+
+        // Register R button to toggle sort order
+        this->registerAction("Sort", brls::ControllerButton::BUTTON_RB, [this](brls::View*) {
+            m_sortDescending = !m_sortDescending;
+            brls::Application::notify(m_sortDescending ? "Newest first" : "Oldest first");
+            applyFilters();
+            return true;
+        });
+
+        // Register Start button to open downloads menu
+        this->registerAction("Downloads", brls::ControllerButton::BUTTON_START, [this](brls::View*) {
+            showDownloadOptions();
+            return true;
+        });
+    }
 
     // Load full details
     loadDetails();
@@ -522,137 +658,19 @@ void MediaDetailView::loadChildren() {
     }
 
     if (!m_children.empty()) {
-        m_childrenBox->clearViews();
-
-        // Helper to format duration
-        auto formatDuration = [](float seconds) -> std::string {
-            int totalSec = static_cast<int>(seconds);
-            int hours = totalSec / 3600;
-            int mins = (totalSec % 3600) / 60;
-            if (hours > 0) {
-                return std::to_string(hours) + "h " + std::to_string(mins) + "m";
-            }
-            return std::to_string(mins) + " min";
-        };
-
-        DownloadsManager& dlMgr = DownloadsManager::getInstance();
-
-        for (size_t i = 0; i < m_children.size(); ++i) {
-            const auto& child = m_children[i];
-
-            auto* episodeRow = new brls::Box();
-            episodeRow->setAxis(brls::Axis::ROW);
-            episodeRow->setAlignItems(brls::AlignItems::CENTER);
-            episodeRow->setHeight(56);
-            episodeRow->setMarginBottom(4);
-            episodeRow->setPadding(10, 14, 10, 14);
-            episodeRow->setCornerRadius(8);
-            episodeRow->setBackgroundColor(nvgRGBA(40, 40, 40, 255));
-            episodeRow->setFocusable(true);
-
-            // Left side: title + duration (grows)
-            auto* textBox = new brls::Box();
-            textBox->setAxis(brls::Axis::COLUMN);
-            textBox->setGrow(1.0f);
-
-            auto* titleLabel = new brls::Label();
-            std::string title = child.title;
-            if (title.length() > 45) {
-                title = title.substr(0, 42) + "...";
-            }
-            titleLabel->setText(title);
-            titleLabel->setFontSize(14);
-            textBox->addView(titleLabel);
-
-            if (child.duration > 0) {
-                auto* durationLabel = new brls::Label();
-                durationLabel->setText(formatDuration(child.duration));
-                durationLabel->setFontSize(11);
-                durationLabel->setTextColor(nvgRGB(150, 150, 150));
-                textBox->addView(durationLabel);
-            }
-
-            episodeRow->addView(textBox);
-
-            // Right side: download status button
-            auto* dlBtn = new brls::Button();
-            dlBtn->setWidth(55);
-            dlBtn->setHeight(36);
-            dlBtn->setCornerRadius(18);
-            dlBtn->setJustifyContent(brls::JustifyContent::CENTER);
-            dlBtn->setAlignItems(brls::AlignItems::CENTER);
-
-            auto* dlIcon = new brls::Image();
-            dlIcon->setWidth(20);
-            dlIcon->setHeight(20);
-            dlIcon->setScalingType(brls::ImageScalingType::FIT);
-
-            // Check download state
-            std::string epItemId = child.podcastId.empty() ? m_item.id : child.podcastId;
-            std::string epId = child.episodeId;
-            bool isEpDownloaded = dlMgr.isDownloaded(epItemId, epId);
-
-            if (isEpDownloaded) {
-                dlIcon->setImageFromFile("app0:resources/icons/checkbox_checked.png");
-                dlBtn->setBackgroundColor(nvgRGBA(46, 204, 113, 200));
-            } else {
-                dlIcon->setImageFromFile("app0:resources/icons/download.png");
-                dlBtn->setBackgroundColor(nvgRGBA(60, 60, 60, 200));
-            }
-
-            dlBtn->addView(dlIcon);
-
-            // Download button click: toggle download/delete
-            dlBtn->registerClickAction([this, child, epItemId, epId, isEpDownloaded](brls::View*) {
-                if (isEpDownloaded) {
-                    // Delete this episode download
-                    DownloadsManager::getInstance().deleteDownload(epItemId, epId);
-                    brls::Application::notify("Deleted download");
-                    loadChildren();  // Refresh list
-                } else {
-                    // Download this episode
-                    startDownloadAndPlay(epItemId, epId, -1.0f, true);
-                }
-                return true;
-            });
-
-            episodeRow->addView(dlBtn);
-
-            // Click row to play episode
-            episodeRow->registerClickAction([this, child](brls::View*) {
-                if (child.mediaType == MediaType::PODCAST_EPISODE) {
-                    startDownloadAndPlay(child.podcastId, child.episodeId);
-                } else {
-                    auto* detailView = new MediaDetailView(child);
-                    brls::Application::pushActivity(new brls::Activity(detailView));
-                }
-                return true;
-            });
-
-            m_childrenBox->addView(episodeRow);
-        }
+        // Build episode rows via applyFilters (handles sort + filter + row creation)
+        applyFilters();
 
         // Update podcast download/delete button visibility now that we know the episodes
         if (m_item.mediaType == MediaType::PODCAST) {
             bool allDownloaded = areAllEpisodesDownloaded();
             bool anyDownloaded = hasAnyDownloadedEpisodes();
 
-            // Hide download button if all episodes are downloaded
             if (m_downloadButton) {
-                if (allDownloaded) {
-                    m_downloadButton->setVisibility(brls::Visibility::GONE);
-                } else {
-                    m_downloadButton->setVisibility(brls::Visibility::VISIBLE);
-                }
+                m_downloadButton->setVisibility(allDownloaded ? brls::Visibility::GONE : brls::Visibility::VISIBLE);
             }
-
-            // Show delete button only if any episodes are downloaded
             if (m_deleteButton) {
-                if (anyDownloaded) {
-                    m_deleteButton->setVisibility(brls::Visibility::VISIBLE);
-                } else {
-                    m_deleteButton->setVisibility(brls::Visibility::GONE);
-                }
+                m_deleteButton->setVisibility(anyDownloaded ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
             }
         }
     }
@@ -797,6 +815,210 @@ void MediaDetailView::populateChapters() {
         });
 
         m_chaptersBox->addView(chapterRow);
+    }
+}
+
+void MediaDetailView::showFilterMenu() {
+    // Build filter options for podcast episodes
+    std::vector<std::string> options;
+    options.push_back(m_filterDownloaded ? "Downloaded  [ON]" : "Downloaded");
+    options.push_back(m_filterUnheard ? "Unheard  [ON]" : "Unheard");
+    options.push_back("Clear Filters");
+
+    auto* dialog = new brls::Dialog("Episode Filters");
+    dialog->registerAction("Back", brls::ControllerButton::BUTTON_B, [dialog](brls::View*) {
+        dialog->dismiss();
+        return true;
+    }, true);
+
+    auto* content = new brls::Box();
+    content->setAxis(brls::Axis::COLUMN);
+    content->setPadding(20);
+    content->setWidth(500);
+
+    for (size_t i = 0; i < options.size(); ++i) {
+        auto* optionBox = new brls::Box();
+        optionBox->setAxis(brls::Axis::ROW);
+        optionBox->setAlignItems(brls::AlignItems::CENTER);
+        optionBox->setJustifyContent(brls::JustifyContent::CENTER);
+        optionBox->setHeight(50);
+        optionBox->setMarginBottom(8);
+        optionBox->setPadding(12);
+        optionBox->setCornerRadius(8);
+        optionBox->setFocusable(true);
+
+        // Color active filters green
+        if ((i == 0 && m_filterDownloaded) || (i == 1 && m_filterUnheard)) {
+            optionBox->setBackgroundColor(nvgRGBA(0, 128, 128, 200));
+        } else if (i == 2) {
+            optionBox->setBackgroundColor(nvgRGBA(80, 60, 60, 255));
+        } else {
+            optionBox->setBackgroundColor(nvgRGBA(50, 50, 50, 255));
+        }
+
+        auto* label = new brls::Label();
+        label->setText(options[i]);
+        label->setFontSize(16);
+        optionBox->addView(label);
+
+        size_t idx = i;
+        optionBox->registerClickAction([this, idx, dialog](brls::View*) {
+            switch (idx) {
+                case 0:
+                    m_filterDownloaded = !m_filterDownloaded;
+                    brls::Application::notify(m_filterDownloaded ? "Filter: Downloaded" : "Filter removed");
+                    break;
+                case 1:
+                    m_filterUnheard = !m_filterUnheard;
+                    brls::Application::notify(m_filterUnheard ? "Filter: Unheard" : "Filter removed");
+                    break;
+                case 2:
+                    m_filterDownloaded = false;
+                    m_filterUnheard = false;
+                    brls::Application::notify("Filters cleared");
+                    break;
+            }
+            dialog->dismiss();
+            applyFilters();
+            return true;
+        });
+
+        content->addView(optionBox);
+    }
+
+    dialog->addView(content);
+    dialog->open();
+}
+
+void MediaDetailView::applyFilters() {
+    if (!m_childrenBox) return;
+
+    m_childrenBox->clearViews();
+
+    // Build filtered + sorted list
+    std::vector<MediaItem> filtered;
+    DownloadsManager& dlMgr = DownloadsManager::getInstance();
+
+    for (const auto& child : m_children) {
+        std::string epItemId = child.podcastId.empty() ? m_item.id : child.podcastId;
+        bool isEpDownloaded = dlMgr.isDownloaded(epItemId, child.episodeId);
+
+        if (m_filterDownloaded && !isEpDownloaded) continue;
+        if (m_filterUnheard && child.progress >= 1.0f) continue;
+
+        filtered.push_back(child);
+    }
+
+    // Sort
+    if (!m_sortDescending) {
+        std::reverse(filtered.begin(), filtered.end());
+    }
+
+    // Update count label
+    if (m_episodeCountLabel) {
+        m_episodeCountLabel->setText("(" + std::to_string(filtered.size()) + "/" +
+                                     std::to_string(m_children.size()) + ")");
+    }
+
+    // Helper to format duration
+    auto formatDuration = [](float seconds) -> std::string {
+        int totalSec = static_cast<int>(seconds);
+        int hours = totalSec / 3600;
+        int mins = (totalSec % 3600) / 60;
+        if (hours > 0) {
+            return std::to_string(hours) + "h " + std::to_string(mins) + "m";
+        }
+        return std::to_string(mins) + " min";
+    };
+
+    for (size_t i = 0; i < filtered.size(); ++i) {
+        const auto& child = filtered[i];
+
+        auto* episodeRow = new brls::Box();
+        episodeRow->setAxis(brls::Axis::ROW);
+        episodeRow->setAlignItems(brls::AlignItems::CENTER);
+        episodeRow->setHeight(56);
+        episodeRow->setMarginBottom(4);
+        episodeRow->setPadding(10, 14, 10, 14);
+        episodeRow->setCornerRadius(8);
+        episodeRow->setBackgroundColor(nvgRGBA(40, 40, 40, 255));
+        episodeRow->setFocusable(true);
+
+        // Left side: title + duration
+        auto* textBox = new brls::Box();
+        textBox->setAxis(brls::Axis::COLUMN);
+        textBox->setGrow(1.0f);
+
+        auto* titleLabel = new brls::Label();
+        std::string title = child.title;
+        if (title.length() > 45) {
+            title = title.substr(0, 42) + "...";
+        }
+        titleLabel->setText(title);
+        titleLabel->setFontSize(14);
+        textBox->addView(titleLabel);
+
+        if (child.duration > 0) {
+            auto* durationLabel = new brls::Label();
+            durationLabel->setText(formatDuration(child.duration));
+            durationLabel->setFontSize(11);
+            durationLabel->setTextColor(nvgRGB(150, 150, 150));
+            textBox->addView(durationLabel);
+        }
+
+        episodeRow->addView(textBox);
+
+        // Right side: download status button
+        auto* dlBtn = new brls::Button();
+        dlBtn->setWidth(55);
+        dlBtn->setHeight(36);
+        dlBtn->setCornerRadius(18);
+        dlBtn->setJustifyContent(brls::JustifyContent::CENTER);
+        dlBtn->setAlignItems(brls::AlignItems::CENTER);
+
+        auto* dlIcon = new brls::Image();
+        dlIcon->setWidth(20);
+        dlIcon->setHeight(20);
+        dlIcon->setScalingType(brls::ImageScalingType::FIT);
+
+        std::string epItemId = child.podcastId.empty() ? m_item.id : child.podcastId;
+        std::string epId = child.episodeId;
+        bool isEpDownloaded = dlMgr.isDownloaded(epItemId, epId);
+
+        if (isEpDownloaded) {
+            dlIcon->setImageFromFile("app0:resources/icons/checkbox_checked.png");
+            dlBtn->setBackgroundColor(nvgRGBA(46, 204, 113, 200));
+        } else {
+            dlIcon->setImageFromFile("app0:resources/icons/download.png");
+            dlBtn->setBackgroundColor(nvgRGBA(60, 60, 60, 200));
+        }
+
+        dlBtn->addView(dlIcon);
+
+        dlBtn->registerClickAction([this, child, epItemId, epId, isEpDownloaded](brls::View*) {
+            if (isEpDownloaded) {
+                DownloadsManager::getInstance().deleteDownload(epItemId, epId);
+                brls::Application::notify("Deleted download");
+                applyFilters();
+            } else {
+                startDownloadAndPlay(epItemId, epId, -1.0f, true);
+            }
+            return true;
+        });
+
+        episodeRow->addView(dlBtn);
+
+        episodeRow->registerClickAction([this, child](brls::View*) {
+            if (child.mediaType == MediaType::PODCAST_EPISODE) {
+                startDownloadAndPlay(child.podcastId, child.episodeId);
+            } else {
+                auto* detailView = new MediaDetailView(child);
+                brls::Application::pushActivity(new brls::Activity(detailView));
+            }
+            return true;
+        });
+
+        m_childrenBox->addView(episodeRow);
     }
 }
 
