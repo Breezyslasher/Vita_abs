@@ -49,6 +49,7 @@ SettingsTab::SettingsTab() {
 
 void SettingsTab::createAccountSection() {
     Application& app = Application::getInstance();
+    AppSettings& settings = app.getSettings();
 
     // Section header
     auto* header = new brls::Header();
@@ -131,14 +132,39 @@ void SettingsTab::createAccountSection() {
         });
     m_contentBox->addView(urlSelector);
 
+    // Auto-switch URL toggle
+    auto* autoSwitchToggle = new brls::BooleanCell();
+    autoSwitchToggle->init("Auto-Switch URL on Failure", settings.autoSwitchUrl, [&settings](bool value) {
+        settings.autoSwitchUrl = value;
+        Application::getInstance().saveSettings();
+    });
+    m_contentBox->addView(autoSwitchToggle);
+
     // Info label
     auto* urlInfoLabel = new brls::Label();
-    urlInfoLabel->setText("Set both URLs to auto-switch when one is unavailable");
+    urlInfoLabel->setText("Auto-switch tries the other URL when connection fails");
     urlInfoLabel->setFontSize(14);
     urlInfoLabel->setMarginLeft(16);
     urlInfoLabel->setMarginTop(4);
     urlInfoLabel->setMarginBottom(16);
     m_contentBox->addView(urlInfoLabel);
+
+    // Connection timeout selector
+    auto* timeoutSelector = new brls::SelectorCell();
+    int timeoutIndex = 1; // default to 30s
+    if (settings.connectionTimeout <= 10) timeoutIndex = 0;
+    else if (settings.connectionTimeout <= 30) timeoutIndex = 1;
+    else if (settings.connectionTimeout <= 60) timeoutIndex = 2;
+    else timeoutIndex = 3;
+    timeoutSelector->init("Connection Timeout",
+        {"10 seconds", "30 seconds", "60 seconds", "120 seconds"},
+        timeoutIndex,
+        [&settings](int index) {
+            int timeouts[] = {10, 30, 60, 120};
+            settings.connectionTimeout = timeouts[index];
+            Application::getInstance().saveSettings();
+        });
+    m_contentBox->addView(timeoutSelector);
 
     // Logout button
     auto* logoutCell = new brls::DetailCell();
@@ -167,22 +193,6 @@ void SettingsTab::createUISection() {
             onThemeChanged(index);
         });
     m_contentBox->addView(m_themeSelector);
-
-    // Show clock toggle
-    m_clockToggle = new brls::BooleanCell();
-    m_clockToggle->init("Show Clock", settings.showClock, [&settings](bool value) {
-        settings.showClock = value;
-        Application::getInstance().saveSettings();
-    });
-    m_contentBox->addView(m_clockToggle);
-
-    // Animations toggle
-    m_animationsToggle = new brls::BooleanCell();
-    m_animationsToggle->init("Enable Animations", settings.animationsEnabled, [&settings](bool value) {
-        settings.animationsEnabled = value;
-        Application::getInstance().saveSettings();
-    });
-    m_contentBox->addView(m_animationsToggle);
 
     // Debug logging toggle
     m_debugLogToggle = new brls::BooleanCell();
@@ -381,17 +391,6 @@ void SettingsTab::createAudioSection() {
     header->setTitle("Audio");
     m_contentBox->addView(header);
 
-    // Audio quality selector
-    auto* qualitySelector = new brls::SelectorCell();
-    qualitySelector->init("Audio Quality",
-        {"Original", "High (256 kbps)", "Medium (128 kbps)", "Low (64 kbps)"},
-        static_cast<int>(settings.audioQuality),
-        [&settings](int index) {
-            settings.audioQuality = static_cast<AudioQuality>(index);
-            Application::getInstance().saveSettings();
-        });
-    m_contentBox->addView(qualitySelector);
-
     // Volume boost toggle
     auto* boostToggle = new brls::BooleanCell();
     boostToggle->init("Volume Boost", settings.boostVolume, [&settings](bool value) {
@@ -426,24 +425,22 @@ void SettingsTab::createDownloadsSection() {
     });
     m_contentBox->addView(m_autoStartDownloadsToggle);
 
-    // WiFi only toggle
-    m_wifiOnlyToggle = new brls::BooleanCell();
-    m_wifiOnlyToggle->init("Download Over WiFi Only", settings.downloadOverWifiOnly, [&settings](bool value) {
-        settings.downloadOverWifiOnly = value;
+    // Download on play toggle
+    auto* downloadOnPlayToggle = new brls::BooleanCell();
+    downloadOnPlayToggle->init("Download on Play", settings.downloadOnPlay, [&settings](bool value) {
+        settings.downloadOnPlay = value;
         Application::getInstance().saveSettings();
     });
-    m_contentBox->addView(m_wifiOnlyToggle);
+    m_contentBox->addView(downloadOnPlayToggle);
 
-    // Concurrent downloads selector
-    m_concurrentDownloadsSelector = new brls::SelectorCell();
-    m_concurrentDownloadsSelector->init("Max Concurrent Downloads",
-        {"1", "2", "3"},
-        settings.maxConcurrentDownloads - 1,
-        [&settings](int index) {
-            settings.maxConcurrentDownloads = index + 1;
-            Application::getInstance().saveSettings();
-        });
-    m_contentBox->addView(m_concurrentDownloadsSelector);
+    // Info label for download on play
+    auto* downloadOnPlayInfo = new brls::Label();
+    downloadOnPlayInfo->setText("When enabled, pressing play also queues for download");
+    downloadOnPlayInfo->setFontSize(14);
+    downloadOnPlayInfo->setMarginLeft(16);
+    downloadOnPlayInfo->setMarginTop(4);
+    downloadOnPlayInfo->setMarginBottom(8);
+    m_contentBox->addView(downloadOnPlayInfo);
 
     // Delete after finish toggle
     m_deleteAfterWatchToggle = new brls::BooleanCell();
@@ -452,25 +449,6 @@ void SettingsTab::createDownloadsSection() {
         Application::getInstance().saveSettings();
     });
     m_contentBox->addView(m_deleteAfterWatchToggle);
-
-    // Sync progress toggle
-    m_syncProgressToggle = new brls::BooleanCell();
-    m_syncProgressToggle->init("Sync Progress on Connect", settings.syncProgressOnConnect, [&settings](bool value) {
-        settings.syncProgressOnConnect = value;
-        Application::getInstance().saveSettings();
-    });
-    m_contentBox->addView(m_syncProgressToggle);
-
-    // Sync progress now button
-    auto* syncNowCell = new brls::DetailCell();
-    syncNowCell->setText("Sync Progress Now");
-    syncNowCell->setDetailText("Upload offline progress to server");
-    syncNowCell->registerClickAction([](brls::View* view) {
-        DownloadsManager::getInstance().syncProgressToServer();
-        brls::Application::notify("Progress synced to server");
-        return true;
-    });
-    m_contentBox->addView(syncNowCell);
 
     // Refresh downloads list button
     auto* refreshDownloadsCell = new brls::DetailCell();

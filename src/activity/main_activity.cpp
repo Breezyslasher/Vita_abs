@@ -7,6 +7,7 @@
 #include "view/library_section_tab.hpp"
 #include "view/search_tab.hpp"
 #include "view/settings_tab.hpp"
+#include "view/downloads_tab.hpp"
 #include "app/downloads_manager.hpp"
 #include "app/application.hpp"
 #include "app/audiobookshelf_client.hpp"
@@ -105,6 +106,9 @@ void MainActivity::onContentAvailable() {
                         return tab;
                     });
                 }
+
+                // Downloads tab for managing offline content
+                tabFrame->addTab("Downloads", []() { return new DownloadsTab(); });
             }
 
             tabFrame->addTab("Settings", []() { return new SettingsTab(); });
@@ -180,6 +184,7 @@ void MainActivity::onContentAvailable() {
 
         // Utility tabs (no separators)
         tabFrame->addTab("Search", []() { return new SearchTab(); });
+        tabFrame->addTab("Downloads", []() { return new DownloadsTab(); });
         tabFrame->addTab("Settings", []() { return new SettingsTab(); });
 
         // Focus first tab

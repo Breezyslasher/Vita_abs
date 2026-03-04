@@ -29,15 +29,6 @@ enum class AppTheme {
     DARK = 2
 };
 
-// Audio quality options for streaming
-enum class AudioQuality {
-    ORIGINAL = 0,      // Direct play (no transcoding)
-    HIGH = 1,          // High quality (320kbps)
-    MEDIUM = 2,        // Medium quality (192kbps)
-    LOW = 3,           // Low quality (128kbps)
-    VERY_LOW = 4       // Very low quality (64kbps)
-};
-
 // Playback speed options
 enum class PlaybackSpeed {
     SPEED_0_5X = 0,    // 0.5x
@@ -87,8 +78,6 @@ struct BackgroundDownloadProgress {
 struct AppSettings {
     // UI Settings
     AppTheme theme = AppTheme::DARK;
-    bool showClock = true;
-    bool animationsEnabled = true;
     bool debugLogging = true;
 
     // Content Display Settings
@@ -113,7 +102,6 @@ struct AppSettings {
     AutoCompleteThreshold podcastAutoComplete = AutoCompleteThreshold::LAST_30_SEC;  // When to mark podcasts as complete
 
     // Audio Settings
-    AudioQuality audioQuality = AudioQuality::ORIGINAL;
     bool boostVolume = false;          // Volume boost for quiet audiobooks
     int volumeBoostDb = 0;             // Volume boost in dB (0-12)
 
@@ -121,18 +109,14 @@ struct AppSettings {
     bool showChapterList = true;       // Show chapter list in player
     bool skipChapterTransitions = false; // Skip chapter intro/outro silence
 
-    // Bookmark Settings
-    bool autoBookmark = true;          // Auto-bookmark when closing player
-
     // Network Settings
-    int connectionTimeout = 180;       // seconds
-    bool downloadOverWifiOnly = false;
+    int connectionTimeout = 30;        // seconds (applied to HTTP client)
+    bool autoSwitchUrl = true;         // Auto-switch between local/remote URL on failure
 
     // Download Settings
     bool autoStartDownloads = true;
-    int maxConcurrentDownloads = 1;
     bool deleteAfterFinish = false;    // Delete downloaded book after finishing
-    bool syncProgressOnConnect = true;
+    bool downloadOnPlay = false;       // Queue download when pressing play (in addition to streaming)
 
     // Player UI Settings
     bool showDownloadProgress = true;  // Show background download progress in player for multi-file books
@@ -202,7 +186,7 @@ public:
     void applyLogLevel();
 
     // Get quality string for display
-    static std::string getAudioQualityString(AudioQuality quality);
+
     static std::string getThemeString(AppTheme theme);
     static std::string getPlaybackSpeedString(PlaybackSpeed speed);
     static std::string getSleepTimerString(SleepTimer timer);

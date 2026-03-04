@@ -1,18 +1,45 @@
 /**
  * VitaABS - Downloads Tab Implementation
+ * Shows both server download queue and local downloads (like Vita_Suwayomi)
+ * Server Queue: items actively downloading from Audiobookshelf server
+ * Local Downloads: completed items stored on device for offline playback
  */
 
 #include "view/downloads_tab.hpp"
 #include "app/downloads_manager.hpp"
+#include "app/application.hpp"
 #include "activity/player_activity.hpp"
 #include "utils/image_loader.hpp"
+#include "utils/async.hpp"
 #include <fstream>
+#include <memory>
+#include <thread>
+#include <chrono>
+#include <cmath>
 
 #ifdef __vita__
 #include <psp2/io/fcntl.h>
 #endif
 
+// Auto-refresh interval in milliseconds
+static const int AUTO_REFRESH_INTERVAL_MS = 3000;
+static const int AUTO_REFRESH_INTERVAL_LARGE_MS = 5000;
+static const int LARGE_QUEUE_THRESHOLD = 50;
+
 namespace vitaabs {
+
+// Helper to format bytes as human-readable MB string
+static std::string formatMB(int64_t bytes) {
+    double mb = static_cast<double>(bytes) / (1024.0 * 1024.0);
+    if (mb < 0.1) {
+        // Show KB for very small values
+        double kb = static_cast<double>(bytes) / 1024.0;
+        int kbInt = static_cast<int>(kb * 10);
+        return std::to_string(kbInt / 10) + "." + std::to_string(kbInt % 10) + " KB";
+    }
+    int mbInt = static_cast<int>(mb * 10);
+    return std::to_string(mbInt / 10) + "." + std::to_string(mbInt % 10) + " MB";
+}
 
 // Helper to load local cover image on Vita
 static void loadLocalCoverImage(brls::Image* image, const std::string& localPath) {
@@ -50,206 +77,953 @@ static void loadLocalCoverImage(brls::Image* image, const std::string& localPath
 }
 
 DownloadsTab::DownloadsTab() {
+    m_alive = std::make_shared<bool>(true);
+
     this->setAxis(brls::Axis::COLUMN);
     this->setPadding(20);
     this->setGrow(1.0f);
 
-    // Header
+    // Header row with title and action buttons
+    auto headerRow = new brls::Box();
+    headerRow->setAxis(brls::Axis::ROW);
+    headerRow->setJustifyContent(brls::JustifyContent::SPACE_BETWEEN);
+    headerRow->setAlignItems(brls::AlignItems::CENTER);
+    headerRow->setMargins(0, 0, 15, 0);
+    this->addView(headerRow);
+
+    // Left side: title and status
+    auto titleBox = new brls::Box();
+    titleBox->setAxis(brls::Axis::ROW);
+    titleBox->setAlignItems(brls::AlignItems::CENTER);
+    titleBox->setShrink(0);
+    titleBox->setGrow(1.0f);
+    headerRow->addView(titleBox);
+
     auto header = new brls::Label();
     header->setText("Downloads");
     header->setFontSize(24);
-    header->setMargins(0, 0, 20, 0);
-    this->addView(header);
+    header->setSingleLine(true);
+    titleBox->addView(header);
 
-    // Sync button
-    auto syncBtn = new brls::Button();
-    syncBtn->setText("Sync Progress to Server");
-    syncBtn->setMargins(0, 0, 20, 0);
-    syncBtn->registerClickAction([](brls::View*) {
-        DownloadsManager::getInstance().syncProgressToServer();
-        brls::Application::notify("Progress synced to server");
+    // Download status label
+    m_downloadStatusLabel = new brls::Label();
+    m_downloadStatusLabel->setText("");
+    m_downloadStatusLabel->setFontSize(14);
+    m_downloadStatusLabel->setMarginLeft(15);
+    m_downloadStatusLabel->setTextColor(nvgRGBA(150, 150, 150, 255));
+    titleBox->addView(m_downloadStatusLabel);
+
+    // Actions row
+    m_actionsRow = new brls::Box();
+    m_actionsRow->setAxis(brls::Axis::ROW);
+    m_actionsRow->setAlignItems(brls::AlignItems::CENTER);
+    headerRow->addView(m_actionsRow);
+
+    // Start/Stop toggle button
+    m_startStopBtn = new brls::Button();
+    m_startStopBtn->setWidth(70);
+    m_startStopBtn->setHeight(32);
+    m_startStopBtn->setCornerRadius(6);
+    m_startStopBtn->setMarginRight(8);
+    m_startStopBtn->setPaddingLeft(8);
+    m_startStopBtn->setPaddingRight(8);
+    m_startStopBtn->setJustifyContent(brls::JustifyContent::CENTER);
+    m_startStopBtn->setAlignItems(brls::AlignItems::CENTER);
+
+    m_startStopLabel = new brls::Label();
+    m_startStopLabel->setText("Start");
+    m_startStopLabel->setFontSize(12);
+    m_startStopBtn->addView(m_startStopLabel);
+
+    m_startStopBtn->registerClickAction([this](brls::View*) {
+        bool wasRunning = m_downloaderRunning;
+        DownloadsManager& mgr = DownloadsManager::getInstance();
+        if (wasRunning) {
+            mgr.pauseDownloads();
+            m_downloaderRunning = false;
+            if (m_startStopLabel) m_startStopLabel->setText("Start");
+            if (m_downloadStatusLabel) {
+                m_downloadStatusLabel->setText("- Stopped");
+                m_downloadStatusLabel->setTextColor(nvgRGBA(200, 150, 100, 255));
+            }
+            brls::Application::notify("Downloads paused");
+        } else {
+            mgr.resumeIncompleteDownloads();
+            mgr.startDownloads();
+            m_downloaderRunning = true;
+            if (m_startStopLabel) m_startStopLabel->setText("Pause");
+            if (m_downloadStatusLabel) {
+                m_downloadStatusLabel->setText("- Downloading");
+                m_downloadStatusLabel->setTextColor(nvgRGBA(100, 200, 100, 255));
+            }
+            brls::Application::notify("Downloads started");
+        }
+        refresh();
         return true;
     });
-    this->addView(syncBtn);
+    m_actionsRow->addView(m_startStopBtn);
 
-    // List container
-    m_listContainer = new brls::Box();
-    m_listContainer->setAxis(brls::Axis::COLUMN);
-    m_listContainer->setGrow(1.0f);
-    this->addView(m_listContainer);
+    // Stop button
+    m_pauseBtn = new brls::Button();
+    m_pauseBtn->setWidth(60);
+    m_pauseBtn->setHeight(32);
+    m_pauseBtn->setCornerRadius(6);
+    m_pauseBtn->setMarginRight(8);
+    m_pauseBtn->setPaddingLeft(8);
+    m_pauseBtn->setPaddingRight(8);
+    m_pauseBtn->setJustifyContent(brls::JustifyContent::CENTER);
+    m_pauseBtn->setAlignItems(brls::AlignItems::CENTER);
 
-    // Empty label
-    m_emptyLabel = new brls::Label();
-    m_emptyLabel->setText("No downloads yet.\nUse the download button on media details to save for offline viewing.");
-    m_emptyLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-    m_emptyLabel->setVerticalAlign(brls::VerticalAlign::CENTER);
-    m_emptyLabel->setGrow(1.0f);
-    m_emptyLabel->setVisibility(brls::Visibility::GONE);
-    m_listContainer->addView(m_emptyLabel);
+    auto* pauseLabel = new brls::Label();
+    pauseLabel->setText("Stop");
+    pauseLabel->setFontSize(12);
+    m_pauseBtn->addView(pauseLabel);
+
+    m_pauseBtn->registerClickAction([this](brls::View*) {
+        DownloadsManager& mgr = DownloadsManager::getInstance();
+        mgr.pauseDownloads();
+        m_downloaderRunning = false;
+        if (m_startStopLabel) m_startStopLabel->setText("Start");
+        if (m_downloadStatusLabel) {
+            m_downloadStatusLabel->setText("- Stopped");
+            m_downloadStatusLabel->setTextColor(nvgRGBA(200, 150, 100, 255));
+        }
+        brls::Application::notify("Downloads stopped");
+        refresh();
+        return true;
+    });
+    m_actionsRow->addView(m_pauseBtn);
+
+    // Clear button
+    m_clearBtn = new brls::Button();
+    m_clearBtn->setWidth(70);
+    m_clearBtn->setHeight(32);
+    m_clearBtn->setCornerRadius(6);
+    m_clearBtn->setMarginRight(8);
+    m_clearBtn->setPaddingLeft(8);
+    m_clearBtn->setPaddingRight(8);
+    m_clearBtn->setJustifyContent(brls::JustifyContent::CENTER);
+    m_clearBtn->setAlignItems(brls::AlignItems::CENTER);
+
+    auto* clearLabel = new brls::Label();
+    clearLabel->setText("Clear");
+    clearLabel->setFontSize(12);
+    m_clearBtn->addView(clearLabel);
+
+    m_clearBtn->registerClickAction([this](brls::View*) {
+        DownloadsManager& mgr = DownloadsManager::getInstance();
+
+        // Stop downloads first and wait
+        mgr.pauseDownloads();
+        mgr.waitForDownloadThread();
+
+        // Cancel all non-completed downloads
+        auto downloads = mgr.getDownloads();
+        for (const auto& item : downloads) {
+            if (item.state != DownloadState::COMPLETED) {
+                mgr.cancelDownload(item.itemId);
+            }
+        }
+
+        m_downloaderRunning = false;
+        if (m_startStopLabel) m_startStopLabel->setText("Start");
+        if (m_downloadStatusLabel) m_downloadStatusLabel->setText("");
+        brls::Application::notify("Queue cleared");
+        refresh();
+        return true;
+    });
+    m_actionsRow->addView(m_clearBtn);
+
+    // Sync button
+    m_syncBtn = new brls::Button();
+    m_syncBtn->setWidth(70);
+    m_syncBtn->setHeight(32);
+    m_syncBtn->setCornerRadius(6);
+    m_syncBtn->setPaddingLeft(8);
+    m_syncBtn->setPaddingRight(8);
+    m_syncBtn->setJustifyContent(brls::JustifyContent::CENTER);
+    m_syncBtn->setAlignItems(brls::AlignItems::CENTER);
+
+    auto* syncLabel = new brls::Label();
+    syncLabel->setText("Sync");
+    syncLabel->setFontSize(12);
+    m_syncBtn->addView(syncLabel);
+
+    m_syncBtn->registerClickAction([](brls::View*) {
+        asyncRun([]() {
+            DownloadsManager::getInstance().syncProgressToServer();
+            brls::sync([]() {
+                brls::Application::notify("Progress synced to server");
+            });
+        });
+        return true;
+    });
+    m_actionsRow->addView(m_syncBtn);
+
+    // === Server Download Queue Section ===
+    m_serverSection = new brls::Box();
+    m_serverSection->setAxis(brls::Axis::COLUMN);
+    m_serverSection->setGrow(1.0f);
+    m_serverSection->setMargins(0, 0, 15, 0);
+    m_serverSection->setVisibility(brls::Visibility::GONE);
+    this->addView(m_serverSection);
+
+    m_serverHeader = new brls::Label();
+    m_serverHeader->setText("Server Download Queue");
+    m_serverHeader->setFontSize(18);
+    m_serverHeader->setMargins(0, 0, 10, 0);
+    m_serverSection->addView(m_serverHeader);
+
+    m_serverEmptyLabel = new brls::Label();
+    m_serverEmptyLabel->setText("No active downloads");
+    m_serverEmptyLabel->setFontSize(14);
+    m_serverEmptyLabel->setTextColor(nvgRGBA(120, 120, 120, 255));
+    m_serverEmptyLabel->setMargins(10, 0, 10, 0);
+    m_serverSection->addView(m_serverEmptyLabel);
+
+    m_serverScroll = new brls::ScrollingFrame();
+    m_serverScroll->setGrow(1.0f);
+    m_serverScroll->setVisibility(brls::Visibility::GONE);
+    m_serverSection->addView(m_serverScroll);
+
+    m_serverContainer = new brls::Box();
+    m_serverContainer->setAxis(brls::Axis::COLUMN);
+    m_serverScroll->setContentView(m_serverContainer);
+
+    // === Local Downloads Section ===
+    m_localSection = new brls::Box();
+    m_localSection->setAxis(brls::Axis::COLUMN);
+    m_localSection->setGrow(1.0f);
+    m_localSection->setVisibility(brls::Visibility::GONE);
+    this->addView(m_localSection);
+
+    m_localHeader = new brls::Label();
+    m_localHeader->setText("Local Downloads");
+    m_localHeader->setFontSize(18);
+    m_localHeader->setMargins(0, 0, 10, 0);
+    m_localSection->addView(m_localHeader);
+
+    m_localEmptyLabel = new brls::Label();
+    m_localEmptyLabel->setText("No local downloads");
+    m_localEmptyLabel->setFontSize(14);
+    m_localEmptyLabel->setTextColor(nvgRGBA(120, 120, 120, 255));
+    m_localEmptyLabel->setMargins(10, 0, 10, 0);
+    m_localSection->addView(m_localEmptyLabel);
+
+    m_localScroll = new brls::ScrollingFrame();
+    m_localScroll->setGrow(1.0f);
+    m_localScroll->setVisibility(brls::Visibility::GONE);
+    m_localSection->addView(m_localScroll);
+
+    m_localContainer = new brls::Box();
+    m_localContainer->setAxis(brls::Axis::COLUMN);
+    m_localScroll->setContentView(m_localContainer);
+
+    // Empty state
+    m_emptyStateBox = new brls::Box();
+    m_emptyStateBox->setAxis(brls::Axis::COLUMN);
+    m_emptyStateBox->setJustifyContent(brls::JustifyContent::CENTER);
+    m_emptyStateBox->setAlignItems(brls::AlignItems::CENTER);
+    m_emptyStateBox->setGrow(1.0f);
+    m_emptyStateBox->setVisibility(brls::Visibility::VISIBLE);
+
+    auto* emptyIcon = new brls::Label();
+    emptyIcon->setText("No Downloads");
+    emptyIcon->setFontSize(24);
+    emptyIcon->setTextColor(nvgRGB(128, 128, 128));
+    emptyIcon->setMarginBottom(10);
+    m_emptyStateBox->addView(emptyIcon);
+
+    auto* emptyHint = new brls::Label();
+    emptyHint->setText("Use the download button on media details to save for offline listening");
+    emptyHint->setFontSize(16);
+    emptyHint->setTextColor(nvgRGB(100, 100, 100));
+    m_emptyStateBox->addView(emptyHint);
+
+    this->addView(m_emptyStateBox);
 }
 
 void DownloadsTab::willAppear(bool resetState) {
     brls::Box::willAppear(resetState);
+
+    // Re-arm alive flag
+    m_alive = std::make_shared<bool>(true);
+
+    // Clear tracking vectors for fresh start
+    m_serverRowElements.clear();
+    m_localRowElements.clear();
+    m_lastServerItems.clear();
+    m_lastLocalItems.clear();
+    m_currentFocusedIcon = nullptr;
+
+    // Remove stale row views
+    if (m_serverContainer) {
+        while (m_serverContainer->getChildren().size() > 0)
+            m_serverContainer->removeView(m_serverContainer->getChildren()[0]);
+    }
+    if (m_localContainer) {
+        while (m_localContainer->getChildren().size() > 0)
+            m_localContainer->removeView(m_localContainer->getChildren()[0]);
+    }
+
+    m_lastProgressRefresh = std::chrono::steady_clock::now();
+
+    // Register progress callback for live UI updates
+    DownloadsManager& mgr = DownloadsManager::getInstance();
+    std::weak_ptr<bool> aliveWeak = m_alive;
+    mgr.setProgressCallback([this, aliveWeak](float downloadedBytes, float totalBytes) {
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastProgressRefresh).count();
+
+        // Update every 100ms for smooth live progress
+        const int FAST_PROGRESS_INTERVAL_MS = 100;
+        if (elapsed >= FAST_PROGRESS_INTERVAL_MS || downloadedBytes >= totalBytes) {
+            m_lastProgressRefresh = now;
+            if (m_autoRefreshEnabled.load()) {
+                brls::sync([this, aliveWeak]() {
+                    auto alive = aliveWeak.lock();
+                    if (!alive || !*alive) return;
+                    if (m_autoRefreshEnabled.load()) {
+                        refreshServerQueue();
+                    }
+                });
+            }
+        }
+    });
+
+    // Register item completion callback
+    mgr.setItemCompletionCallback([this, aliveWeak](const std::string& itemId, const std::string& episodeId, bool success) {
+        if (!m_autoRefreshEnabled.load()) return;
+
+        brls::sync([this, aliveWeak]() {
+            auto alive = aliveWeak.lock();
+            if (!alive || !*alive) return;
+            if (!m_autoRefreshEnabled.load()) return;
+            // Full refresh to move item from server queue to local downloads
+            refresh();
+        });
+    });
+
     refresh();
+    startAutoRefresh();
+}
+
+DownloadsTab::~DownloadsTab() {
+    if (m_alive) *m_alive = false;
+}
+
+void DownloadsTab::willDisappear(bool resetState) {
+    brls::Box::willDisappear(resetState);
+
+    if (m_alive) *m_alive = false;
+
+    stopAutoRefresh();
+
+    DownloadsManager& mgr = DownloadsManager::getInstance();
+    mgr.setProgressCallback(nullptr);
+    mgr.setItemCompletionCallback(nullptr);
+
+    ImageLoader::cancelAll();
+
+    m_serverRowElements.clear();
+    m_localRowElements.clear();
+    m_currentFocusedIcon = nullptr;
 }
 
 void DownloadsTab::refresh() {
-    // Clear existing items (except empty label)
-    while (m_listContainer->getChildren().size() > 1) {
-        m_listContainer->removeView(m_listContainer->getChildren()[0]);
-    }
+    refreshServerQueue();
+    refreshLocalDownloads();
+}
 
-    // Ensure manager is initialized and state is loaded
+void DownloadsTab::refreshServerQueue() {
     DownloadsManager& mgr = DownloadsManager::getInstance();
     mgr.init();
 
     auto downloads = mgr.getDownloads();
-    brls::Logger::info("DownloadsTab: Found {} downloads", downloads.size());
 
-    if (downloads.empty()) {
-        m_emptyLabel->setVisibility(brls::Visibility::VISIBLE);
+    // Build list of active (non-completed) items for server queue
+    struct ServerInfo {
+        std::string itemId, episodeId, title, authorName, coverUrl, localCoverPath;
+        int64_t downloadedBytes, totalBytes;
+        int state;
+    };
+    std::vector<ServerInfo> serverItems;
+
+    bool isAnyDownloading = false;
+    for (const auto& item : downloads) {
+        if (item.state != DownloadState::COMPLETED) {
+            ServerInfo si;
+            si.itemId = item.itemId;
+            si.episodeId = item.episodeId;
+            si.title = item.title;
+            si.authorName = item.authorName;
+            si.coverUrl = item.coverUrl;
+            si.localCoverPath = item.localCoverPath;
+            si.downloadedBytes = item.downloadedBytes;
+            si.totalBytes = item.totalBytes;
+            si.state = static_cast<int>(item.state);
+            serverItems.push_back(si);
+            if (item.state == DownloadState::DOWNLOADING) isAnyDownloading = true;
+        }
+    }
+
+    // Update status
+    m_downloaderRunning = isAnyDownloading || mgr.isDownloading();
+    if (m_startStopLabel) {
+        m_startStopLabel->setText(m_downloaderRunning ? "Pause" : "Start");
+    }
+    if (m_downloadStatusLabel) {
+        if (serverItems.empty()) {
+            m_downloadStatusLabel->setText("");
+        } else if (m_downloaderRunning) {
+            m_downloadStatusLabel->setText("- Downloading");
+            m_downloadStatusLabel->setTextColor(nvgRGBA(100, 200, 100, 255));
+        } else {
+            bool hasFailed = false;
+            for (const auto& si : serverItems) {
+                if (si.state == static_cast<int>(DownloadState::FAILED)) { hasFailed = true; break; }
+            }
+            if (hasFailed) {
+                m_downloadStatusLabel->setText("- Error");
+                m_downloadStatusLabel->setTextColor(nvgRGBA(200, 100, 100, 255));
+            } else {
+                m_downloadStatusLabel->setText("- Stopped");
+                m_downloadStatusLabel->setTextColor(nvgRGBA(200, 150, 100, 255));
+            }
+        }
+    }
+
+    if (serverItems.empty()) {
+        m_serverSection->setVisibility(brls::Visibility::GONE);
+        m_lastServerItems.clear();
+        m_serverRowElements.clear();
+        while (m_serverContainer->getChildren().size() > 0) {
+            m_serverContainer->removeView(m_serverContainer->getChildren()[0]);
+        }
+
+        // Show empty state only if local section is also empty
+        if (m_lastLocalItems.empty() && m_emptyStateBox) {
+            m_emptyStateBox->setVisibility(brls::Visibility::VISIBLE);
+        }
         return;
     }
 
-    m_emptyLabel->setVisibility(brls::Visibility::GONE);
+    // Hide empty state
+    if (m_emptyStateBox) m_emptyStateBox->setVisibility(brls::Visibility::GONE);
+    m_serverSection->setVisibility(brls::Visibility::VISIBLE);
+    m_serverEmptyLabel->setVisibility(brls::Visibility::GONE);
+    m_serverScroll->setVisibility(brls::Visibility::VISIBLE);
 
-    for (const auto& item : downloads) {
-        auto row = new brls::Box();
-        row->setAxis(brls::Axis::ROW);
-        row->setJustifyContent(brls::JustifyContent::SPACE_BETWEEN);
-        row->setAlignItems(brls::AlignItems::CENTER);
-        row->setPadding(10);
-        row->setMargins(0, 0, 10, 0);
-        row->setBackgroundColor(nvgRGBA(40, 40, 40, 200));
-        row->setCornerRadius(8);
-
-        // Cover image (try local first, then remote URL)
-        auto coverImage = new brls::Image();
-        coverImage->setWidth(60);
-        coverImage->setHeight(60);
-        coverImage->setCornerRadius(4);
-        coverImage->setMargins(0, 15, 0, 0);
-        row->addView(coverImage);
-
-        brls::Logger::debug("DownloadsTab: Item '{}' - localCoverPath='{}', coverUrl empty={}",
-                           item.title, item.localCoverPath, item.coverUrl.empty() ? "yes" : "no");
-
-        if (!item.localCoverPath.empty()) {
-            // Load local cover using Vita-compatible method
-            brls::Logger::debug("DownloadsTab: Loading local cover for '{}'", item.title);
-            loadLocalCoverImage(coverImage, item.localCoverPath);
-        } else if (!item.coverUrl.empty()) {
-            // Load from remote URL
-            brls::Logger::debug("DownloadsTab: Loading remote cover for '{}'", item.title);
-            ImageLoader::loadAsync(item.coverUrl, [](brls::Image* img) {
-                // Image loaded callback
-            }, coverImage);
-        } else {
-            brls::Logger::debug("DownloadsTab: No cover available for '{}'", item.title);
-        }
-
-        // Title and info
-        auto infoBox = new brls::Box();
-        infoBox->setAxis(brls::Axis::COLUMN);
-        infoBox->setGrow(1.0f);
-
-        auto titleLabel = new brls::Label();
-        std::string displayTitle = item.title;
-        if (!item.parentTitle.empty()) {
-            displayTitle = item.parentTitle + " - " + item.title;
-        }
-        titleLabel->setText(displayTitle);
-        titleLabel->setFontSize(18);
-        infoBox->addView(titleLabel);
-
-        // Author name (if available)
-        if (!item.authorName.empty()) {
-            auto authorLabel = new brls::Label();
-            authorLabel->setText(item.authorName);
-            authorLabel->setFontSize(14);
-            authorLabel->setTextColor(nvgRGBA(180, 180, 180, 255));
-            infoBox->addView(authorLabel);
-        }
-
-        // Status/progress
-        auto statusLabel = new brls::Label();
-        statusLabel->setFontSize(14);
-
-        std::string statusText;
-        switch (item.state) {
-            case DownloadState::QUEUED:
-                statusText = "Queued";
-                break;
-            case DownloadState::DOWNLOADING:
-                if (item.totalBytes > 0) {
-                    int percent = (int)((item.downloadedBytes * 100) / item.totalBytes);
-                    statusText = "Downloading... " + std::to_string(percent) + "%";
-                } else {
-                    statusText = "Downloading...";
-                }
-                break;
-            case DownloadState::PAUSED:
-                statusText = "Paused";
-                break;
-            case DownloadState::COMPLETED:
-                statusText = "Ready to play";
-                if (item.currentTime > 0) {
-                    int minutes = (int)(item.currentTime / 60.0f);  // currentTime is in seconds
-                    statusText += " (" + std::to_string(minutes) + " min watched)";
-                }
-                break;
-            case DownloadState::FAILED:
-                statusText = "Download failed";
-                break;
-        }
-        statusLabel->setText(statusText);
-        infoBox->addView(statusLabel);
-
-        row->addView(infoBox);
-
-        // Actions based on state
-        if (item.state == DownloadState::COMPLETED) {
-            auto playBtn = new brls::Button();
-            playBtn->setText("Play");
-            playBtn->setMargins(0, 0, 0, 10);
-
-            std::string ratingKey = item.itemId;
-            std::string localPath = item.localPath;
-            playBtn->registerClickAction([ratingKey, localPath](brls::View*) {
-                // Play local file
-                brls::Application::pushActivity(new PlayerActivity(ratingKey, true));
-                return true;
-            });
-            row->addView(playBtn);
-
-            auto deleteBtn = new brls::Button();
-            deleteBtn->setText("Delete");
-            std::string key = item.itemId;
-            deleteBtn->registerClickAction([key](brls::View*) {
-                DownloadsManager::getInstance().deleteDownload(key);
-                brls::Application::notify("Download deleted");
-                return true;
-            });
-            row->addView(deleteBtn);
-        } else if (item.state == DownloadState::DOWNLOADING || item.state == DownloadState::QUEUED) {
-            auto cancelBtn = new brls::Button();
-            cancelBtn->setText("Cancel");
-            std::string key = item.itemId;
-            cancelBtn->registerClickAction([key](brls::View*) {
-                DownloadsManager::getInstance().cancelDownload(key);
-                brls::Application::notify("Download cancelled");
-                return true;
-            });
-            row->addView(cancelBtn);
-        }
-
-        // Add row at the beginning (before empty label)
-        m_listContainer->addView(row, 0);
+    // Build new cache
+    std::vector<CachedServerItem> newCache;
+    for (const auto& si : serverItems) {
+        CachedServerItem cached;
+        cached.itemId = si.itemId;
+        cached.episodeId = si.episodeId;
+        cached.downloadedBytes = si.downloadedBytes;
+        cached.totalBytes = si.totalBytes;
+        cached.state = si.state;
+        newCache.push_back(cached);
     }
+
+    // Check for in-place progress updates (same items, just progress changed)
+    bool structureChanged = (newCache.size() != m_lastServerItems.size());
+    if (!structureChanged) {
+        for (size_t i = 0; i < newCache.size(); i++) {
+            if (newCache[i].itemId != m_lastServerItems[i].itemId ||
+                newCache[i].episodeId != m_lastServerItems[i].episodeId) {
+                structureChanged = true;
+                break;
+            }
+        }
+    }
+
+    // Update in-place if possible (no structural changes)
+    if (!structureChanged) {
+        for (size_t i = 0; i < newCache.size() && i < m_serverRowElements.size(); i++) {
+            const auto& newItem = newCache[i];
+            const auto& oldItem = m_lastServerItems[i];
+            if (newItem.downloadedBytes != oldItem.downloadedBytes ||
+                newItem.state != oldItem.state) {
+                if (m_serverRowElements[i].progressLabel) {
+                    std::string progressText;
+                    if (newItem.state == static_cast<int>(DownloadState::DOWNLOADING)) {
+                        // Show progress in MB format
+                        progressText = formatMB(newItem.downloadedBytes) + " / " + formatMB(newItem.totalBytes);
+                        m_serverRowElements[i].progressLabel->setTextColor(nvgRGBA(100, 200, 100, 255));
+                    } else if (newItem.state == static_cast<int>(DownloadState::QUEUED)) {
+                        progressText = "Queued";
+                        m_serverRowElements[i].progressLabel->setTextColor(nvgRGBA(255, 255, 255, 255));
+                    } else if (newItem.state == static_cast<int>(DownloadState::PAUSED)) {
+                        progressText = "Paused - " + formatMB(newItem.downloadedBytes) + " / " + formatMB(newItem.totalBytes);
+                        m_serverRowElements[i].progressLabel->setTextColor(nvgRGBA(200, 180, 100, 255));
+                    } else if (newItem.state == static_cast<int>(DownloadState::FAILED)) {
+                        progressText = "Failed";
+                        m_serverRowElements[i].progressLabel->setTextColor(nvgRGBA(200, 100, 100, 255));
+                    }
+                    m_serverRowElements[i].progressLabel->setText(progressText);
+
+                    // Update background color
+                    if (m_serverRowElements[i].row) {
+                        if (newItem.state == static_cast<int>(DownloadState::DOWNLOADING)) {
+                            m_serverRowElements[i].row->setBackgroundColor(nvgRGBA(30, 60, 30, 200));
+                        } else if (newItem.state == static_cast<int>(DownloadState::FAILED)) {
+                            m_serverRowElements[i].row->setBackgroundColor(nvgRGBA(60, 30, 30, 200));
+                        } else if (newItem.state == static_cast<int>(DownloadState::PAUSED)) {
+                            m_serverRowElements[i].row->setBackgroundColor(nvgRGBA(50, 50, 30, 200));
+                        } else {
+                            m_serverRowElements[i].row->setBackgroundColor(nvgRGBA(40, 40, 40, 200));
+                        }
+                    }
+                }
+            }
+        }
+        m_lastServerItems = newCache;
+        return;
+    }
+
+    // Full rebuild needed
+    m_lastServerItems = newCache;
+    m_serverRowElements.clear();
+    while (m_serverContainer->getChildren().size() > 0) {
+        m_serverContainer->removeView(m_serverContainer->getChildren()[0]);
+    }
+
+    for (const auto& si : serverItems) {
+        brls::Label* progressLabel = nullptr;
+        brls::Image* xButtonIcon = nullptr;
+        auto* row = createServerRow(si.itemId, si.episodeId, si.title, si.authorName,
+                                     si.downloadedBytes, si.totalBytes, si.state,
+                                     si.coverUrl, si.localCoverPath,
+                                     progressLabel, xButtonIcon);
+        m_serverContainer->addView(row);
+
+        ServerRowElements elem;
+        elem.row = row;
+        elem.progressLabel = progressLabel;
+        elem.xButtonIcon = xButtonIcon;
+        elem.itemId = si.itemId;
+        elem.episodeId = si.episodeId;
+        m_serverRowElements.push_back(elem);
+    }
+
+    updateNavigationRoutes();
 }
 
-void DownloadsTab::showDownloadOptions(const std::string& ratingKey, const std::string& title) {
-    // Not implemented - download options would be shown from media detail view
+void DownloadsTab::refreshLocalDownloads() {
+    DownloadsManager& mgr = DownloadsManager::getInstance();
+    auto downloads = mgr.getDownloads();
+
+    // Build list of completed items for local section
+    struct LocalInfo {
+        std::string itemId, episodeId, title, authorName, coverUrl, localCoverPath, mediaType;
+        float currentTime, duration;
+    };
+    std::vector<LocalInfo> localItems;
+
+    for (const auto& item : downloads) {
+        if (item.state == DownloadState::COMPLETED) {
+            LocalInfo li;
+            li.itemId = item.itemId;
+            li.episodeId = item.episodeId;
+            li.title = item.title;
+            li.authorName = item.authorName;
+            li.coverUrl = item.coverUrl;
+            li.localCoverPath = item.localCoverPath;
+            li.mediaType = item.mediaType;
+            li.currentTime = item.currentTime;
+            li.duration = item.duration;
+            localItems.push_back(li);
+        }
+    }
+
+    if (localItems.empty()) {
+        m_localSection->setVisibility(brls::Visibility::GONE);
+        m_lastLocalItems.clear();
+        m_localRowElements.clear();
+        while (m_localContainer->getChildren().size() > 0) {
+            m_localContainer->removeView(m_localContainer->getChildren()[0]);
+        }
+
+        // Show empty state if server queue is also empty
+        if (m_lastServerItems.empty() && m_emptyStateBox) {
+            m_emptyStateBox->setVisibility(brls::Visibility::VISIBLE);
+        }
+        return;
+    }
+
+    if (m_emptyStateBox) m_emptyStateBox->setVisibility(brls::Visibility::GONE);
+    m_localSection->setVisibility(brls::Visibility::VISIBLE);
+    m_localEmptyLabel->setVisibility(brls::Visibility::GONE);
+    m_localScroll->setVisibility(brls::Visibility::VISIBLE);
+
+    // Check if structure changed
+    bool structureChanged = (localItems.size() != m_lastLocalItems.size());
+    if (!structureChanged) {
+        for (size_t i = 0; i < localItems.size(); i++) {
+            if (localItems[i].itemId != m_lastLocalItems[i].itemId ||
+                localItems[i].episodeId != m_lastLocalItems[i].episodeId) {
+                structureChanged = true;
+                break;
+            }
+        }
+    }
+
+    // Build new cache
+    std::vector<CachedLocalItem> newCache;
+    for (const auto& li : localItems) {
+        CachedLocalItem cached;
+        cached.itemId = li.itemId;
+        cached.episodeId = li.episodeId;
+        cached.currentTime = li.currentTime;
+        newCache.push_back(cached);
+    }
+
+    if (!structureChanged) {
+        // Update progress labels in-place
+        for (size_t i = 0; i < newCache.size() && i < m_localRowElements.size(); i++) {
+            if (newCache[i].currentTime != m_lastLocalItems[i].currentTime) {
+                if (m_localRowElements[i].statusLabel) {
+                    std::string statusText = "Ready to play";
+                    if (newCache[i].currentTime > 0) {
+                        int minutes = static_cast<int>(newCache[i].currentTime / 60.0f);
+                        statusText += " (" + std::to_string(minutes) + " min listened)";
+                    }
+                    m_localRowElements[i].statusLabel->setText(statusText);
+                }
+            }
+        }
+        m_lastLocalItems = newCache;
+        return;
+    }
+
+    // Full rebuild
+    m_lastLocalItems = newCache;
+    m_localRowElements.clear();
+    while (m_localContainer->getChildren().size() > 0) {
+        m_localContainer->removeView(m_localContainer->getChildren()[0]);
+    }
+
+    for (const auto& li : localItems) {
+        brls::Label* statusLabel = nullptr;
+        brls::Image* xButtonIcon = nullptr;
+        auto* row = createLocalRow(li.itemId, li.episodeId, li.title, li.authorName,
+                                    li.currentTime, li.duration,
+                                    li.coverUrl, li.localCoverPath, li.mediaType,
+                                    statusLabel, xButtonIcon);
+        m_localContainer->addView(row);
+
+        LocalRowElements elem;
+        elem.row = row;
+        elem.statusLabel = statusLabel;
+        elem.xButtonIcon = xButtonIcon;
+        elem.itemId = li.itemId;
+        elem.episodeId = li.episodeId;
+        m_localRowElements.push_back(elem);
+    }
+
+    updateNavigationRoutes();
+}
+
+brls::Box* DownloadsTab::createServerRow(const std::string& itemId, const std::string& episodeId,
+                                          const std::string& title, const std::string& authorName,
+                                          int64_t downloadedBytes, int64_t totalBytes, int state,
+                                          const std::string& coverUrl, const std::string& localCoverPath,
+                                          brls::Label*& outProgressLabel, brls::Image*& outXButtonIcon) {
+    auto row = new brls::Box();
+    row->setAxis(brls::Axis::ROW);
+    row->setJustifyContent(brls::JustifyContent::SPACE_BETWEEN);
+    row->setAlignItems(brls::AlignItems::CENTER);
+    row->setPadding(8);
+    row->setMargins(0, 0, 8, 0);
+    row->setCornerRadius(6);
+    row->setFocusable(true);
+
+    // Background color based on state
+    if (state == static_cast<int>(DownloadState::DOWNLOADING)) {
+        row->setBackgroundColor(nvgRGBA(30, 60, 30, 200));
+    } else if (state == static_cast<int>(DownloadState::FAILED)) {
+        row->setBackgroundColor(nvgRGBA(60, 30, 30, 200));
+    } else if (state == static_cast<int>(DownloadState::PAUSED)) {
+        row->setBackgroundColor(nvgRGBA(50, 50, 30, 200));
+    } else {
+        row->setBackgroundColor(nvgRGBA(40, 40, 40, 200));
+    }
+
+    // Cover image
+    auto coverImage = new brls::Image();
+    coverImage->setWidth(50);
+    coverImage->setHeight(50);
+    coverImage->setCornerRadius(4);
+    coverImage->setMargins(0, 12, 0, 0);
+    row->addView(coverImage);
+
+    if (!localCoverPath.empty()) {
+        loadLocalCoverImage(coverImage, localCoverPath);
+    } else if (!coverUrl.empty()) {
+        ImageLoader::loadAsync(coverUrl, [](brls::Image*) {}, coverImage);
+    }
+
+    // Info column (left side, grows)
+    auto infoBox = new brls::Box();
+    infoBox->setAxis(brls::Axis::COLUMN);
+    infoBox->setGrow(1.0f);
+
+    auto titleLabel = new brls::Label();
+    titleLabel->setText(title);
+    titleLabel->setFontSize(16);
+    titleLabel->setSingleLine(true);
+    infoBox->addView(titleLabel);
+
+    if (!authorName.empty()) {
+        auto authorLabel = new brls::Label();
+        authorLabel->setText(authorName);
+        authorLabel->setFontSize(13);
+        authorLabel->setTextColor(nvgRGBA(180, 180, 180, 255));
+        authorLabel->setSingleLine(true);
+        infoBox->addView(authorLabel);
+    }
+
+    row->addView(infoBox);
+
+    // Status box (right side: progress label + square button icon)
+    auto statusBox = new brls::Box();
+    statusBox->setAxis(brls::Axis::ROW);
+    statusBox->setAlignItems(brls::AlignItems::CENTER);
+
+    // Progress label with MB format
+    auto progressLabel = new brls::Label();
+    progressLabel->setFontSize(14);
+    progressLabel->setMargins(0, 0, 0, 10);
+
+    std::string progressText;
+    if (state == static_cast<int>(DownloadState::DOWNLOADING)) {
+        progressText = formatMB(downloadedBytes) + " / " + formatMB(totalBytes);
+        progressLabel->setTextColor(nvgRGBA(100, 200, 100, 255));
+    } else if (state == static_cast<int>(DownloadState::QUEUED)) {
+        progressText = "Queued";
+    } else if (state == static_cast<int>(DownloadState::PAUSED)) {
+        progressText = "Paused - " + formatMB(downloadedBytes) + " / " + formatMB(totalBytes);
+        progressLabel->setTextColor(nvgRGBA(200, 180, 100, 255));
+    } else if (state == static_cast<int>(DownloadState::FAILED)) {
+        progressText = "Failed";
+        progressLabel->setTextColor(nvgRGBA(200, 100, 100, 255));
+    }
+    progressLabel->setText(progressText);
+    outProgressLabel = progressLabel;
+    statusBox->addView(progressLabel);
+
+    // Square button icon - only visible when row is focused
+    auto* xButtonIcon = new brls::Image();
+    xButtonIcon->setWidth(24);
+    xButtonIcon->setHeight(24);
+    xButtonIcon->setScalingType(brls::ImageScalingType::FIT);
+    xButtonIcon->setImageFromFile("app0:resources/images/square_button.png");
+    xButtonIcon->setMarginLeft(8);
+    xButtonIcon->setVisibility(brls::Visibility::INVISIBLE);
+    outXButtonIcon = xButtonIcon;
+    statusBox->addView(xButtonIcon);
+
+    row->addView(statusBox);
+
+    // Show square button icon when this row gets focus
+    row->getFocusEvent()->subscribe([this, xButtonIcon](brls::View* view) {
+        // Hide previous focused icon (validate it's still a live element)
+        if (m_currentFocusedIcon && m_currentFocusedIcon != xButtonIcon) {
+            bool isValid = false;
+            for (const auto& elem : m_serverRowElements) {
+                if (elem.xButtonIcon == m_currentFocusedIcon) { isValid = true; break; }
+            }
+            if (!isValid) {
+                for (const auto& elem : m_localRowElements) {
+                    if (elem.xButtonIcon == m_currentFocusedIcon) { isValid = true; break; }
+                }
+            }
+            if (isValid) {
+                m_currentFocusedIcon->setVisibility(brls::Visibility::INVISIBLE);
+            } else {
+                m_currentFocusedIcon = nullptr;
+            }
+        }
+        xButtonIcon->setVisibility(brls::Visibility::VISIBLE);
+        m_currentFocusedIcon = xButtonIcon;
+    });
+
+    // Square button action - cancel download
+    std::string capturedItemId = itemId;
+    row->registerAction("Cancel", brls::ControllerButton::BUTTON_X, [this, capturedItemId](brls::View*) {
+        DownloadsManager::getInstance().cancelDownload(capturedItemId);
+        brls::Application::notify("Download cancelled");
+        refresh();
+        return true;
+    });
+
+    return row;
+}
+
+brls::Box* DownloadsTab::createLocalRow(const std::string& itemId, const std::string& episodeId,
+                                         const std::string& title, const std::string& authorName,
+                                         float currentTime, float duration,
+                                         const std::string& coverUrl, const std::string& localCoverPath,
+                                         const std::string& mediaType,
+                                         brls::Label*& outStatusLabel, brls::Image*& outXButtonIcon) {
+    auto row = new brls::Box();
+    row->setAxis(brls::Axis::ROW);
+    row->setJustifyContent(brls::JustifyContent::SPACE_BETWEEN);
+    row->setAlignItems(brls::AlignItems::CENTER);
+    row->setPadding(8);
+    row->setMargins(0, 0, 8, 0);
+    row->setBackgroundColor(nvgRGBA(40, 40, 40, 200));
+    row->setCornerRadius(6);
+    row->setFocusable(true);
+
+    // Cover image
+    auto coverImage = new brls::Image();
+    coverImage->setWidth(50);
+    coverImage->setHeight(50);
+    coverImage->setCornerRadius(4);
+    coverImage->setMargins(0, 12, 0, 0);
+    row->addView(coverImage);
+
+    if (!localCoverPath.empty()) {
+        loadLocalCoverImage(coverImage, localCoverPath);
+    } else if (!coverUrl.empty()) {
+        ImageLoader::loadAsync(coverUrl, [](brls::Image*) {}, coverImage);
+    }
+
+    // Info column (left side, grows)
+    auto infoBox = new brls::Box();
+    infoBox->setAxis(brls::Axis::COLUMN);
+    infoBox->setGrow(1.0f);
+
+    auto titleLabel = new brls::Label();
+    titleLabel->setText(title);
+    titleLabel->setFontSize(16);
+    titleLabel->setSingleLine(true);
+    infoBox->addView(titleLabel);
+
+    if (!authorName.empty()) {
+        auto authorLabel = new brls::Label();
+        authorLabel->setText(authorName);
+        authorLabel->setFontSize(13);
+        authorLabel->setTextColor(nvgRGBA(180, 180, 180, 255));
+        authorLabel->setSingleLine(true);
+        infoBox->addView(authorLabel);
+    }
+
+    row->addView(infoBox);
+
+    // Status box (right side: status label + square button icon)
+    auto statusBox = new brls::Box();
+    statusBox->setAxis(brls::Axis::ROW);
+    statusBox->setAlignItems(brls::AlignItems::CENTER);
+
+    auto statusLabel = new brls::Label();
+    statusLabel->setFontSize(14);
+    statusLabel->setMargins(0, 0, 0, 10);
+    std::string statusText = "Ready";
+    if (currentTime > 0) {
+        int minutes = static_cast<int>(currentTime / 60.0f);
+        statusText += " (" + std::to_string(minutes) + " min)";
+    }
+    statusLabel->setText(statusText);
+    statusLabel->setTextColor(nvgRGBA(100, 180, 220, 255));
+    outStatusLabel = statusLabel;
+    statusBox->addView(statusLabel);
+
+    // Square button icon - only visible when row is focused
+    auto* xButtonIcon = new brls::Image();
+    xButtonIcon->setWidth(24);
+    xButtonIcon->setHeight(24);
+    xButtonIcon->setScalingType(brls::ImageScalingType::FIT);
+    xButtonIcon->setImageFromFile("app0:resources/images/square_button.png");
+    xButtonIcon->setMarginLeft(8);
+    xButtonIcon->setVisibility(brls::Visibility::INVISIBLE);
+    outXButtonIcon = xButtonIcon;
+    statusBox->addView(xButtonIcon);
+
+    row->addView(statusBox);
+
+    // Show square button icon when this row gets focus
+    row->getFocusEvent()->subscribe([this, xButtonIcon](brls::View* view) {
+        if (m_currentFocusedIcon && m_currentFocusedIcon != xButtonIcon) {
+            bool isValid = false;
+            for (const auto& elem : m_serverRowElements) {
+                if (elem.xButtonIcon == m_currentFocusedIcon) { isValid = true; break; }
+            }
+            if (!isValid) {
+                for (const auto& elem : m_localRowElements) {
+                    if (elem.xButtonIcon == m_currentFocusedIcon) { isValid = true; break; }
+                }
+            }
+            if (isValid) {
+                m_currentFocusedIcon->setVisibility(brls::Visibility::INVISIBLE);
+            } else {
+                m_currentFocusedIcon = nullptr;
+            }
+        }
+        xButtonIcon->setVisibility(brls::Visibility::VISIBLE);
+        m_currentFocusedIcon = xButtonIcon;
+    });
+
+    // A button - play
+    std::string capturedItemId = itemId;
+    row->registerClickAction([capturedItemId](brls::View*) {
+        brls::Application::pushActivity(new PlayerActivity(capturedItemId, true));
+        return true;
+    });
+
+    // Square button action - delete local download
+    row->registerAction("Delete", brls::ControllerButton::BUTTON_X, [this, capturedItemId](brls::View*) {
+        DownloadsManager::getInstance().deleteDownload(capturedItemId);
+        brls::Application::notify("Download deleted");
+        refresh();
+        return true;
+    });
+
+    return row;
+}
+
+void DownloadsTab::startAutoRefresh() {
+    if (m_autoRefreshTimerActive.load()) return;
+    m_autoRefreshEnabled.store(true);
+    m_autoRefreshTimerActive.store(true);
+
+    std::weak_ptr<bool> aliveWeak = m_alive;
+
+    asyncRun([this, aliveWeak]() {
+        while (m_autoRefreshEnabled.load()) {
+            auto alive = aliveWeak.lock();
+            if (!alive || !*alive) break;
+
+            int totalItems = static_cast<int>(m_lastServerItems.size() + m_lastLocalItems.size());
+            int interval = (totalItems > LARGE_QUEUE_THRESHOLD) ?
+                           AUTO_REFRESH_INTERVAL_LARGE_MS : AUTO_REFRESH_INTERVAL_MS;
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(interval));
+
+            alive = aliveWeak.lock();
+            if (!alive || !*alive) break;
+            if (!m_autoRefreshEnabled.load()) break;
+
+            brls::sync([this, aliveWeak]() {
+                auto alive = aliveWeak.lock();
+                if (!alive || !*alive) return;
+                if (m_autoRefreshEnabled.load()) {
+                    refresh();
+                }
+            });
+        }
+        m_autoRefreshTimerActive.store(false);
+    });
+}
+
+void DownloadsTab::stopAutoRefresh() {
+    m_autoRefreshEnabled.store(false);
+}
+
+void DownloadsTab::updateNavigationRoutes() {
+    // Let borealis handle default navigation between focusable items
 }
 
 } // namespace vitaabs

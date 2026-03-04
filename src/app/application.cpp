@@ -67,6 +67,18 @@ void Application::run() {
         // Try to connect, with automatic URL switching if needed
         if (tryConnectToServer()) {
             brls::Logger::info("Restored session, connected to {}", m_serverUrl);
+
+            // Auto-sync progress both directions on startup
+            auto& dm = DownloadsManager::getInstance();
+            if (!dm.getDownloads().empty()) {
+                // First push local progress to server (offline playback resume points)
+                dm.syncProgressToServer();
+                // Then pull latest progress from server (played on other devices)
+                dm.syncProgressFromServer();
+                // Resume incomplete downloads
+                dm.resumeDownloadsIfNeeded();
+            }
+
             pushMainActivity();
         } else {
             // Connection failed - could be offline
@@ -99,6 +111,8 @@ void Application::run() {
 }
 
 void Application::shutdown() {
+    // Save any pending download state before shutting down
+    DownloadsManager::getInstance().saveState();
     saveSettings();
     m_initialized = false;
     brls::Logger::info("VitaABS shutting down");
@@ -153,16 +167,6 @@ void Application::applyLogLevel() {
     }
 }
 
-std::string Application::getAudioQualityString(AudioQuality quality) {
-    switch (quality) {
-        case AudioQuality::ORIGINAL: return "Original (Direct Play)";
-        case AudioQuality::HIGH: return "High (320 kbps)";
-        case AudioQuality::MEDIUM: return "Medium (192 kbps)";
-        case AudioQuality::LOW: return "Low (128 kbps)";
-        case AudioQuality::VERY_LOW: return "Very Low (64 kbps)";
-        default: return "Unknown";
-    }
-}
 
 std::string Application::getThemeString(AppTheme theme) {
     switch (theme) {
@@ -333,8 +337,6 @@ bool Application::loadSettings() {
 
     // Load UI settings
     m_settings.theme = static_cast<AppTheme>(extractInt("theme"));
-    m_settings.showClock = extractBool("showClock", true);
-    m_settings.animationsEnabled = extractBool("animationsEnabled", true);
     m_settings.debugLogging = extractBool("debugLogging", true);
 
     // Load content display settings
@@ -362,7 +364,6 @@ bool Application::loadSettings() {
     m_settings.podcastAutoComplete = static_cast<AutoCompleteThreshold>(extractInt("podcastAutoComplete"));
 
     // Load audio settings
-    m_settings.audioQuality = static_cast<AudioQuality>(extractInt("audioQuality"));
     m_settings.boostVolume = extractBool("boostVolume", false);
     m_settings.volumeBoostDb = extractInt("volumeBoostDb");
 
@@ -370,20 +371,15 @@ bool Application::loadSettings() {
     m_settings.showChapterList = extractBool("showChapterList", true);
     m_settings.skipChapterTransitions = extractBool("skipChapterTransitions", false);
 
-    // Load bookmark settings
-    m_settings.autoBookmark = extractBool("autoBookmark", true);
-
     // Load network settings
     m_settings.connectionTimeout = extractInt("connectionTimeout");
-    if (m_settings.connectionTimeout <= 0) m_settings.connectionTimeout = 180;
-    m_settings.downloadOverWifiOnly = extractBool("downloadOverWifiOnly", false);
+    if (m_settings.connectionTimeout <= 0) m_settings.connectionTimeout = 30;
+    m_settings.autoSwitchUrl = extractBool("autoSwitchUrl", true);
 
     // Load download settings
     m_settings.autoStartDownloads = extractBool("autoStartDownloads", true);
-    m_settings.maxConcurrentDownloads = extractInt("maxConcurrentDownloads");
-    if (m_settings.maxConcurrentDownloads <= 0) m_settings.maxConcurrentDownloads = 1;
     m_settings.deleteAfterFinish = extractBool("deleteAfterFinish", false);
-    m_settings.syncProgressOnConnect = extractBool("syncProgressOnConnect", true);
+    m_settings.downloadOnPlay = extractBool("downloadOnPlay", false);
 
     // Load player UI settings
     m_settings.showDownloadProgress = extractBool("showDownloadProgress", true);
@@ -421,8 +417,6 @@ bool Application::saveSettings() {
 
     // UI settings
     json += "  \"theme\": " + std::to_string(static_cast<int>(m_settings.theme)) + ",\n";
-    json += "  \"showClock\": " + std::string(m_settings.showClock ? "true" : "false") + ",\n";
-    json += "  \"animationsEnabled\": " + std::string(m_settings.animationsEnabled ? "true" : "false") + ",\n";
     json += "  \"debugLogging\": " + std::string(m_settings.debugLogging ? "true" : "false") + ",\n";
 
     // Content display settings
@@ -447,7 +441,6 @@ bool Application::saveSettings() {
     json += "  \"podcastAutoComplete\": " + std::to_string(static_cast<int>(m_settings.podcastAutoComplete)) + ",\n";
 
     // Audio settings
-    json += "  \"audioQuality\": " + std::to_string(static_cast<int>(m_settings.audioQuality)) + ",\n";
     json += "  \"boostVolume\": " + std::string(m_settings.boostVolume ? "true" : "false") + ",\n";
     json += "  \"volumeBoostDb\": " + std::to_string(m_settings.volumeBoostDb) + ",\n";
 
@@ -455,18 +448,14 @@ bool Application::saveSettings() {
     json += "  \"showChapterList\": " + std::string(m_settings.showChapterList ? "true" : "false") + ",\n";
     json += "  \"skipChapterTransitions\": " + std::string(m_settings.skipChapterTransitions ? "true" : "false") + ",\n";
 
-    // Bookmark settings
-    json += "  \"autoBookmark\": " + std::string(m_settings.autoBookmark ? "true" : "false") + ",\n";
-
     // Network settings
     json += "  \"connectionTimeout\": " + std::to_string(m_settings.connectionTimeout) + ",\n";
-    json += "  \"downloadOverWifiOnly\": " + std::string(m_settings.downloadOverWifiOnly ? "true" : "false") + ",\n";
+    json += "  \"autoSwitchUrl\": " + std::string(m_settings.autoSwitchUrl ? "true" : "false") + ",\n";
 
     // Download settings
     json += "  \"autoStartDownloads\": " + std::string(m_settings.autoStartDownloads ? "true" : "false") + ",\n";
-    json += "  \"maxConcurrentDownloads\": " + std::to_string(m_settings.maxConcurrentDownloads) + ",\n";
     json += "  \"deleteAfterFinish\": " + std::string(m_settings.deleteAfterFinish ? "true" : "false") + ",\n";
-    json += "  \"syncProgressOnConnect\": " + std::string(m_settings.syncProgressOnConnect ? "true" : "false") + ",\n";
+    json += "  \"downloadOnPlay\": " + std::string(m_settings.downloadOnPlay ? "true" : "false") + ",\n";
 
     // Player UI settings
     json += "  \"showDownloadProgress\": " + std::string(m_settings.showDownloadProgress ? "true" : "false") + ",\n";
@@ -543,14 +532,14 @@ bool Application::tryConnectToServer() {
         }
     }
 
-    // Try fallback URL if available
-    if (!fallbackUrl.empty()) {
-        brls::Logger::info("Primary failed, trying fallback URL: {}", fallbackUrl);
+    // Try fallback URL if auto-switch is enabled and both URLs are configured
+    if (m_settings.autoSwitchUrl && !fallbackUrl.empty()) {
+        brls::Logger::info("Auto-switch: Primary failed, trying fallback URL: {}", fallbackUrl);
         client.setServerUrl(fallbackUrl);
         if (client.validateToken()) {
             m_serverUrl = fallbackUrl;
             m_useLocalUrl = !m_useLocalUrl;  // Switch to the working URL
-            brls::Logger::info("Connected to fallback URL, switched to {}", m_useLocalUrl ? "local" : "remote");
+            brls::Logger::info("Auto-switch: Connected to fallback URL, switched to {}", m_useLocalUrl ? "local" : "remote");
             saveSettings();
             return true;
         }

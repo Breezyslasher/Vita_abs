@@ -23,10 +23,33 @@
 #include <psp2/io/stat.h>
 #endif
 
+namespace {
+
+// Box subclass that shows/hides a square button hint on focus
+class FocusHintBox : public brls::Box {
+public:
+    void setHintImage(brls::Image* hint) { m_hint = hint; }
+
+    void onFocusGained() override {
+        brls::Box::onFocusGained();
+        if (m_hint) m_hint->setVisibility(brls::Visibility::VISIBLE);
+    }
+
+    void onFocusLost() override {
+        brls::Box::onFocusLost();
+        if (m_hint) m_hint->setVisibility(brls::Visibility::GONE);
+    }
+
+private:
+    brls::Image* m_hint = nullptr;
+};
+
+} // anonymous namespace
+
 namespace vitaabs {
 
 MediaDetailView::MediaDetailView(const MediaItem& item)
-    : m_item(item) {
+    : m_item(item), m_alive(std::make_shared<bool>(true)) {
     brls::Logger::info("MediaDetailView: Creating for '{}' id='{}' type='{}'",
                        item.title, item.id, item.type);
 
@@ -68,7 +91,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         // Select button hint above play button
         auto* selectHintContainer = new brls::Box();
         selectHintContainer->setAxis(brls::Axis::ROW);
-        selectHintContainer->setJustifyContent(brls::JustifyContent::CENTER);
+        selectHintContainer->setJustifyContent(brls::JustifyContent::FLEX_START);
         selectHintContainer->setMarginBottom(4);
         auto* selectHint = new brls::Image();
         selectHint->setSize(brls::Size(64, 16));
@@ -126,7 +149,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         // Select button hint above play button
         auto* selectHintContainer = new brls::Box();
         selectHintContainer->setAxis(brls::Axis::ROW);
-        selectHintContainer->setJustifyContent(brls::JustifyContent::CENTER);
+        selectHintContainer->setJustifyContent(brls::JustifyContent::FLEX_START);
         selectHintContainer->setMarginBottom(4);
         auto* selectHint = new brls::Image();
         selectHint->setSize(brls::Size(64, 16));
@@ -308,15 +331,17 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         sortBtn->setCornerRadius(8);
         sortBtn->setJustifyContent(brls::JustifyContent::CENTER);
         sortBtn->setAlignItems(brls::AlignItems::CENTER);
-        auto* sortIcon = new brls::Image();
-        sortIcon->setWidth(20);
-        sortIcon->setHeight(20);
-        sortIcon->setScalingType(brls::ImageScalingType::FIT);
-        sortIcon->setImageFromFile("app0:resources/icons/sort-calendar-descending.png");
-        sortBtn->addView(sortIcon);
+        m_sortIcon = new brls::Image();
+        m_sortIcon->setWidth(20);
+        m_sortIcon->setHeight(20);
+        m_sortIcon->setScalingType(brls::ImageScalingType::FIT);
+        m_sortIcon->setImageFromFile("app0:resources/icons/sort-9-1.png");
+        sortBtn->addView(m_sortIcon);
         sortBtn->registerClickAction([this](brls::View*) {
             m_sortDescending = !m_sortDescending;
-            brls::Application::notify(m_sortDescending ? "Newest first" : "Oldest first");
+            m_sortIcon->setImageFromFile(m_sortDescending
+                ? "app0:resources/icons/sort-9-1.png"
+                : "app0:resources/icons/sort-1-9.png");
             applyFilters();
             return true;
         });
@@ -470,7 +495,9 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         // Register R button to toggle sort order
         this->registerAction("Sort", brls::ControllerButton::BUTTON_RB, [this](brls::View*) {
             m_sortDescending = !m_sortDescending;
-            brls::Application::notify(m_sortDescending ? "Newest first" : "Oldest first");
+            m_sortIcon->setImageFromFile(m_sortDescending
+                ? "app0:resources/icons/sort-9-1.png"
+                : "app0:resources/icons/sort-1-9.png");
             applyFilters();
             return true;
         });
@@ -495,6 +522,91 @@ brls::HScrollingFrame* MediaDetailView::createMediaRow(const std::string& title,
 
 brls::View* MediaDetailView::create() {
     return nullptr; // Factory not used
+}
+
+void MediaDetailView::willAppear(bool resetState) {
+    brls::Box::willAppear(resetState);
+
+    // Re-arm alive flag
+    m_alive = std::make_shared<bool>(true);
+    m_lastProgressUpdate = std::chrono::steady_clock::now();
+
+    // Register download progress callback for live UI updates
+    DownloadsManager& mgr = DownloadsManager::getInstance();
+    std::weak_ptr<bool> aliveWeak = m_alive;
+
+    mgr.setProgressCallback([this, aliveWeak](float downloadedBytes, float totalBytes) {
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastProgressUpdate).count();
+
+        // Throttle to every 200ms for smooth but not excessive updates
+        if (elapsed < 200 && downloadedBytes < totalBytes) return;
+        m_lastProgressUpdate = now;
+
+        brls::sync([this, aliveWeak, downloadedBytes, totalBytes]() {
+            auto alive = aliveWeak.lock();
+            if (!alive || !*alive) return;
+
+            // Update download button text with live MB progress
+            if (m_downloadButton) {
+                double dlMB = downloadedBytes / (1024.0 * 1024.0);
+                double totMB = totalBytes / (1024.0 * 1024.0);
+                int dlInt = static_cast<int>(dlMB * 10);
+                int totInt = static_cast<int>(totMB * 10);
+                std::string text = std::to_string(dlInt / 10) + "." + std::to_string(dlInt % 10) + " / "
+                                 + std::to_string(totInt / 10) + "." + std::to_string(totInt % 10) + " MB";
+                m_downloadButton->setText(text);
+            }
+        });
+    });
+
+    // Register item completion callback for UI refresh
+    mgr.setItemCompletionCallback([this, aliveWeak](const std::string& itemId, const std::string& episodeId, bool success) {
+        brls::sync([this, aliveWeak, itemId, episodeId, success]() {
+            auto alive = aliveWeak.lock();
+            if (!alive || !*alive) return;
+
+            if (success) {
+                // Update download button for audiobooks
+                if (m_downloadButton && itemId == m_item.id && episodeId.empty()) {
+                    m_downloadButton->setText("Downloaded");
+                    m_downloadButton->setBackgroundColor(nvgRGBA(46, 204, 113, 200));
+                }
+
+                // Refresh episode list so download icons update (green checkmark)
+                if (m_item.mediaType == MediaType::PODCAST && m_childrenBox) {
+                    applyFilters();
+                }
+
+                // Update podcast download/delete button visibility
+                if (m_item.mediaType == MediaType::PODCAST) {
+                    bool allDownloaded = areAllEpisodesDownloaded();
+                    bool anyDownloaded = hasAnyDownloadedEpisodes();
+                    if (m_downloadButton) {
+                        m_downloadButton->setVisibility(allDownloaded ? brls::Visibility::GONE : brls::Visibility::VISIBLE);
+                    }
+                    if (m_deleteButton) {
+                        m_deleteButton->setVisibility(anyDownloaded ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+                    }
+                }
+            } else {
+                // Download failed - reset button
+                if (m_downloadButton) {
+                    m_downloadButton->setText("Download");
+                }
+            }
+        });
+    });
+}
+
+void MediaDetailView::willDisappear(bool resetState) {
+    brls::Box::willDisappear(resetState);
+
+    if (m_alive) *m_alive = false;
+
+    DownloadsManager& mgr = DownloadsManager::getInstance();
+    mgr.setProgressCallback(nullptr);
+    mgr.setItemCompletionCallback(nullptr);
 }
 
 void MediaDetailView::loadDetails() {
@@ -813,7 +925,7 @@ void MediaDetailView::populateChapters() {
     for (size_t i = 0; i < m_item.chapters.size(); ++i) {
         const auto& chapter = m_item.chapters[i];
 
-        auto* chapterRow = new brls::Box();
+        auto* chapterRow = new FocusHintBox();
         chapterRow->setAxis(brls::Axis::ROW);
         chapterRow->setAlignItems(brls::AlignItems::CENTER);
         chapterRow->setHeight(56);
@@ -821,6 +933,16 @@ void MediaDetailView::populateChapters() {
         chapterRow->setPadding(10, 14, 10, 14);
         chapterRow->setCornerRadius(8);
         chapterRow->setFocusable(true);
+
+        // Square button hint (visible on focus only)
+        auto* squareHint = new brls::Image();
+        squareHint->setSize(brls::Size(16, 16));
+        squareHint->setScalingType(brls::ImageScalingType::FIT);
+        squareHint->setImageFromFile("app0:resources/images/square_button.png");
+        squareHint->setMarginRight(8);
+        squareHint->setVisibility(brls::Visibility::GONE);
+        chapterRow->addView(squareHint);
+        chapterRow->setHintImage(squareHint);
 
         // Highlight current chapter
         bool isCurrentChapter = (currentTime >= chapter.start && currentTime < chapter.end);
@@ -989,7 +1111,7 @@ void MediaDetailView::applyFilters() {
     for (size_t i = 0; i < filtered.size(); ++i) {
         const auto& child = filtered[i];
 
-        auto* episodeRow = new brls::Box();
+        auto* episodeRow = new FocusHintBox();
         episodeRow->setAxis(brls::Axis::ROW);
         episodeRow->setAlignItems(brls::AlignItems::CENTER);
         episodeRow->setHeight(56);
@@ -998,6 +1120,16 @@ void MediaDetailView::applyFilters() {
         episodeRow->setCornerRadius(8);
         episodeRow->setBackgroundColor(nvgRGBA(40, 40, 40, 255));
         episodeRow->setFocusable(true);
+
+        // Square button hint (visible on focus only)
+        auto* squareHint = new brls::Image();
+        squareHint->setSize(brls::Size(16, 16));
+        squareHint->setScalingType(brls::ImageScalingType::FIT);
+        squareHint->setImageFromFile("app0:resources/images/square_button.png");
+        squareHint->setMarginRight(8);
+        squareHint->setVisibility(brls::Visibility::GONE);
+        episodeRow->addView(squareHint);
+        episodeRow->setHintImage(squareHint);
 
         // Left side: title + duration
         auto* textBox = new brls::Box();
@@ -1038,11 +1170,25 @@ void MediaDetailView::applyFilters() {
 
         std::string epItemId = child.podcastId.empty() ? m_item.id : child.podcastId;
         std::string epId = child.episodeId;
+
+        // Check download state: completed, queued/downloading, or not queued
         bool isEpDownloaded = dlMgr.isDownloaded(epItemId, epId);
+        bool isEpQueued = false;
+        bool isEpDownloading = false;
+        {
+            DownloadItem* dlItem = dlMgr.getDownload(epItemId, epId);
+            if (dlItem) {
+                isEpQueued = (dlItem->state == DownloadState::QUEUED);
+                isEpDownloading = (dlItem->state == DownloadState::DOWNLOADING);
+            }
+        }
 
         if (isEpDownloaded) {
             dlIcon->setImageFromFile("app0:resources/icons/checkbox_checked.png");
             dlBtn->setBackgroundColor(nvgRGBA(46, 204, 113, 200));
+        } else if (isEpQueued || isEpDownloading) {
+            dlIcon->setImageFromFile("app0:resources/icons/download.png");
+            dlBtn->setBackgroundColor(nvgRGBA(200, 180, 60, 200));  // Yellow for queued/downloading
         } else {
             dlIcon->setImageFromFile("app0:resources/icons/download.png");
             dlBtn->setBackgroundColor(nvgRGBA(60, 60, 60, 200));
@@ -1050,18 +1196,85 @@ void MediaDetailView::applyFilters() {
 
         dlBtn->addView(dlIcon);
 
-        dlBtn->registerClickAction([this, child, epItemId, epId, isEpDownloaded](brls::View*) {
-            if (isEpDownloaded) {
-                DownloadsManager::getInstance().deleteDownloadByEpisodeId(epItemId, epId);
+        // Click and X button: toggle download queue state (like Suwayomi)
+        // Queued/Downloading → cancel, Downloaded → delete, Not queued → queue download
+        std::string epTitle = child.title;
+        std::string epAuthor = m_item.authorName;
+        float epDuration = child.duration;
+        std::string epMediaType = (child.mediaType == MediaType::PODCAST_EPISODE) ? "episode" : "book";
+
+        dlBtn->registerClickAction([this, epItemId, epId, epTitle, epAuthor, epDuration, epMediaType, dlBtn](brls::View*) {
+            DownloadsManager& dm = DownloadsManager::getInstance();
+            dm.init();
+
+            // Query live state at action time (not stale bind-time values)
+            DownloadItem* dlItem = dm.getDownload(epItemId, epId);
+            bool downloaded = dm.isDownloaded(epItemId, epId);
+            bool queued = dlItem && (dlItem->state == DownloadState::QUEUED);
+            bool downloading = dlItem && (dlItem->state == DownloadState::DOWNLOADING);
+
+            if (queued || downloading) {
+                // Cancel the download
+                dm.cancelDownload(epItemId, epId);
+                brls::Application::notify("Download cancelled");
+                applyFilters();
+            } else if (downloaded) {
+                // Delete the download
+                dm.deleteDownloadByEpisodeId(epItemId, epId);
                 brls::Application::notify("Deleted download");
                 applyFilters();
             } else {
-                startDownloadAndPlay(epItemId, epId, -1.0f, true);
+                // Queue the download (like Suwayomi - no blocking dialog)
+                bool queued = dm.queueDownload(epItemId, epTitle, epAuthor, epDuration, epMediaType, "", epId);
+                if (queued) {
+                    dm.startDownloads();
+                    brls::Application::notify("Queued: " + epTitle);
+                } else {
+                    brls::Application::notify("Already in queue");
+                }
+                applyFilters();  // Refresh to show queued state
             }
             return true;
         });
 
         episodeRow->addView(dlBtn);
+
+        // Square button action: toggle download queue state (like Suwayomi X button)
+        episodeRow->registerAction("Download", brls::ControllerButton::BUTTON_X,
+            [this, epItemId, epId, epTitle, epAuthor, epDuration, epMediaType](brls::View*) {
+            DownloadsManager& dm = DownloadsManager::getInstance();
+            dm.init();
+
+            // Query live state
+            DownloadItem* dlItem = dm.getDownload(epItemId, epId);
+            bool downloaded = dm.isDownloaded(epItemId, epId);
+            bool isQueued = dlItem && (dlItem->state == DownloadState::QUEUED);
+            bool isDownloading = dlItem && (dlItem->state == DownloadState::DOWNLOADING);
+
+            if (isQueued || isDownloading) {
+                dm.cancelDownload(epItemId, epId);
+                brls::Application::notify("Download cancelled");
+            } else if (downloaded) {
+                dm.deleteDownloadByEpisodeId(epItemId, epId);
+                brls::Application::notify("Deleted download");
+            } else {
+                bool q = dm.queueDownload(epItemId, epTitle, epAuthor, epDuration, epMediaType, "", epId);
+                if (q) {
+                    dm.startDownloads();
+                    brls::Application::notify("Queued: " + epTitle);
+                } else {
+                    brls::Application::notify("Already in queue");
+                }
+            }
+            // Defer UI refresh to next frame
+            std::weak_ptr<bool> aliveWeak = m_alive;
+            brls::sync([this, aliveWeak]() {
+                auto alive = aliveWeak.lock();
+                if (!alive || !*alive) return;
+                applyFilters();
+            });
+            return true;
+        }, false, false, brls::Sound::SOUND_CLICK);
 
         episodeRow->registerClickAction([this, child](brls::View*) {
             if (child.mediaType == MediaType::PODCAST_EPISODE) {
@@ -1151,6 +1364,22 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
     // If not download-only, stream directly from server URL
     // mpv handles HTTP streaming natively (matching Vita_plex approach)
     if (!downloadOnly) {
+        // If downloadOnPlay setting is enabled, also queue for background download
+        if (Application::getInstance().getSettings().downloadOnPlay) {
+            DownloadsManager& dm = DownloadsManager::getInstance();
+            dm.init();
+            if (!dm.isDownloaded(itemId, episodeId)) {
+                std::string title = m_item.title;
+                std::string author = m_item.authorName;
+                float dur = m_item.duration;
+                std::string mediaType = m_item.type;
+                std::string series = m_item.seriesName;
+                if (dm.queueDownload(itemId, title, author, dur, mediaType, series, episodeId)) {
+                    dm.startDownloads();
+                    brls::Logger::info("downloadOnPlay: Queued {} for background download", title);
+                }
+            }
+        }
         brls::Logger::info("Streaming directly from server");
         Application::getInstance().pushPlayerActivity(itemId, episodeId, requestedStartTime);
         return;
@@ -1772,23 +2001,40 @@ void MediaDetailView::showDeleteEpisodesDialog(
 void MediaDetailView::startDownloadOnly(const std::string& itemId, const std::string& episodeId) {
     brls::Logger::info("startDownloadOnly: itemId={}, episodeId={}", itemId, episodeId);
 
-    // Check if already downloaded (check both itemId and episodeId)
-    DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
-    downloadsMgr.init();
+    DownloadsManager& dm = DownloadsManager::getInstance();
+    dm.init();
 
-    if (downloadsMgr.isDownloaded(itemId, episodeId)) {
+    // Check if already downloaded
+    if (dm.isDownloaded(itemId, episodeId)) {
         brls::Application::notify("Already downloaded");
         return;
     }
 
-    // Update button state
-    if (m_downloadButton) {
-        m_downloadButton->setText("Downloading...");
+    // Check if already in queue
+    DownloadItem* existing = dm.getDownload(itemId, episodeId);
+    if (existing && (existing->state == DownloadState::QUEUED || existing->state == DownloadState::DOWNLOADING)) {
+        brls::Application::notify("Already in download queue");
+        return;
     }
 
-    // Use the same code path as play, but with downloadOnly=true
-    // This will save to downloads folder and not start playback
-    startDownloadAndPlay(itemId, episodeId, -1.0f, true);
+    // Queue the download (like Suwayomi - no blocking dialog)
+    std::string title = m_item.title;
+    std::string author = m_item.authorName;
+    float duration = m_item.duration;
+    std::string mediaType = m_item.type;
+    std::string series = m_item.seriesName;
+
+    bool queued = dm.queueDownload(itemId, title, author, duration, mediaType, series, episodeId);
+    if (queued) {
+        dm.startDownloads();
+        if (m_downloadButton) {
+            m_downloadButton->setText("Queued");
+            m_downloadButton->setBackgroundColor(nvgRGBA(200, 180, 60, 200));
+        }
+        brls::Application::notify("Queued: " + title);
+    } else {
+        brls::Application::notify("Already in queue");
+    }
 }
 
 void MediaDetailView::batchDownloadEpisodes(const std::vector<MediaItem>& episodes) {
@@ -1797,177 +2043,45 @@ void MediaDetailView::batchDownloadEpisodes(const std::vector<MediaItem>& episod
         return;
     }
 
-    brls::Logger::info("batchDownloadEpisodes: Starting batch download of {} episodes", episodes.size());
+    brls::Logger::info("batchDownloadEpisodes: Queueing {} episodes for download", episodes.size());
 
-    // Show progress dialog
-    auto* progressDialog = ProgressDialog::showDownloading("Downloading Episodes");
-    progressDialog->setStatus("Preparing downloads...");
+    // Queue all episodes to the download manager (like Suwayomi - no blocking dialog)
+    DownloadsManager& dm = DownloadsManager::getInstance();
+    dm.init();
 
-    // Store data for async operation - use parent podcast ID for all episodes
-    std::string podcastTitle = m_item.title;
-    std::string podcastId = m_item.id;  // Parent podcast ID
+    std::string podcastId = m_item.id;
+    std::string podcastAuthor = m_item.authorName.empty() ? m_item.title : m_item.authorName;
+    int queued = 0;
+    int skipped = 0;
 
-    asyncRun([this, progressDialog, episodes, podcastTitle, podcastId]() {
-        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-        DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
-        downloadsMgr.init();
+    for (const auto& ep : episodes) {
+        std::string episodeId = ep.episodeId;
 
-        int completed = 0;
-        int failed = 0;
-        int totalEpisodes = static_cast<int>(episodes.size());
-
-        for (size_t i = 0; i < episodes.size(); i++) {
-            const auto& ep = episodes[i];
-            // Use parent podcast ID, not episode's podcastId field (which may be empty)
-            std::string itemId = podcastId;
-            std::string episodeId = ep.episodeId;
-
-            brls::Logger::info("batchDownloadEpisodes: Downloading episode {} of {}: {} (episodeId: {})",
-                              i + 1, totalEpisodes, ep.title, episodeId);
-
-            // Update progress dialog
-            std::string epTitle = ep.title;  // Copy to avoid reference issues
-            brls::sync([progressDialog, i, totalEpisodes, epTitle]() {
-                char buf[128];
-                snprintf(buf, sizeof(buf), "Downloading %d/%d:\n%s",
-                        static_cast<int>(i + 1), totalEpisodes, epTitle.c_str());
-                progressDialog->setStatus(buf);
-                progressDialog->setProgress(static_cast<float>(i) / totalEpisodes);
-            });
-
-            // Check if already downloaded (check both itemId and episodeId)
-            if (downloadsMgr.isDownloaded(itemId, episodeId)) {
-                brls::Logger::info("Episode already downloaded: {}", ep.title);
-                completed++;
-                continue;
-            }
-
-            // Start playback session to get download URL
-            PlaybackSession session;
-            if (!client.startPlaybackSession(itemId, session, episodeId)) {
-                brls::Logger::error("Failed to start session for episode: {}", ep.title);
-                failed++;
-                continue;
-            }
-
-            if (session.audioTracks.empty()) {
-                brls::Logger::error("No audio tracks for episode: {}", ep.title);
-                failed++;
-                continue;
-            }
-
-            // Get download URL
-            std::string trackUrl = client.getStreamUrl(session.audioTracks[0].contentUrl, "");
-            if (trackUrl.empty()) {
-                brls::Logger::error("Failed to get download URL for episode: {}", ep.title);
-                failed++;
-                continue;
-            }
-
-            // Determine file extension
-            std::string ext = ".mp3";
-            std::string mimeType = session.audioTracks[0].mimeType;
-            if (mimeType.find("mp4") != std::string::npos || mimeType.find("m4a") != std::string::npos) {
-                ext = ".m4a";
-            }
-
-            // Destination path
-            std::string filename = episodeId.empty() ? itemId : episodeId;
-            filename += ext;
-            std::string destPath = downloadsMgr.getDownloadsPath() + "/" + filename;
-
-            brls::Logger::info("Downloading to: {}", destPath);
-
-#ifdef __vita__
-            HttpClient httpClient;
-            httpClient.setTimeout(300);
-
-            SceUID fd = sceIoOpen(destPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
-            if (fd < 0) {
-                brls::Logger::error("Failed to create file: {}", destPath);
-                failed++;
-                continue;
-            }
-
-            int64_t totalDownloaded = 0;
-            int64_t totalSize = 0;
-            int currentEpisodeNum = static_cast<int>(i) + 1;
-
-            bool success = httpClient.downloadFile(trackUrl,
-                [&](const char* data, size_t size) -> bool {
-                    int written = sceIoWrite(fd, data, size);
-                    if (written < 0) return false;
-                    totalDownloaded += size;
-
-                    // Update progress with detailed MB info like audiobooks
-                    if (totalSize > 0) {
-                        float episodeProgress = static_cast<float>(totalDownloaded) / totalSize;
-                        float overallProgress = (static_cast<float>(i) + episodeProgress) / totalEpisodes;
-                        int percent = static_cast<int>(episodeProgress * 100);
-                        int dlMB = static_cast<int>(totalDownloaded / (1024 * 1024));
-                        int sizeMB = static_cast<int>(totalSize / (1024 * 1024));
-                        brls::sync([progressDialog, overallProgress, currentEpisodeNum, totalEpisodes, percent, dlMB, sizeMB, epTitle]() {
-                            char buf[160];
-                            snprintf(buf, sizeof(buf), "Episode %d/%d: %d%% (%d/%d MB)\n%s",
-                                    currentEpisodeNum, totalEpisodes, percent, dlMB, sizeMB, epTitle.c_str());
-                            progressDialog->setStatus(buf);
-                            progressDialog->setProgress(overallProgress);
-                        });
-                    }
-                    return true;
-                },
-                [&](int64_t size) { totalSize = size; }
-            );
-
-            sceIoClose(fd);
-
-            if (success) {
-                // Register the download - use podcast author for episodes
-                std::string coverUrl = client.getCoverUrl(itemId);
-                // Use the actual podcast author, fall back to podcast title if no author
-                std::string podcastAuthor = m_item.authorName.empty() ? m_item.title : m_item.authorName;
-                downloadsMgr.registerCompletedDownload(
-                    itemId, episodeId, ep.title, podcastAuthor,
-                    destPath, totalDownloaded, ep.duration, "episode",
-                    coverUrl, "", {}
-                );
-
-                // Download cover
-                if (!coverUrl.empty()) {
-                    downloadsMgr.downloadCoverImage(episodeId.empty() ? itemId : episodeId, coverUrl);
-                }
-
-                completed++;
-                brls::Logger::info("Downloaded episode: {}", ep.title);
-            } else {
-                sceIoRemove(destPath.c_str());
-                failed++;
-                brls::Logger::error("Failed to download episode: {}", ep.title);
-            }
-#else
-            // Non-Vita: simplified download
-            completed++;
-#endif
+        // Skip if already downloaded or already in queue
+        if (dm.isDownloaded(podcastId, episodeId)) {
+            skipped++;
+            continue;
+        }
+        DownloadItem* existing = dm.getDownload(podcastId, episodeId);
+        if (existing && (existing->state == DownloadState::QUEUED || existing->state == DownloadState::DOWNLOADING)) {
+            skipped++;
+            continue;
         }
 
-        // Ensure state is saved
-        downloadsMgr.saveState();
+        if (dm.queueDownload(podcastId, ep.title, podcastAuthor, ep.duration, "episode", "", episodeId)) {
+            queued++;
+        }
+    }
 
-        // Show completion dialog
-        brls::sync([progressDialog, completed, failed, totalEpisodes]() {
-            char buf[128];
-            snprintf(buf, sizeof(buf), "Downloaded %d of %d episodes\n(%d failed)",
-                    completed, totalEpisodes, failed);
-            progressDialog->setStatus(buf);
-            progressDialog->setProgress(1.0f);
+    if (queued > 0) {
+        dm.startDownloads();
+        brls::Application::notify("Queued " + std::to_string(queued) + " episodes");
+    } else {
+        brls::Application::notify("All episodes already downloaded or queued");
+    }
 
-            brls::delay(2000, [progressDialog]() {
-                progressDialog->dismiss();
-            });
-        });
-
-        brls::Logger::info("batchDownloadEpisodes: Completed {} of {} episodes", completed, totalEpisodes);
-    });
+    // Refresh UI to show queued states
+    applyFilters();
 }
 
 void MediaDetailView::showDownloadOptions() {
@@ -2099,89 +2213,83 @@ void MediaDetailView::showDownloadOptions() {
 }
 
 void MediaDetailView::downloadAll() {
-    auto* progressDialog = new ProgressDialog("Preparing Downloads");
-    progressDialog->setStatus("Fetching episode list...");
-    progressDialog->show();
+    // Queue all episodes from loaded children (like Suwayomi - no blocking dialog)
+    if (m_children.empty()) {
+        // If children not loaded yet, fetch them first
+        std::string podcastId = m_item.id;
+        std::weak_ptr<bool> aliveWeak = m_alive;
 
-    std::string podcastId = m_item.id;
+        asyncRun([this, podcastId, aliveWeak]() {
+            AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+            std::vector<MediaItem> episodes;
 
-    asyncRun([this, progressDialog, podcastId]() {
-        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-        std::vector<MediaItem> episodes;
-
-        if (client.fetchPodcastEpisodes(podcastId, episodes)) {
-            size_t itemCount = episodes.size();
-            brls::sync([progressDialog, itemCount]() {
-                progressDialog->setStatus("Found " + std::to_string(itemCount) + " episodes");
-            });
-
-            brls::Logger::info("downloadAll: Found {} episodes to download", episodes.size());
-
-            // Dismiss the preparation dialog and start batch download
-            brls::sync([this, progressDialog, episodes]() {
-                progressDialog->dismiss();
-                // Use the same download method as the play button
-                batchDownloadEpisodes(episodes);
-            });
-        } else {
-            brls::sync([progressDialog]() {
-                progressDialog->setStatus("Failed to fetch episodes");
-                brls::delay(1500, [progressDialog]() {
-                    progressDialog->dismiss();
+            if (client.fetchPodcastEpisodes(podcastId, episodes)) {
+                brls::sync([this, aliveWeak, episodes]() {
+                    auto alive = aliveWeak.lock();
+                    if (!alive || !*alive) return;
+                    batchDownloadEpisodes(episodes);
                 });
-            });
-        }
-    });
+            } else {
+                brls::sync([]() {
+                    brls::Application::notify("Failed to fetch episodes");
+                });
+            }
+        });
+    } else {
+        batchDownloadEpisodes(m_children);
+    }
 }
 
 void MediaDetailView::downloadUnwatched(int maxCount) {
-    auto* progressDialog = new ProgressDialog("Preparing Downloads");
-    progressDialog->setStatus("Fetching unheard episodes...");
-    progressDialog->show();
+    // Filter unheard episodes and queue them (like Suwayomi - no blocking dialog)
+    std::vector<MediaItem> unheardEpisodes;
 
-    std::string podcastId = m_item.id;
+    if (m_children.empty()) {
+        // Fetch episodes first
+        std::string podcastId = m_item.id;
+        std::weak_ptr<bool> aliveWeak = m_alive;
 
-    asyncRun([this, progressDialog, podcastId, maxCount]() {
-        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
-        std::vector<MediaItem> unheardEpisodes;
+        asyncRun([this, podcastId, maxCount, aliveWeak]() {
+            AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+            std::vector<MediaItem> allEpisodes;
 
-        std::vector<MediaItem> allEpisodes;
-        if (client.fetchPodcastEpisodes(podcastId, allEpisodes)) {
-            for (auto& ep : allEpisodes) {
-                // Episode is unheard if not finished AND has no progress
-                if (!ep.isFinished && ep.currentTime == 0) {
-                    unheardEpisodes.push_back(ep);
-                    if (maxCount > 0 && static_cast<int>(unheardEpisodes.size()) >= maxCount) {
-                        break;
+            if (client.fetchPodcastEpisodes(podcastId, allEpisodes)) {
+                std::vector<MediaItem> unheard;
+                for (auto& ep : allEpisodes) {
+                    if (!ep.isFinished && ep.currentTime == 0) {
+                        unheard.push_back(ep);
+                        if (maxCount > 0 && static_cast<int>(unheard.size()) >= maxCount) break;
                     }
                 }
-            }
-        }
-
-        size_t itemCount = unheardEpisodes.size();
-        brls::sync([progressDialog, itemCount]() {
-            progressDialog->setStatus("Found " + std::to_string(itemCount) + " unheard");
-        });
-
-        if (unheardEpisodes.empty()) {
-            brls::sync([progressDialog]() {
-                progressDialog->setStatus("No unheard episodes found");
-                brls::delay(1500, [progressDialog]() {
-                    progressDialog->dismiss();
+                brls::sync([this, aliveWeak, unheard]() {
+                    auto alive = aliveWeak.lock();
+                    if (!alive || !*alive) return;
+                    if (unheard.empty()) {
+                        brls::Application::notify("No unheard episodes found");
+                    } else {
+                        batchDownloadEpisodes(unheard);
+                    }
                 });
-            });
-            return;
-        }
-
-        brls::Logger::info("downloadUnwatched: Found {} unheard episodes to download", unheardEpisodes.size());
-
-        // Dismiss the preparation dialog and start batch download
-        brls::sync([this, progressDialog, unheardEpisodes]() {
-            progressDialog->dismiss();
-            // Use the same download method as the play button
-            batchDownloadEpisodes(unheardEpisodes);
+            } else {
+                brls::sync([]() { brls::Application::notify("Failed to fetch episodes"); });
+            }
         });
-    });
+        return;
+    }
+
+    for (const auto& ep : m_children) {
+        if (!ep.isFinished && ep.currentTime == 0) {
+            unheardEpisodes.push_back(ep);
+            if (maxCount > 0 && static_cast<int>(unheardEpisodes.size()) >= maxCount) break;
+        }
+    }
+
+    if (unheardEpisodes.empty()) {
+        brls::Application::notify("No unheard episodes found");
+        return;
+    }
+
+    batchDownloadEpisodes(unheardEpisodes);
 }
 
 void MediaDetailView::findNewEpisodes() {
