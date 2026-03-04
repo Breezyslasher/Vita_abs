@@ -80,8 +80,6 @@ bool MpvPlayer::init() {
 
     // ========================================
     // AUDIO-ONLY MODE - Disable all video
-    // This is an audiobook player, we don't need video decoding
-    // This also prevents crashes from embedded album art (PNG) in MP3s
     // ========================================
 
     mpv_set_option_string(m_mpv, "video", "no");       // Disable video decoding entirely
@@ -102,8 +100,6 @@ bool MpvPlayer::init() {
     // ========================================
 
 #ifdef __vita__
-    // Enable cache for network streaming (required for HTTP)
-    // Use smaller cache sizes for Vita's limited memory
     mpv_set_option_string(m_mpv, "cache", "yes");
     mpv_set_option_string(m_mpv, "demuxer-max-bytes", "2MiB");
     mpv_set_option_string(m_mpv, "demuxer-max-back-bytes", "512KiB");
@@ -119,8 +115,6 @@ bool MpvPlayer::init() {
     // ========================================
 
     mpv_set_option_string(m_mpv, "network-timeout", "30");
-
-    // User agent for Plex compatibility
     mpv_set_option_string(m_mpv, "user-agent", "VitaABS/1.0");
 
     // ========================================

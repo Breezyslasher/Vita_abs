@@ -9,9 +9,16 @@ namespace vitaabs {
 
 std::map<std::string, std::vector<uint8_t>> ImageLoader::s_cache;
 std::mutex ImageLoader::s_cacheMutex;
+bool ImageLoader::s_paused = false;
 
 void ImageLoader::loadAsync(const std::string& url, LoadCallback callback, brls::Image* target) {
     if (url.empty() || !target) return;
+
+    // Don't start new loads while paused (mpv streaming needs network bandwidth)
+    if (s_paused) {
+        brls::Logger::debug("ImageLoader: Paused, skipping load for {}", url);
+        return;
+    }
 
     // Check cache first
     {
@@ -63,6 +70,19 @@ void ImageLoader::clearCache() {
 
 void ImageLoader::cancelAll() {
     // Borealis handles thread cancellation
+}
+
+void ImageLoader::setPaused(bool paused) {
+    s_paused = paused;
+    if (paused) {
+        brls::Logger::debug("ImageLoader: Paused - new loads will be skipped");
+    } else {
+        brls::Logger::debug("ImageLoader: Resumed - loads enabled");
+    }
+}
+
+bool ImageLoader::isPaused() {
+    return s_paused;
 }
 
 } // namespace vitaabs

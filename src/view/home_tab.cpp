@@ -101,6 +101,24 @@ void HomeTab::onFocusGained() {
     }
 }
 
+brls::View* HomeTab::getDefaultFocus() {
+    // Route focus to the first item in Continue Listening, or Recent Episodes
+    if (m_continueBox && !m_continueBox->getChildren().empty()) {
+        brls::View* child = m_continueBox->getChildren()[0];
+        if (child && child->isFocusable()) {
+            return child;
+        }
+    }
+    if (m_recentEpisodesBox && !m_recentEpisodesBox->getChildren().empty()) {
+        brls::View* child = m_recentEpisodesBox->getChildren()[0];
+        if (child && child->isFocusable()) {
+            return child;
+        }
+    }
+    // Fallback to default behavior
+    return brls::Box::getDefaultFocus();
+}
+
 void HomeTab::loadContent() {
     if (m_loaded) return;
 

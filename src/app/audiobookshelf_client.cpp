@@ -1159,18 +1159,19 @@ bool AudiobookshelfClient::fetchItem(const std::string& itemId, MediaItem& item)
     item = parseMediaItem(resp.body);
 
     // Extract media object for chapters and tracks
-    // Kodi addon: item.get('media', {}).get('chapters', [])
     std::string mediaObj = extractJsonObject(resp.body, "media");
-    brls::Logger::info("Media object found: {} ({} chars)", !mediaObj.empty() ? "yes" : "no", mediaObj.length());
+    brls::Logger::debug("Media object found: {} ({} chars)", !mediaObj.empty() ? "yes" : "no", mediaObj.length());
 
-    // Debug: show part of media object to verify structure
-    if (!mediaObj.empty() && mediaObj.length() > 100) {
-        brls::Logger::debug("Media object preview: {}", mediaObj.substr(0, 300));
+    // Podcasts use episodes[].audioFile, not media.audioFiles or media.chapters
+    // Only parse chapters/audioFiles for audiobook (book) media types
+    bool isPodcast = (item.mediaType == MediaType::PODCAST || item.mediaType == MediaType::PODCAST_EPISODE);
+
+    // Parse chapters from media.chapters (audiobooks only - podcasts don't have chapters at media level)
+    std::string chaptersArray;
+    if (!isPodcast) {
+        chaptersArray = extractJsonArray(mediaObj, "chapters");
     }
-
-    // Parse chapters from media.chapters using extractJsonArray (like Kodi addon does)
-    std::string chaptersArray = extractJsonArray(mediaObj, "chapters");
-    brls::Logger::info("Chapters array: {} chars", chaptersArray.length());
+    brls::Logger::debug("Chapters array: {} chars", chaptersArray.length());
     if (!chaptersArray.empty() && chaptersArray.length() > 10) {
         brls::Logger::debug("Chapters preview: {}", chaptersArray.substr(0, std::min((size_t)200, chaptersArray.length())));
     }
@@ -1215,8 +1216,8 @@ bool AudiobookshelfClient::fetchItem(const std::string& itemId, MediaItem& item)
         brls::Logger::debug("No chapters in media.chapters, will check audioFiles");
     }
 
-    // If no chapters found in media.chapters, check audioFiles[0].chapters (M4B files)
-    if (item.chapters.empty() && !mediaObj.empty()) {
+    // If no chapters found in media.chapters, check audioFiles[0].chapters (M4B audiobooks)
+    if (item.chapters.empty() && !mediaObj.empty() && !isPodcast) {
         std::string audioFilesArray = extractJsonArray(mediaObj, "audioFiles");
         if (!audioFilesArray.empty()) {
             // Get first audio file object
@@ -1263,14 +1264,17 @@ bool AudiobookshelfClient::fetchItem(const std::string& itemId, MediaItem& item)
         }
     }
 
-    if (item.chapters.empty()) {
-        brls::Logger::warning("No chapters found in media.chapters or audioFiles");
+    if (item.chapters.empty() && !isPodcast) {
+        brls::Logger::debug("No chapters found in media.chapters or audioFiles");
     }
 
-    // Parse audio tracks
-    std::string tracksArray = extractJsonArray(resp.body, "audioFiles");
-    if (tracksArray.empty() && !mediaObj.empty()) {
-        tracksArray = extractJsonArray(mediaObj, "audioFiles");
+    // Parse audio tracks (audiobooks use media.audioFiles, podcasts use episodes[].audioFile)
+    std::string tracksArray;
+    if (!isPodcast) {
+        tracksArray = extractJsonArray(resp.body, "audioFiles");
+        if (tracksArray.empty() && !mediaObj.empty()) {
+            tracksArray = extractJsonArray(mediaObj, "audioFiles");
+        }
     }
     if (!tracksArray.empty()) {
         size_t pos = 0;
@@ -1375,9 +1379,10 @@ bool AudiobookshelfClient::fetchItemWithProgress(const std::string& itemId, Medi
 
     item = parseMediaItem(resp.body);
 
-    // Extract chapters from media.chapters using extractJsonArray (same as fetchItem)
+    // Extract chapters from media.chapters (audiobooks only - podcasts don't have these)
     std::string mediaObj = extractJsonObject(resp.body, "media");
-    if (!mediaObj.empty()) {
+    bool isPodcastItem = (item.mediaType == MediaType::PODCAST || item.mediaType == MediaType::PODCAST_EPISODE);
+    if (!mediaObj.empty() && !isPodcastItem) {
         // First try media.chapters
         std::string chaptersArray = extractJsonArray(mediaObj, "chapters");
         if (!chaptersArray.empty() && chaptersArray != "[]") {
@@ -1404,7 +1409,7 @@ bool AudiobookshelfClient::fetchItemWithProgress(const std::string& itemId, Medi
             brls::Logger::debug("Parsed {} chapters from media.chapters", item.chapters.size());
         }
 
-        // If no chapters found, check audioFiles[0].chapters (M4B files)
+        // If no chapters found, check audioFiles[0].chapters (M4B audiobooks)
         if (item.chapters.empty()) {
             std::string audioFilesArray = extractJsonArray(mediaObj, "audioFiles");
             if (!audioFilesArray.empty()) {
