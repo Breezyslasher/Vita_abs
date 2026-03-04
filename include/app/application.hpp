@@ -87,8 +87,6 @@ struct BackgroundDownloadProgress {
 struct AppSettings {
     // UI Settings
     AppTheme theme = AppTheme::DARK;
-    bool showClock = true;
-    bool animationsEnabled = true;
     bool debugLogging = true;
 
     // Content Display Settings
