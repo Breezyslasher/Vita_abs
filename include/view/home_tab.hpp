@@ -19,6 +19,7 @@ public:
     ~HomeTab() override;
 
     void onFocusGained() override;
+    brls::View* getDefaultFocus() override;
 
 private:
     void loadContent();
