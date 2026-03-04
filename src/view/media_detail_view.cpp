@@ -71,7 +71,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         selectHintContainer->setJustifyContent(brls::JustifyContent::CENTER);
         selectHintContainer->setMarginBottom(4);
         auto* selectHint = new brls::Image();
-        selectHint->setSize(brls::Size(32, 32));
+        selectHint->setSize(brls::Size(64, 16));
         selectHint->setScalingType(brls::ImageScalingType::FIT);
         selectHint->setImageFromFile("app0:resources/images/select_button.png");
         selectHintContainer->addView(selectHint);
@@ -129,7 +129,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         selectHintContainer->setJustifyContent(brls::JustifyContent::CENTER);
         selectHintContainer->setMarginBottom(4);
         auto* selectHint = new brls::Image();
-        selectHint->setSize(brls::Size(32, 32));
+        selectHint->setSize(brls::Size(64, 16));
         selectHint->setScalingType(brls::ImageScalingType::FIT);
         selectHint->setImageFromFile("app0:resources/images/select_button.png");
         selectHintContainer->addView(selectHint);
@@ -295,8 +295,8 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         sortContainer->setMarginRight(8);
 
         auto* sortHint = new brls::Image();
-        sortHint->setWidth(20);
-        sortHint->setHeight(20);
+        sortHint->setWidth(24);
+        sortHint->setHeight(16);
         sortHint->setScalingType(brls::ImageScalingType::FIT);
         sortHint->setImageFromFile("app0:resources/images/r_button.png");
         sortHint->setMarginBottom(2);
@@ -330,8 +330,8 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         filterContainer->setMarginRight(8);
 
         auto* filterHint = new brls::Image();
-        filterHint->setWidth(20);
-        filterHint->setHeight(20);
+        filterHint->setWidth(16);
+        filterHint->setHeight(16);
         filterHint->setScalingType(brls::ImageScalingType::FIT);
         filterHint->setImageFromFile("app0:resources/images/triangle_button.png");
         filterHint->setMarginBottom(2);
@@ -362,8 +362,8 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         dlMenuContainer->setAlignItems(brls::AlignItems::CENTER);
 
         auto* dlMenuHint = new brls::Image();
-        dlMenuHint->setWidth(20);
-        dlMenuHint->setHeight(20);
+        dlMenuHint->setWidth(64);
+        dlMenuHint->setHeight(16);
         dlMenuHint->setScalingType(brls::ImageScalingType::FIT);
         dlMenuHint->setImageFromFile("app0:resources/images/start_button.png");
         dlMenuHint->setMarginBottom(2);
