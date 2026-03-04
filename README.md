@@ -56,6 +56,3 @@ A native Audiobookshelf client for PlayStation Vita enabling audiobook and podca
 3. Install using VitaShell
 4. Configure Audiobookshelf server URL and login
 
-## License
-
-GPL-3.0
