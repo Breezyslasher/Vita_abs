@@ -260,7 +260,7 @@ DownloadsTab::DownloadsTab() {
     });
     m_actionsRow->addView(m_syncBtn);
 
-    // === Server Download Queue Section ===
+    // === Downloading to Vita Section ===
     m_serverSection = new brls::Box();
     m_serverSection->setAxis(brls::Axis::COLUMN);
     m_serverSection->setGrow(1.0f);
@@ -269,7 +269,7 @@ DownloadsTab::DownloadsTab() {
     this->addView(m_serverSection);
 
     m_serverHeader = new brls::Label();
-    m_serverHeader->setText("Server Download Queue");
+    m_serverHeader->setText("Downloading to Vita");
     m_serverHeader->setFontSize(18);
     m_serverHeader->setMargins(0, 0, 10, 0);
     m_serverSection->addView(m_serverHeader);
