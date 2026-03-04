@@ -260,7 +260,7 @@ DownloadsTab::DownloadsTab() {
     });
     m_actionsRow->addView(m_syncBtn);
 
-    // === Downloading to Vita Section ===
+    // === Local Downloads Section ===
     m_serverSection = new brls::Box();
     m_serverSection->setAxis(brls::Axis::COLUMN);
     m_serverSection->setGrow(1.0f);
@@ -269,7 +269,7 @@ DownloadsTab::DownloadsTab() {
     this->addView(m_serverSection);
 
     m_serverHeader = new brls::Label();
-    m_serverHeader->setText("Downloading to Vita");
+    m_serverHeader->setText("Local Downloads");
     m_serverHeader->setFontSize(18);
     m_serverHeader->setMargins(0, 0, 10, 0);
     m_serverSection->addView(m_serverHeader);
@@ -289,6 +289,25 @@ DownloadsTab::DownloadsTab() {
     m_serverContainer = new brls::Box();
     m_serverContainer->setAxis(brls::Axis::COLUMN);
     m_serverScroll->setContentView(m_serverContainer);
+
+    // === Server Downloads Section ===
+    auto* serverDlSection = new brls::Box();
+    serverDlSection->setAxis(brls::Axis::COLUMN);
+    serverDlSection->setMargins(0, 0, 15, 0);
+    this->addView(serverDlSection);
+
+    auto* serverDlHeader = new brls::Label();
+    serverDlHeader->setText("Server Downloads");
+    serverDlHeader->setFontSize(18);
+    serverDlHeader->setMargins(0, 0, 10, 0);
+    serverDlSection->addView(serverDlHeader);
+
+    auto* serverDlHint = new brls::Label();
+    serverDlHint->setText("Manage server downloads from the Audiobookshelf web UI");
+    serverDlHint->setFontSize(14);
+    serverDlHint->setTextColor(nvgRGBA(120, 120, 120, 255));
+    serverDlHint->setMargins(10, 0, 10, 0);
+    serverDlSection->addView(serverDlHint);
 
     // Empty state
     m_emptyStateBox = new brls::Box();
