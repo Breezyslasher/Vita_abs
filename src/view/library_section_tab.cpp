@@ -87,26 +87,87 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
     });
     m_viewModeBox->addView(m_backBtn);
 
-    // Find Podcasts button (only for podcast libraries)
+    // Find Podcasts and Check Episodes buttons (only for podcast libraries)
     if (sectionType == "podcast") {
+        // Find Podcasts button container with Start button hint
+        m_findPodcastsContainer = new brls::Box();
+        m_findPodcastsContainer->setAxis(brls::Axis::COLUMN);
+        m_findPodcastsContainer->setAlignItems(brls::AlignItems::CENTER);
+        m_findPodcastsContainer->setMarginLeft(20);
+
+        auto* searchHintIcon = new brls::Image();
+        searchHintIcon->setHeight(16);
+        searchHintIcon->setScalingType(brls::ImageScalingType::FIT);
+        searchHintIcon->setImageFromFile("app0:resources/images/start_button.png");
+        searchHintIcon->setMarginBottom(2);
+        m_findPodcastsContainer->addView(searchHintIcon);
+
         m_findPodcastsBtn = new brls::Button();
-        m_findPodcastsBtn->setText("+ Find Podcasts");
-        m_findPodcastsBtn->setMarginLeft(20);
+        m_findPodcastsBtn->setWidth(44);
+        m_findPodcastsBtn->setHeight(40);
+        m_findPodcastsBtn->setCornerRadius(8);
+        m_findPodcastsBtn->setJustifyContent(brls::JustifyContent::CENTER);
+        m_findPodcastsBtn->setAlignItems(brls::AlignItems::CENTER);
+
+        auto* searchIcon = new brls::Image();
+        searchIcon->setWidth(24);
+        searchIcon->setHeight(24);
+        searchIcon->setScalingType(brls::ImageScalingType::FIT);
+        searchIcon->setImageFromFile("app0:resources/icons/search.png");
+        m_findPodcastsBtn->addView(searchIcon);
+
         m_findPodcastsBtn->registerClickAction([this](brls::View* view) {
             openPodcastSearch();
             return true;
         });
-        m_viewModeBox->addView(m_findPodcastsBtn);
+        m_findPodcastsContainer->addView(m_findPodcastsBtn);
+        m_viewModeBox->addView(m_findPodcastsContainer);
 
-        // Check New Episodes button
+        // Check New Episodes button container with Select button hint
+        m_checkEpisodesContainer = new brls::Box();
+        m_checkEpisodesContainer->setAxis(brls::Axis::COLUMN);
+        m_checkEpisodesContainer->setAlignItems(brls::AlignItems::CENTER);
+        m_checkEpisodesContainer->setMarginLeft(8);
+
+        auto* refreshHintIcon = new brls::Image();
+        refreshHintIcon->setHeight(16);
+        refreshHintIcon->setScalingType(brls::ImageScalingType::FIT);
+        refreshHintIcon->setImageFromFile("app0:resources/images/select_button.png");
+        refreshHintIcon->setMarginBottom(2);
+        m_checkEpisodesContainer->addView(refreshHintIcon);
+
         m_checkEpisodesBtn = new brls::Button();
-        m_checkEpisodesBtn->setText("Check Episodes");
-        m_checkEpisodesBtn->setMarginLeft(10);
+        m_checkEpisodesBtn->setWidth(44);
+        m_checkEpisodesBtn->setHeight(40);
+        m_checkEpisodesBtn->setCornerRadius(8);
+        m_checkEpisodesBtn->setJustifyContent(brls::JustifyContent::CENTER);
+        m_checkEpisodesBtn->setAlignItems(brls::AlignItems::CENTER);
+
+        auto* refreshIcon = new brls::Image();
+        refreshIcon->setWidth(24);
+        refreshIcon->setHeight(24);
+        refreshIcon->setScalingType(brls::ImageScalingType::FIT);
+        refreshIcon->setImageFromFile("app0:resources/icons/refresh.png");
+        m_checkEpisodesBtn->addView(refreshIcon);
+
         m_checkEpisodesBtn->registerClickAction([this](brls::View* view) {
             checkAllNewEpisodes();
             return true;
         });
-        m_viewModeBox->addView(m_checkEpisodesBtn);
+        m_checkEpisodesContainer->addView(m_checkEpisodesBtn);
+        m_viewModeBox->addView(m_checkEpisodesContainer);
+
+        // Register Start button to open podcast search
+        this->registerAction("Search", brls::ControllerButton::BUTTON_START, [this](brls::View*) {
+            openPodcastSearch();
+            return true;
+        });
+
+        // Register Select button to check for new episodes
+        this->registerAction("Update", brls::ControllerButton::BUTTON_BACK, [this](brls::View*) {
+            checkAllNewEpisodes();
+            return true;
+        });
     }
 
     this->addView(m_viewModeBox);
@@ -511,11 +572,11 @@ void LibrarySectionTab::hideNavigationButtons() {
     if (m_backBtn) {
         m_backBtn->setVisibility(brls::Visibility::GONE);
     }
-    if (m_findPodcastsBtn) {
-        m_findPodcastsBtn->setVisibility(brls::Visibility::GONE);
+    if (m_findPodcastsContainer) {
+        m_findPodcastsContainer->setVisibility(brls::Visibility::GONE);
     }
-    if (m_checkEpisodesBtn) {
-        m_checkEpisodesBtn->setVisibility(brls::Visibility::GONE);
+    if (m_checkEpisodesContainer) {
+        m_checkEpisodesContainer->setVisibility(brls::Visibility::GONE);
     }
 }
 

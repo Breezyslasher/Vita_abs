@@ -247,6 +247,24 @@ MediaItem AudiobookshelfClient::parseMediaItem(const std::string& json) {
         item.language = extractJsonValue(metadataObj, "language");
         item.seriesName = extractJsonValue(metadataObj, "seriesName");
         item.seriesSequence = extractJsonValue(metadataObj, "sequence");
+
+        // Parse genres from metadata.genres (array of strings)
+        std::string genresArray = extractJsonArray(metadataObj, "genres");
+        if (!genresArray.empty() && genresArray != "[]") {
+            size_t pos = 0;
+            while ((pos = genresArray.find('"', pos)) != std::string::npos) {
+                size_t strEnd = genresArray.find('"', pos + 1);
+                if (strEnd != std::string::npos) {
+                    std::string genre = genresArray.substr(pos + 1, strEnd - pos - 1);
+                    if (!genre.empty()) {
+                        item.genres.push_back(genre);
+                    }
+                    pos = strEnd + 1;
+                } else {
+                    break;
+                }
+            }
+        }
     } else {
         // Fallback to direct fields
         item.title = extractJsonValue(json, "title");
@@ -256,6 +274,25 @@ MediaItem AudiobookshelfClient::parseMediaItem(const std::string& json) {
     // If title still empty, try other fields
     if (item.title.empty()) {
         item.title = extractJsonValue(json, "name");
+    }
+
+    // Parse tags from media.tags (array of strings, one level above metadata)
+    std::string tagsSource = mediaObj.empty() ? json : mediaObj;
+    std::string tagsArray = extractJsonArray(tagsSource, "tags");
+    if (!tagsArray.empty() && tagsArray != "[]") {
+        size_t pos = 0;
+        while ((pos = tagsArray.find('"', pos)) != std::string::npos) {
+            size_t strEnd = tagsArray.find('"', pos + 1);
+            if (strEnd != std::string::npos) {
+                std::string tag = tagsArray.substr(pos + 1, strEnd - pos - 1);
+                if (!tag.empty()) {
+                    item.tags.push_back(tag);
+                }
+                pos = strEnd + 1;
+            } else {
+                break;
+            }
+        }
     }
 
     // Media type
