@@ -54,9 +54,8 @@ private:
     MediaItem m_item;
     std::vector<MediaItem> m_children;
 
-    // Main layout
-    brls::ScrollingFrame* m_scrollView = nullptr;
-    brls::Box* m_mainContent = nullptr;
+    // Layout
+    brls::ScrollingFrame* m_scrollView = nullptr;  // Scrolls the list (chapters or episodes)
 
     brls::Label* m_titleLabel = nullptr;
     brls::Label* m_yearLabel = nullptr;
@@ -66,21 +65,14 @@ private:
     brls::Image* m_posterImage = nullptr;
     brls::Button* m_playButton = nullptr;
     brls::Button* m_downloadButton = nullptr;
-    brls::Button* m_deleteButton = nullptr;        // Delete download button
-    brls::Button* m_findEpisodesButton = nullptr;  // Find New Episodes button for podcasts
-    brls::Box* m_childrenBox = nullptr;
+    brls::Button* m_deleteButton = nullptr;
+    brls::Button* m_findEpisodesButton = nullptr;
+    brls::Box* m_childrenBox = nullptr;       // Podcast episode rows
+    brls::Box* m_chaptersBox = nullptr;       // Audiobook chapter rows
 
-    // Chapters list for audiobooks
-    brls::ScrollingFrame* m_chaptersScroll = nullptr;
-    brls::Box* m_chaptersBox = nullptr;
-
-    // Music category rows for artists
-    brls::Box* m_musicCategoriesBox = nullptr;
-    brls::Box* m_albumsContent = nullptr;
-    brls::Box* m_singlesContent = nullptr;
-    brls::Box* m_epsContent = nullptr;
-    brls::Box* m_compilationsContent = nullptr;
-    brls::Box* m_soundtracksContent = nullptr;
+    // Description expand/collapse
+    std::string m_fullDescription;
+    bool m_descriptionExpanded = false;
 };
 
 } // namespace vitaabs
