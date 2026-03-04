@@ -1,0 +1,583 @@
+02:15:55.250 [INFO] Log file initialized: ux0:data/VitaABS/vitaabs.log
+02:15:55.848 [DEBUG] DownloadsManager: No saved state found
+02:15:55.849 [INFO] DownloadsManager: Initialized at ux0:data/VitaABS/downloads
+02:15:55.849 [INFO] VitaABS 1.0.0 initializing...
+02:15:55.851 [DEBUG] sceIoMkdir result: -0x7ffeffef
+02:15:55.851 [INFO] Loading saved settings...
+02:15:55.851 [DEBUG] loadSettings: Opening ux0:data/VitaABS/settings.json
+02:15:55.853 [DEBUG] loadSettings: File size = 1350
+02:15:55.856 [DEBUG] loadSettings: Read 1350 bytes
+02:15:55.862 [INFO] loadSettings: authToken=(set), serverUrl=http://192.168.1.28:13378, username=Nick
+02:15:55.874 [INFO] Settings loaded successfully
+02:15:55.884 [INFO] Settings load result: success
+02:15:55.896 [INFO] Applied theme: Dark
+02:15:55.901 [INFO] Debug logging enabled
+02:15:55.906 [INFO] Application::run - isLoggedIn=true, serverUrl=http://192.168.1.28:13378
+02:15:55.914 [INFO] Restoring saved session...
+02:15:55.923 [INFO] Trying primary local URL: http://192.168.1.28:13378
+02:15:55.934 [DEBUG] HTTP GET http://192.168.1.28:13378/api/me
+02:15:56.020 [DEBUG] HTTP response: 200 (83731 bytes)
+02:15:56.031 [INFO] Connected to primary URL
+02:15:56.041 [INFO] Restored session, connected to http://192.168.1.28:13378
+02:15:56.046 [DEBUG] MainActivity created
+02:15:56.051 [DEBUG] Adding an inputs block token (tokens=1)
+02:15:56.085 [DEBUG] MainActivity content available
+02:15:56.095 [DEBUG] Fetching libraries
+02:15:56.105 [DEBUG] HTTP GET http://192.168.1.28:13378/api/libraries
+02:15:56.213 [DEBUG] HTTP response: 200 (1482 bytes)
+02:15:56.225 [DEBUG] extractJsonArray: found array for 'libraries' with 1468 chars
+02:15:56.234 [DEBUG] extractJsonObject: key 'stats' not found
+02:15:56.240 [DEBUG] extractJsonObject: key 'stats' not found
+02:15:56.245 [INFO] Found 2 libraries
+02:15:56.253 [INFO] MainActivity: Online - syncing progress from server for downloaded items
+02:15:56.262 [DEBUG] DownloadsManager: No downloaded items to sync from server
+02:15:56.286 [DEBUG] MainActivity: Added Home tab
+02:15:56.309 [DEBUG] MainActivity: Added audiobook library tab: AudioBooks
+02:15:56.332 [DEBUG] MainActivity: Added podcast library tab: podcasts
+02:15:56.405 [DEBUG] HomeTab: Created, loading content...
+02:15:56.410 [DEBUG] HomeTab: Loading content
+02:15:56.416 [INFO] HomeTab: Fetching items in progress...
+02:15:56.423 [DEBUG] Giving focus to brls::SidebarItem
+02:15:56.424 [DEBUG] Fetching items in progress
+02:15:56.433 [DEBUG] Hiding brls::Box
+02:15:56.443 [DEBUG] HTTP GET http://192.168.1.28:13378/api/me/items-in-progress
+02:15:56.454 [DEBUG] push activity to the stack
+02:15:56.475 [DEBUG] Showing brls::Box
+02:15:56.498 [DEBUG] HTTP response: 200 (8760 bytes)
+02:15:56.504 [DEBUG] extractJsonArray: found array for 'libraryItems' with 8743 chars
+02:15:56.513 [DEBUG] extractJsonObject: found object for 'media' with 1265 chars
+02:15:56.521 [DEBUG] extractJsonObject: found object for 'metadata' with 953 chars
+02:15:56.532 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:56.542 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:56.554 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2224 chars
+02:15:56.564 [DEBUG] extractJsonObject: found object for 'media' with 1825 chars
+02:15:56.569 [DEBUG] extractJsonObject: found object for 'metadata' with 1590 chars
+02:15:56.575 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:56.583 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:56.592 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:15:56.603 [DEBUG] extractJsonObject: found object for 'media' with 1809 chars
+02:15:56.613 [DEBUG] extractJsonObject: found object for 'metadata' with 1583 chars
+02:15:56.625 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:56.634 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:56.640 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:15:56.645 [INFO] Found 3 items in progress
+02:15:56.653 [INFO] HomeTab: Got 3 items in progress
+02:15:56.662 [DEBUG] Fetching libraries
+02:15:56.672 [DEBUG] HTTP GET http://192.168.1.28:13378/api/libraries
+02:15:56.705 [DEBUG] Removing an inputs block token (tokens=0)
+02:15:56.718 [DEBUG] HTTP response: 200 (1482 bytes)
+02:15:56.727 [DEBUG] extractJsonArray: found array for 'libraries' with 1468 chars
+02:15:56.733 [DEBUG] extractJsonObject: key 'stats' not found
+02:15:56.738 [DEBUG] extractJsonObject: key 'stats' not found
+02:15:56.746 [INFO] Found 2 libraries
+02:15:56.755 [DEBUG] HomeTab: Fetching recent episodes from podcast library 'podcasts'
+02:15:56.764 [DEBUG] Fetching personalized content for library: c48157a5-7cf3-4590-b2f2-32cec0b3c195
+02:15:56.776 [DEBUG] Fetching library: c48157a5-7cf3-4590-b2f2-32cec0b3c195
+02:15:56.787 [DEBUG] HTTP GET http://192.168.1.28:13378/api/libraries/c48157a5-7cf3-4590-b2f2-32cec0b3c195
+02:15:56.810 [DEBUG] HTTP response: 200 (596 bytes)
+02:15:56.816 [DEBUG] HTTP GET http://192.168.1.28:13378/api/libraries/c48157a5-7cf3-4590-b2f2-32cec0b3c195/personalized
+02:15:56.972 [DEBUG] HTTP response: 200 (88743 bytes)
+02:15:56.983 [DEBUG] extractJsonArray: found array for 'entities' with 3989 chars
+02:15:56.994 [DEBUG] extractJsonObject: found object for 'media' with 1256 chars
+02:15:57.006 [DEBUG] extractJsonObject: found object for 'metadata' with 953 chars
+02:15:57.012 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.017 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.027 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2224 chars
+02:15:57.036 [DEBUG] fetchLibraryPersonalized: Found shelf id='continue-listening' label='Continue Listening' labelStringKey='LabelContinueListening' type='episode' entities=1
+02:15:57.056 [DEBUG] extractJsonArray: found array for 'entities' with 40719 chars
+02:15:57.068 [DEBUG] extractJsonObject: found object for 'media' with 1126 chars
+02:15:57.073 [DEBUG] extractJsonObject: found object for 'metadata' with 815 chars
+02:15:57.080 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.088 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.098 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2290 chars
+02:15:57.110 [DEBUG] extractJsonObject: found object for 'media' with 1190 chars
+02:15:57.122 [DEBUG] extractJsonObject: found object for 'metadata' with 881 chars
+02:15:57.128 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.134 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.143 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2497 chars
+02:15:57.153 [DEBUG] extractJsonObject: found object for 'media' with 1256 chars
+02:15:57.164 [DEBUG] extractJsonObject: found object for 'metadata' with 953 chars
+02:15:57.176 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.182 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.188 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2224 chars
+02:15:57.197 [DEBUG] extractJsonObject: found object for 'media' with 1190 chars
+02:15:57.207 [DEBUG] extractJsonObject: found object for 'metadata' with 881 chars
+02:15:57.218 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.230 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.236 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2273 chars
+02:15:57.243 [DEBUG] extractJsonObject: found object for 'media' with 1126 chars
+02:15:57.251 [DEBUG] extractJsonObject: found object for 'metadata' with 815 chars
+02:15:57.261 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.272 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.285 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2181 chars
+02:15:57.291 [DEBUG] extractJsonObject: found object for 'media' with 1256 chars
+02:15:57.296 [DEBUG] extractJsonObject: found object for 'metadata' with 953 chars
+02:15:57.306 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.315 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.327 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2290 chars
+02:15:57.340 [DEBUG] extractJsonObject: found object for 'media' with 1190 chars
+02:15:57.345 [DEBUG] extractJsonObject: found object for 'metadata' with 881 chars
+02:15:57.351 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.360 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.369 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2437 chars
+02:15:57.381 [DEBUG] extractJsonObject: found object for 'media' with 1256 chars
+02:15:57.393 [DEBUG] extractJsonObject: found object for 'metadata' with 953 chars
+02:15:57.399 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.407 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.417 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2540 chars
+02:15:57.430 [DEBUG] extractJsonObject: found object for 'media' with 1190 chars
+02:15:57.440 [DEBUG] extractJsonObject: found object for 'metadata' with 881 chars
+02:15:57.446 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.455 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.465 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2184 chars
+02:15:57.478 [DEBUG] extractJsonObject: found object for 'media' with 1256 chars
+02:15:57.485 [DEBUG] extractJsonObject: found object for 'metadata' with 953 chars
+02:15:57.491 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.500 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.511 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2596 chars
+02:15:57.522 [DEBUG] fetchLibraryPersonalized: Found shelf id='newest-episodes' label='Newest Episodes' labelStringKey='LabelNewestEpisodes' type='episode' entities=10
+02:15:57.532 [DEBUG] extractJsonArray: found array for 'entities' with 2938 chars
+02:15:57.538 [DEBUG] extractJsonObject: found object for 'media' with 1265 chars
+02:15:57.547 [DEBUG] extractJsonObject: found object for 'metadata' with 953 chars
+02:15:57.558 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.570 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.579 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:15:57.586 [DEBUG] extractJsonObject: found object for 'media' with 649 chars
+02:15:57.595 [DEBUG] extractJsonObject: found object for 'metadata' with 326 chars
+02:15:57.608 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.620 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.626 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:15:57.634 [DEBUG] fetchLibraryPersonalized: Found shelf id='recently-added' label='Recently Added' labelStringKey='LabelRecentlyAdded' type='podcast' entities=2
+02:15:57.651 [DEBUG] extractJsonArray: found array for 'entities' with 40579 chars
+02:15:57.663 [DEBUG] extractJsonObject: found object for 'media' with 1190 chars
+02:15:57.673 [DEBUG] extractJsonObject: found object for 'metadata' with 881 chars
+02:15:57.679 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.688 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.699 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2437 chars
+02:15:57.711 [DEBUG] extractJsonObject: found object for 'media' with 1190 chars
+02:15:57.718 [DEBUG] extractJsonObject: found object for 'metadata' with 881 chars
+02:15:57.724 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.733 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.744 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2184 chars
+02:15:57.757 [DEBUG] extractJsonObject: found object for 'media' with 1190 chars
+02:15:57.765 [DEBUG] extractJsonObject: found object for 'metadata' with 881 chars
+02:15:57.771 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.780 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.791 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2998 chars
+02:15:57.803 [DEBUG] extractJsonObject: found object for 'media' with 1256 chars
+02:15:57.811 [DEBUG] extractJsonObject: found object for 'metadata' with 953 chars
+02:15:57.819 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.828 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.840 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2540 chars
+02:15:57.853 [DEBUG] extractJsonObject: found object for 'media' with 1256 chars
+02:15:57.859 [DEBUG] extractJsonObject: found object for 'metadata' with 953 chars
+02:15:57.867 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.877 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.889 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2290 chars
+02:15:57.899 [DEBUG] extractJsonObject: found object for 'media' with 1256 chars
+02:15:57.907 [DEBUG] extractJsonObject: found object for 'metadata' with 953 chars
+02:15:57.918 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.929 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.939 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2308 chars
+02:15:57.948 [DEBUG] extractJsonObject: found object for 'media' with 1256 chars
+02:15:57.958 [DEBUG] extractJsonObject: found object for 'metadata' with 953 chars
+02:15:57.970 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:57.979 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:57.987 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2091 chars
+02:15:57.998 [DEBUG] extractJsonObject: found object for 'media' with 1256 chars
+02:15:58.010 [DEBUG] extractJsonObject: found object for 'metadata' with 953 chars
+02:15:58.019 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:58.028 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:58.038 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2012 chars
+02:15:58.050 [DEBUG] extractJsonObject: found object for 'media' with 1256 chars
+02:15:58.059 [DEBUG] extractJsonObject: found object for 'metadata' with 953 chars
+02:15:58.068 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:58.077 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:58.090 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2152 chars
+02:15:58.099 [DEBUG] extractJsonObject: found object for 'media' with 1190 chars
+02:15:58.108 [DEBUG] extractJsonObject: found object for 'metadata' with 881 chars
+02:15:58.118 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:15:58.130 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:15:58.139 [DEBUG] extractJsonObject: found object for 'recentEpisode' with 2138 chars
+02:15:58.148 [DEBUG] fetchLibraryPersonalized: Found shelf id='listen-again' label='Listen Again' labelStringKey='LabelListenAgain' type='episode' entities=10
+02:15:58.158 [INFO] Found 4 personalized shelves
+02:15:58.170 [DEBUG] HomeTab: Got 4 shelves from library 'podcasts'
+02:15:58.179 [DEBUG] HomeTab: Checking shelf id='continue-listening' label='Continue Listening' entities=1
+02:15:58.188 [DEBUG] HomeTab: Checking shelf id='newest-episodes' label='Newest Episodes' entities=10
+02:15:58.198 [INFO] HomeTab: Found Recent Episodes shelf 'Newest Episodes' with 10 items
+02:15:58.210 [DEBUG] HomeTab: Checking shelf id='recently-added' label='Recently Added' entities=2
+02:15:58.219 [INFO] HomeTab: Found Recent Episodes shelf 'Recently Added' with 2 items
+02:15:58.227 [DEBUG] HomeTab: Checking shelf id='listen-again' label='Listen Again' entities=10
+02:15:58.237 [INFO] HomeTab: Found 3 continue items, 12 recent episodes
+02:15:58.279 [DEBUG] MediaItemCell::loadThumbnail for 'SPACE PIRATES D&D #8 | \"Brotherhood\"' id='cde8e04b-18d8-43a1-af13-ca684977753b' coverPath='/audiobooks/Podcasts/Space Pirates D&D/cover.jpg'
+02:15:58.284 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/cde8e04b-18d8-43a1-af13-ca684977753b/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.316 [DEBUG] MediaItemCell::loadThumbnail for 'Death Troopers: Star Wars Legends (Unabridged)' id='e5dcf891-f899-4d5e-a190-12940ebaf979' coverPath='/audiobooks/AudioBooks/Death Troopers Joe Schreiber/cover.jpg'
+02:15:58.326 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/e5dcf891-f899-4d5e-a190-12940ebaf979/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.360 [DEBUG] MediaItemCell::loadThumbnail for 'Thrawn (Star Wars)' id='17537883-10a1-4157-9d1f-d9c54c85bae2' coverPath='/audiobooks/AudioBooks/Thrawn Timothy Zahn/cover.jpg'
+02:15:58.366 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/17537883-10a1-4157-9d1f-d9c54c85bae2/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.378 [DEBUG] HomeTab: Populated horizontal row with 3 items, width=540
+02:15:58.415 [DEBUG] MediaItemCell::loadThumbnail for '15 - Book Burning' id='6a82a7be-0328-4e24-812d-e123de2194dd' coverPath='/audiobooks/Podcasts/The Arcane Underground D&D/cover.jpg'
+02:15:58.421 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/6a82a7be-0328-4e24-812d-e123de2194dd/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.451 [DEBUG] MediaItemCell::loadThumbnail for 'ONE PIECE D&D: MARINES #64 | \"The Four Kingdoms\"' id='472b98f6-55e7-4d80-9c62-23c1a0524644' coverPath='/audiobooks/Podcasts/One Piece D&D - Marines/cover.jpg'
+02:15:58.461 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/472b98f6-55e7-4d80-9c62-23c1a0524644/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.496 [DEBUG] MediaItemCell::loadThumbnail for 'SPACE PIRATES D&D #8 | \"Brotherhood\"' id='cde8e04b-18d8-43a1-af13-ca684977753b' coverPath='/audiobooks/Podcasts/Space Pirates D&D/cover.jpg'
+02:15:58.502 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/cde8e04b-18d8-43a1-af13-ca684977753b/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.534 [DEBUG] MediaItemCell::loadThumbnail for 'ONE PIECE D&D: MARINES #63 | \"Celestial Dragons\"' id='472b98f6-55e7-4d80-9c62-23c1a0524644' coverPath='/audiobooks/Podcasts/One Piece D&D - Marines/cover.jpg'
+02:15:58.546 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/472b98f6-55e7-4d80-9c62-23c1a0524644/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.579 [DEBUG] MediaItemCell::loadThumbnail for '14 - Beginning of the End' id='6a82a7be-0328-4e24-812d-e123de2194dd' coverPath='/audiobooks/Podcasts/The Arcane Underground D&D/cover.jpg'
+02:15:58.588 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/6a82a7be-0328-4e24-812d-e123de2194dd/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.621 [DEBUG] MediaItemCell::loadThumbnail for 'SPACE PIRATES D&D #7 | \"Gingerbread Kaiju\"' id='cde8e04b-18d8-43a1-af13-ca684977753b' coverPath='/audiobooks/Podcasts/Space Pirates D&D/cover.jpg'
+02:15:58.634 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/cde8e04b-18d8-43a1-af13-ca684977753b/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.664 [DEBUG] MediaItemCell::loadThumbnail for 'ONE PIECE D&D: MARINES #62 | \"Purpose & Promotion\"' id='472b98f6-55e7-4d80-9c62-23c1a0524644' coverPath='/audiobooks/Podcasts/One Piece D&D - Marines/cover.jpg'
+02:15:58.674 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/472b98f6-55e7-4d80-9c62-23c1a0524644/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.710 [DEBUG] MediaItemCell::loadThumbnail for 'SPACE PIRATES D&D #6 | \"Roly-Poly Rumble\"' id='cde8e04b-18d8-43a1-af13-ca684977753b' coverPath='/audiobooks/Podcasts/Space Pirates D&D/cover.jpg'
+02:15:58.717 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/cde8e04b-18d8-43a1-af13-ca684977753b/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.751 [DEBUG] MediaItemCell::loadThumbnail for 'ONE PIECE D&D: MARINES #61 | \"Funeral Light\"' id='472b98f6-55e7-4d80-9c62-23c1a0524644' coverPath='/audiobooks/Podcasts/One Piece D&D - Marines/cover.jpg'
+02:15:58.752 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/cde8e04b-18d8-43a1-af13-ca684977753b/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.763 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/472b98f6-55e7-4d80-9c62-23c1a0524644/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.802 [DEBUG] HTTP response: 200 (14247 bytes)
+02:15:58.808 [DEBUG] MediaItemCell::loadThumbnail for 'SPACE PIRATES D&D #1 | \"Escape Plann\"' id='cde8e04b-18d8-43a1-af13-ca684977753b' coverPath='/audiobooks/Podcasts/Space Pirates D&D/cover.jpg'
+02:15:58.815 [DEBUG] ImageLoader: Successfully loaded 14247 bytes from http://192.168.1.28:13378/api/items/cde8e04b-18d8-43a1-af13-ca684977753b/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.824 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/cde8e04b-18d8-43a1-af13-ca684977753b/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.835 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/e5dcf891-f899-4d5e-a190-12940ebaf979/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.895 [DEBUG] HTTP response: 200 (15770 bytes)
+02:15:58.905 [DEBUG] ImageLoader: Successfully loaded 15770 bytes from http://192.168.1.28:13378/api/items/e5dcf891-f899-4d5e-a190-12940ebaf979/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.937 [DEBUG] MediaItemCell: Cover loaded for 'SPACE PIRATES D&D #1 | \"Escape Plann\"'
+02:15:58.944 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/17537883-10a1-4157-9d1f-d9c54c85bae2/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.948 [DEBUG] HomeTab: Populated horizontal row with 10 items, width=1800
+02:15:58.964 [DEBUG] HomeTab: Content loaded and displayed
+02:15:58.974 [DEBUG] HTTP response: 200 (12109 bytes)
+02:15:58.987 [DEBUG] ImageLoader: Successfully loaded 12109 bytes from http://192.168.1.28:13378/api/items/17537883-10a1-4157-9d1f-d9c54c85bae2/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:58.998 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/6a82a7be-0328-4e24-812d-e123de2194dd/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:59.085 [DEBUG] MediaItemCell: Cover loaded for 'SPACE PIRATES D&D #8 | \"Brotherhood\"'
+02:15:59.188 [DEBUG] MediaItemCell: Cover loaded for 'Death Troopers: Star Wars Legends (Unabridged)'
+02:15:59.295 [DEBUG] MediaItemCell: Cover loaded for 'Thrawn (Star Wars)'
+02:15:59.355 [DEBUG] HTTP response: 200 (18192 bytes)
+02:15:59.361 [DEBUG] ImageLoader: Successfully loaded 18192 bytes from http://192.168.1.28:13378/api/items/6a82a7be-0328-4e24-812d-e123de2194dd/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:59.372 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/472b98f6-55e7-4d80-9c62-23c1a0524644/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:59.465 [DEBUG] HTTP response: 200 (20160 bytes)
+02:15:59.471 [DEBUG] ImageLoader: Successfully loaded 20160 bytes from http://192.168.1.28:13378/api/items/472b98f6-55e7-4d80-9c62-23c1a0524644/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:59.477 [DEBUG] MediaItemCell: Cover loaded for '15 - Book Burning'
+02:15:59.483 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/cde8e04b-18d8-43a1-af13-ca684977753b/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:59.523 [DEBUG] HTTP response: 200 (14247 bytes)
+02:15:59.534 [DEBUG] ImageLoader: Successfully loaded 14247 bytes from http://192.168.1.28:13378/api/items/cde8e04b-18d8-43a1-af13-ca684977753b/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:59.544 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/472b98f6-55e7-4d80-9c62-23c1a0524644/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:59.603 [DEBUG] MediaItemCell: Cover loaded for 'ONE PIECE D&D: MARINES #64 | \"The Four Kingdoms\"'
+02:15:59.644 [DEBUG] HTTP response: 200 (20160 bytes)
+02:15:59.654 [DEBUG] ImageLoader: Successfully loaded 20160 bytes from http://192.168.1.28:13378/api/items/472b98f6-55e7-4d80-9c62-23c1a0524644/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:59.669 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/6a82a7be-0328-4e24-812d-e123de2194dd/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:59.715 [DEBUG] MediaItemCell: Cover loaded for 'SPACE PIRATES D&D #8 | \"Brotherhood\"'
+02:15:59.729 [DEBUG] HTTP response: 200 (18192 bytes)
+02:15:59.737 [DEBUG] ImageLoader: Successfully loaded 18192 bytes from http://192.168.1.28:13378/api/items/6a82a7be-0328-4e24-812d-e123de2194dd/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:59.749 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/cde8e04b-18d8-43a1-af13-ca684977753b/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:59.780 [DEBUG] HTTP response: 200 (14247 bytes)
+02:15:59.790 [DEBUG] ImageLoader: Successfully loaded 14247 bytes from http://192.168.1.28:13378/api/items/cde8e04b-18d8-43a1-af13-ca684977753b/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:59.804 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/472b98f6-55e7-4d80-9c62-23c1a0524644/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:59.832 [DEBUG] HTTP response: 200 (20160 bytes)
+02:15:59.836 [DEBUG] MediaItemCell: Cover loaded for 'ONE PIECE D&D: MARINES #63 | \"Celestial Dragons\"'
+02:15:59.844 [DEBUG] ImageLoader: Successfully loaded 20160 bytes from http://192.168.1.28:13378/api/items/472b98f6-55e7-4d80-9c62-23c1a0524644/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:59.866 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/cde8e04b-18d8-43a1-af13-ca684977753b/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:15:59.962 [DEBUG] MediaItemCell: Cover loaded for '14 - Beginning of the End'
+02:15:59.973 [DEBUG] HTTP response: 200 (14247 bytes)
+02:15:59.985 [DEBUG] ImageLoader: Successfully loaded 14247 bytes from http://192.168.1.28:13378/api/items/cde8e04b-18d8-43a1-af13-ca684977753b/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:00.062 [DEBUG] MediaItemCell: Cover loaded for 'SPACE PIRATES D&D #7 | \"Gingerbread Kaiju\"'
+02:16:00.155 [DEBUG] MediaItemCell: Cover loaded for 'ONE PIECE D&D: MARINES #62 | \"Purpose & Promotion\"'
+02:16:00.263 [DEBUG] MediaItemCell: Cover loaded for 'SPACE PIRATES D&D #6 | \"Roly-Poly Rumble\"'
+02:16:00.496 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/472b98f6-55e7-4d80-9c62-23c1a0524644/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:00.527 [DEBUG] HTTP response: 200 (20160 bytes)
+02:16:00.538 [DEBUG] ImageLoader: Successfully loaded 20160 bytes from http://192.168.1.28:13378/api/items/472b98f6-55e7-4d80-9c62-23c1a0524644/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:00.651 [DEBUG] MediaItemCell: Cover loaded for 'ONE PIECE D&D: MARINES #61 | \"Funeral Light\"'
+02:16:11.034 [DEBUG] LibraryTab: Created for section bdec1feb-9103-4a34-b302-b69eec9a3c58 (AudioBooks) type=book
+02:16:11.041 [DEBUG] LibrarySectionTab::loadContent - section: bdec1feb-9103-4a34-b302-b69eec9a3c58 (async)
+02:16:11.050 [DEBUG] LibrarySectionTab::loadDownloadedItems - section: bdec1feb-9103-4a34-b302-b69eec9a3c58
+02:16:11.059 [INFO] LibrarySectionTab: Found 0 downloaded items for type book
+02:16:11.074 [DEBUG] Fetching library items: library=bdec1feb-9103-4a34-b302-b69eec9a3c58, page=0, limit=50
+02:16:11.075 [DEBUG] Fetching collections for library: bdec1feb-9103-4a34-b302-b69eec9a3c58
+02:16:11.085 [DEBUG] HTTP GET http://192.168.1.28:13378/api/libraries/bdec1feb-9103-4a34-b302-b69eec9a3c58/items?page=0&limit=50
+02:16:11.087 [DEBUG] Giving focus to brls::SidebarItem
+02:16:11.097 [DEBUG] HTTP GET http://192.168.1.28:13378/api/libraries/bdec1feb-9103-4a34-b302-b69eec9a3c58/collections
+02:16:11.115 [DEBUG] HomeTab: Destroyed
+02:16:11.250 [DEBUG] HTTP response: 200 (16935 bytes)
+02:16:11.259 [DEBUG] Library media type: book (enum: 1)
+02:16:11.272 [DEBUG] extractJsonArray: found array for 'results' with 16793 chars
+02:16:11.283 [DEBUG] extractJsonObject: found object for 'media' with 1809 chars
+02:16:11.294 [DEBUG] extractJsonObject: found object for 'metadata' with 1583 chars
+02:16:11.300 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:16:11.305 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:16:11.312 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:16:11.322 [DEBUG] extractJsonObject: found object for 'media' with 2577 chars
+02:16:11.331 [DEBUG] extractJsonObject: found object for 'metadata' with 2335 chars
+02:16:11.342 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:16:11.353 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:16:11.365 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:16:11.371 [DEBUG] extractJsonObject: found object for 'media' with 2621 chars
+02:16:11.376 [DEBUG] extractJsonObject: found object for 'metadata' with 2381 chars
+02:16:11.383 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:16:11.392 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:16:11.401 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:16:11.407 [DEBUG] HTTP response: 200 (544442 bytes)
+02:16:11.412 [DEBUG] extractJsonObject: found object for 'media' with 2044 chars
+02:16:11.434 [DEBUG] extractJsonObject: found object for 'metadata' with 1809 chars
+02:16:11.440 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:16:11.445 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:16:11.452 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:16:11.462 [DEBUG] extractJsonObject: found object for 'media' with 2858 chars
+02:16:11.470 [DEBUG] extractJsonObject: found object for 'metadata' with 2616 chars
+02:16:11.479 [DEBUG] extractJsonArray: found array for 'results' with 544354 chars
+02:16:11.481 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:16:11.503 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:16:11.509 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:16:11.515 [DEBUG] extractJsonObject: found object for 'media' with 1825 chars
+02:16:11.524 [DEBUG] extractJsonObject: found object for 'metadata' with 1590 chars
+02:16:11.533 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:16:11.545 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:16:11.556 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:16:11.565 [INFO] Found 6 items in library bdec1feb-9103-4a34-b302-b69eec9a3c58
+02:16:11.569 [INFO] Found 1 collections
+02:16:11.571 [INFO] LibraryTab: Got 6 items for section bdec1feb-9103-4a34-b302-b69eec9a3c58
+02:16:11.580 [INFO] LibrarySectionTab: Got 1 collections for section bdec1feb-9103-4a34-b302-b69eec9a3c58
+02:16:11.603 [DEBUG] RecyclingGrid: setDataSource with 6 items
+02:16:11.637 [DEBUG] MediaItemCell::loadThumbnail for 'Thrawn (Star Wars)' id='17537883-10a1-4157-9d1f-d9c54c85bae2' coverPath='/audiobooks/AudioBooks/Thrawn Timothy Zahn/cover.jpg'
+02:16:11.642 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/17537883-10a1-4157-9d1f-d9c54c85bae2/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:11.734 [DEBUG] MediaItemCell: Cover loaded for 'Thrawn (Star Wars)'
+02:16:11.765 [DEBUG] MediaItemCell::loadThumbnail for 'Dark Disciple: Star Wars (Unabridged)' id='e62a2248-50fa-4195-a501-02d97dabb05d' coverPath='/audiobooks/AudioBooks/Dark Disciple Christie Golden/cover.jpg'
+02:16:11.774 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/e62a2248-50fa-4195-a501-02d97dabb05d/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:11.809 [DEBUG] MediaItemCell::loadThumbnail for 'Thrawn: Treason (Star Wars) (Unabridged)' id='b80ca585-7cfc-48c8-932c-d02c6a215204' coverPath='/audiobooks/AudioBooks/Thrawn Treason Timothy Zahn/cover.jpg'
+02:16:11.821 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/b80ca585-7cfc-48c8-932c-d02c6a215204/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:11.853 [DEBUG] MediaItemCell::loadThumbnail for 'Kenobi: Star Wars Legends (Unabridged)' id='4334fecc-d6fd-4f37-9f51-a0ab56e254cd' coverPath='/audiobooks/AudioBooks/ Kenobi  John Jackson Miller/cover.jpg'
+02:16:11.859 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/4334fecc-d6fd-4f37-9f51-a0ab56e254cd/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:11.892 [DEBUG] MediaItemCell::loadThumbnail for 'Thrawn: Alliances (Star Wars) (Unabridged)' id='daf426e6-7f06-4be6-936f-dafe14c09997' coverPath='/audiobooks/AudioBooks/Thrawn Alliances Timothy Zahn /cover.jpg'
+02:16:11.900 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/daf426e6-7f06-4be6-936f-dafe14c09997/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:11.940 [DEBUG] MediaItemCell::loadThumbnail for 'Death Troopers: Star Wars Legends (Unabridged)' id='e5dcf891-f899-4d5e-a190-12940ebaf979' coverPath='/audiobooks/AudioBooks/Death Troopers Joe Schreiber/cover.jpg'
+02:16:11.951 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/e5dcf891-f899-4d5e-a190-12940ebaf979/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:12.048 [DEBUG] MediaItemCell: Cover loaded for 'Death Troopers: Star Wars Legends (Unabridged)'
+02:16:12.049 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/e62a2248-50fa-4195-a501-02d97dabb05d/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:12.058 [DEBUG] RecyclingGrid: rebuildGrid completed
+02:16:12.093 [DEBUG] HTTP response: 200 (16915 bytes)
+02:16:12.105 [DEBUG] ImageLoader: Successfully loaded 16915 bytes from http://192.168.1.28:13378/api/items/e62a2248-50fa-4195-a501-02d97dabb05d/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:12.115 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/b80ca585-7cfc-48c8-932c-d02c6a215204/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:12.136 [DEBUG] HTTP response: 200 (12627 bytes)
+02:16:12.145 [DEBUG] ImageLoader: Successfully loaded 12627 bytes from http://192.168.1.28:13378/api/items/b80ca585-7cfc-48c8-932c-d02c6a215204/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:12.158 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/4334fecc-d6fd-4f37-9f51-a0ab56e254cd/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:12.181 [DEBUG] HTTP response: 200 (11133 bytes)
+02:16:12.186 [DEBUG] ImageLoader: Successfully loaded 11133 bytes from http://192.168.1.28:13378/api/items/4334fecc-d6fd-4f37-9f51-a0ab56e254cd/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:12.196 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/daf426e6-7f06-4be6-936f-dafe14c09997/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:12.215 [DEBUG] MediaItemCell: Cover loaded for 'Dark Disciple: Star Wars (Unabridged)'
+02:16:12.232 [DEBUG] HTTP response: 200 (13369 bytes)
+02:16:12.241 [DEBUG] ImageLoader: Successfully loaded 13369 bytes from http://192.168.1.28:13378/api/items/daf426e6-7f06-4be6-936f-dafe14c09997/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:12.326 [DEBUG] MediaItemCell: Cover loaded for 'Thrawn: Treason (Star Wars) (Unabridged)'
+02:16:12.422 [DEBUG] MediaItemCell: Cover loaded for 'Kenobi: Star Wars Legends (Unabridged)'
+02:16:12.532 [DEBUG] MediaItemCell: Cover loaded for 'Thrawn: Alliances (Star Wars) (Unabridged)'
+02:16:13.376 [DEBUG] LibraryTab: Created for section c48157a5-7cf3-4590-b2f2-32cec0b3c195 (podcasts) type=podcast
+02:16:13.381 [DEBUG] LibrarySectionTab::loadContent - section: c48157a5-7cf3-4590-b2f2-32cec0b3c195 (async)
+02:16:13.387 [DEBUG] LibrarySectionTab::loadDownloadedItems - section: c48157a5-7cf3-4590-b2f2-32cec0b3c195
+02:16:13.397 [INFO] LibrarySectionTab: Found 0 downloaded items for type podcast
+02:16:13.414 [DEBUG] Fetching library items: library=c48157a5-7cf3-4590-b2f2-32cec0b3c195, page=0, limit=50
+02:16:13.415 [DEBUG] Fetching collections for library: c48157a5-7cf3-4590-b2f2-32cec0b3c195
+02:16:13.425 [DEBUG] HTTP GET http://192.168.1.28:13378/api/libraries/c48157a5-7cf3-4590-b2f2-32cec0b3c195/items?page=0&limit=50
+02:16:13.431 [DEBUG] HTTP GET http://192.168.1.28:13378/api/libraries/c48157a5-7cf3-4590-b2f2-32cec0b3c195/collections
+02:16:13.433 [DEBUG] Giving focus to brls::SidebarItem
+02:16:13.464 [DEBUG] HTTP response: 200 (13472 bytes)
+02:16:13.470 [DEBUG] Library media type: podcast (enum: 2)
+02:16:13.471 [DEBUG] LibrarySectionTab: Destroyed for section bdec1feb-9103-4a34-b302-b69eec9a3c58
+02:16:13.472 [DEBUG] HTTP response: 200 (90 bytes)
+02:16:13.481 [DEBUG] extractJsonArray: found array for 'results' with 13327 chars
+02:16:13.502 [DEBUG] extractJsonArray: found array for 'results' with 2 chars
+02:16:13.508 [DEBUG] extractJsonObject: found object for 'media' with 631 chars
+02:16:13.517 [INFO] Found 0 collections
+02:16:13.530 [DEBUG] extractJsonObject: found object for 'metadata' with 334 chars
+02:16:13.540 [INFO] LibrarySectionTab: Got 0 collections for section c48157a5-7cf3-4590-b2f2-32cec0b3c195
+02:16:13.547 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:16:13.568 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:16:13.578 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:16:13.585 [DEBUG] extractJsonObject: found object for 'media' with 1200 chars
+02:16:13.594 [DEBUG] extractJsonObject: found object for 'metadata' with 881 chars
+02:16:13.607 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:16:13.617 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:16:13.623 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:16:13.633 [DEBUG] extractJsonObject: found object for 'media' with 1142 chars
+02:16:13.644 [DEBUG] extractJsonObject: found object for 'metadata' with 833 chars
+02:16:13.655 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:16:13.661 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:16:13.670 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:16:13.683 [DEBUG] extractJsonObject: found object for 'media' with 1080 chars
+02:16:13.693 [DEBUG] extractJsonObject: found object for 'metadata' with 774 chars
+02:16:13.700 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:16:13.709 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:16:13.721 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:16:13.732 [DEBUG] extractJsonObject: found object for 'media' with 789 chars
+02:16:13.738 [DEBUG] extractJsonObject: found object for 'metadata' with 478 chars
+02:16:13.748 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:16:13.760 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:16:13.770 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:16:13.776 [DEBUG] extractJsonObject: found object for 'media' with 986 chars
+02:16:13.785 [DEBUG] extractJsonObject: found object for 'metadata' with 684 chars
+02:16:13.798 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:16:13.808 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:16:13.814 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:16:13.824 [DEBUG] extractJsonObject: found object for 'media' with 1136 chars
+02:16:13.836 [DEBUG] extractJsonObject: found object for 'metadata' with 815 chars
+02:16:13.846 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:16:13.852 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:16:13.862 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:16:13.874 [DEBUG] extractJsonObject: found object for 'media' with 649 chars
+02:16:13.884 [DEBUG] extractJsonObject: found object for 'metadata' with 326 chars
+02:16:13.891 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:16:13.900 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:16:13.913 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:16:13.923 [DEBUG] extractJsonObject: found object for 'media' with 1265 chars
+02:16:13.932 [DEBUG] extractJsonObject: found object for 'metadata' with 953 chars
+02:16:13.944 [DEBUG] extractJsonObject: key 'userMediaProgress' not found
+02:16:13.954 [DEBUG] extractJsonObject: key 'mediaProgress' not found
+02:16:13.960 [DEBUG] extractJsonObject: key 'recentEpisode' not found
+02:16:13.970 [INFO] Found 9 items in library c48157a5-7cf3-4590-b2f2-32cec0b3c195
+02:16:13.983 [INFO] LibraryTab: Got 9 items for section c48157a5-7cf3-4590-b2f2-32cec0b3c195
+02:16:14.006 [DEBUG] RecyclingGrid: setDataSource with 9 items
+02:16:14.037 [DEBUG] MediaItemCell::loadThumbnail for 'Pokemon D&D' id='31c1be12-24a1-4ef9-93bd-fe4df0956bd5' coverPath='/audiobooks/Podcasts/Pokemon D&D/cover.jpg'
+02:16:14.048 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/31c1be12-24a1-4ef9-93bd-fe4df0956bd5/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.079 [DEBUG] MediaItemCell::loadThumbnail for 'One Piece D&D: Marines' id='472b98f6-55e7-4d80-9c62-23c1a0524644' coverPath='/audiobooks/Podcasts/One Piece D&D - Marines/cover.jpg'
+02:16:14.086 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/472b98f6-55e7-4d80-9c62-23c1a0524644/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.187 [DEBUG] MediaItemCell: Cover loaded for 'One Piece D&D: Marines'
+02:16:14.225 [DEBUG] MediaItemCell::loadThumbnail for 'One Piece D&D' id='e95c72b2-ccf6-44e1-893f-45d681454b87' coverPath='/audiobooks/Podcasts/One Piece D&D/cover.jpg'
+02:16:14.232 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/e95c72b2-ccf6-44e1-893f-45d681454b87/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.249 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/31c1be12-24a1-4ef9-93bd-fe4df0956bd5/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.265 [DEBUG] MediaItemCell::loadThumbnail for 'Isekai D&D' id='69a7d6e6-f93d-4efe-8d7c-32970a9884e8' coverPath='/audiobooks/Podcasts/Isekai D&D/cover.jpg'
+02:16:14.270 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/69a7d6e6-f93d-4efe-8d7c-32970a9884e8/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.290 [DEBUG] HTTP response: 200 (37626 bytes)
+02:16:14.301 [DEBUG] ImageLoader: Successfully loaded 37626 bytes from http://192.168.1.28:13378/api/items/31c1be12-24a1-4ef9-93bd-fe4df0956bd5/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.304 [DEBUG] MediaItemCell::loadThumbnail for 'History of Everything' id='c17d331b-c2a0-435e-9c43-63adaa225696' coverPath='/audiobooks/Podcasts/History of Everything/cover.jpg'
+02:16:14.316 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/e95c72b2-ccf6-44e1-893f-45d681454b87/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.320 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/c17d331b-c2a0-435e-9c43-63adaa225696/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.358 [DEBUG] HTTP response: 200 (17595 bytes)
+02:16:14.364 [DEBUG] ImageLoader: Successfully loaded 17595 bytes from http://192.168.1.28:13378/api/items/e95c72b2-ccf6-44e1-893f-45d681454b87/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.365 [DEBUG] MediaItemCell::loadThumbnail for 'The WAN Show' id='2942da7e-836c-4e22-8cae-155e44968c44' coverPath='/audiobooks/Podcasts/The WAN Show/cover.jpg'
+02:16:14.387 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/2942da7e-836c-4e22-8cae-155e44968c44/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.419 [DEBUG] MediaItemCell::loadThumbnail for 'The Arcane Underground D&D' id='6a82a7be-0328-4e24-812d-e123de2194dd' coverPath='/audiobooks/Podcasts/The Arcane Underground D&D/cover.jpg'
+02:16:14.428 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/6a82a7be-0328-4e24-812d-e123de2194dd/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.532 [DEBUG] MediaItemCell: Cover loaded for 'The Arcane Underground D&D'
+02:16:14.565 [DEBUG] MediaItemCell::loadThumbnail for 'The ENTIRE Backrooms Iceberg EXPLAINED' id='7d437239-d851-426a-9882-6e3898edfbf6' coverPath='/audiobooks/Podcasts/The ENTIRE Backrooms Iceberg EXPLAINED/cover.png'
+02:16:14.574 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/7d437239-d851-426a-9882-6e3898edfbf6/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.614 [DEBUG] MediaItemCell::loadThumbnail for 'Space Pirates D&D' id='cde8e04b-18d8-43a1-af13-ca684977753b' coverPath='/audiobooks/Podcasts/Space Pirates D&D/cover.jpg'
+02:16:14.621 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/cde8e04b-18d8-43a1-af13-ca684977753b/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.718 [DEBUG] MediaItemCell: Cover loaded for 'Space Pirates D&D'
+02:16:14.735 [DEBUG] RecyclingGrid: rebuildGrid completed
+02:16:14.875 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/69a7d6e6-f93d-4efe-8d7c-32970a9884e8/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.885 [DEBUG] MediaItemCell: Cover loaded for 'Pokemon D&D'
+02:16:14.906 [DEBUG] HTTP response: 200 (13319 bytes)
+02:16:14.912 [DEBUG] ImageLoader: Successfully loaded 13319 bytes from http://192.168.1.28:13378/api/items/69a7d6e6-f93d-4efe-8d7c-32970a9884e8/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.922 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/c17d331b-c2a0-435e-9c43-63adaa225696/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.949 [DEBUG] HTTP response: 200 (11281 bytes)
+02:16:14.955 [DEBUG] ImageLoader: Successfully loaded 11281 bytes from http://192.168.1.28:13378/api/items/c17d331b-c2a0-435e-9c43-63adaa225696/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.967 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/2942da7e-836c-4e22-8cae-155e44968c44/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:14.989 [DEBUG] HTTP response: 200 (8495 bytes)
+02:16:14.993 [DEBUG] MediaItemCell: Cover loaded for 'One Piece D&D'
+02:16:14.998 [DEBUG] ImageLoader: Successfully loaded 8495 bytes from http://192.168.1.28:13378/api/items/2942da7e-836c-4e22-8cae-155e44968c44/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:15.021 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/7d437239-d851-426a-9882-6e3898edfbf6/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:15.047 [DEBUG] HTTP response: 200 (21645 bytes)
+02:16:15.059 [DEBUG] ImageLoader: Successfully loaded 21645 bytes from http://192.168.1.28:13378/api/items/7d437239-d851-426a-9882-6e3898edfbf6/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:15.115 [DEBUG] MediaItemCell: Cover loaded for 'Isekai D&D'
+02:16:15.214 [DEBUG] MediaItemCell: Cover loaded for 'History of Everything'
+02:16:15.311 [DEBUG] MediaItemCell: Cover loaded for 'The WAN Show'
+02:16:15.455 [DEBUG] MediaItemCell: Cover loaded for 'The ENTIRE Backrooms Iceberg EXPLAINED'
+02:16:19.311 [DEBUG] Giving focus to brls::Button
+02:16:19.788 [DEBUG] Giving focus to vitaabs::MediaItemCell
+02:16:20.395 [DEBUG] Giving focus to vitaabs::MediaItemCell
+02:16:20.700 [DEBUG] Giving focus to vitaabs::MediaItemCell
+02:16:20.938 [DEBUG] Giving focus to vitaabs::MediaItemCell
+02:16:21.730 [DEBUG] RecyclingGrid::onItemClicked index=7 items=9
+02:16:21.741 [DEBUG] RecyclingGrid: Calling onItemSelected for 'The ENTIRE Backrooms Iceberg EXPLAINED'
+02:16:21.750 [DEBUG] LibrarySectionTab::onItemSelected - title='The ENTIRE Backrooms Iceberg EXPLAINED' id='7d437239-d851-426a-9882-6e3898edfbf6' type='podcast' viewMode=0
+02:16:21.763 [INFO] LibrarySectionTab: Opening detail view for 'The ENTIRE Backrooms Iceberg EXPLAINED'
+02:16:21.774 [INFO] MediaDetailView: Creating for 'The ENTIRE Backrooms Iceberg EXPLAINED' id='7d437239-d851-426a-9882-6e3898edfbf6' type='podcast'
+02:16:21.892 [DEBUG] Fetching item: 7d437239-d851-426a-9882-6e3898edfbf6
+02:16:21.905 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/7d437239-d851-426a-9882-6e3898edfbf6?expanded=1&include=progress
+02:16:22.088 [DEBUG] HTTP response: 200 (5258 bytes)
+02:16:22.099 [DEBUG] Response body length: 5258 chars
+02:16:22.110 [DEBUG] extractJsonObject: found object for 'media' with 3035 chars
+02:16:22.120 [DEBUG] extractJsonObject: found object for 'metadata' with 326 chars
+02:16:22.134 [DEBUG] extractJsonObject: found object for 'userMediaProgress' with 493 chars
+02:16:22.144 [DEBUG] extractJsonObject: found object for 'media' with 3035 chars
+02:16:22.157 [INFO] Media object found: yes (3035 chars)
+02:16:22.167 [DEBUG] Media object preview: {"id":"8b18f4db-7b55-49e3-8034-fb0dcb67ca85","libraryItemId":"7d437239-d851-426a-9882-6e3898edfbf6","metadata":{"title":"The ENTIRE Backrooms Iceberg EXPLAINED","author":"CreepyDemon","description":null,"releaseDate":null,"genres":[],"feedUrl":null,"imageUrl":null,"itunesPageUrl":null,"itunesId":nul
+02:16:22.177 [DEBUG] extractJsonArray: found array for 'chapters' with 2 chars
+02:16:22.189 [INFO] Chapters array: 2 chars
+02:16:22.199 [DEBUG] No chapters in media.chapters, will check audioFiles
+02:16:22.213 [DEBUG] extractJsonArray: key 'audioFiles' not found
+02:16:22.222 [WARNING] No chapters found in media.chapters or audioFiles
+02:16:22.234 [DEBUG] extractJsonArray: key 'audioFiles' not found
+02:16:22.244 [DEBUG] extractJsonArray: key 'audioFiles' not found
+02:16:22.254 [INFO] Fetched item: The ENTIRE Backrooms Iceberg EXPLAINED (0 chapters, 0 tracks)
+02:16:22.273 [DEBUG] Fetching podcast episodes: 7d437239-d851-426a-9882-6e3898edfbf6
+02:16:22.281 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/7d437239-d851-426a-9882-6e3898edfbf6
+02:16:22.313 [DEBUG] HTTP response: 200 (3612 bytes)
+02:16:22.319 [DEBUG] extractJsonObject: found object for 'media' with 1920 chars
+02:16:22.330 [DEBUG] extractJsonArray: found array for 'episodes' with 1299 chars
+02:16:22.341 [INFO] Found 1 podcast episodes
+02:16:22.371 [DEBUG] MediaItemCell::loadThumbnail for 'The ENTIRE Backrooms Iceberg EXPLAINED' id='7d437239-d851-426a-9882-6e3898edfbf6' coverPath=''
+02:16:22.384 [DEBUG] MediaItemCell: Loading cover from URL: http://192.168.1.28:13378/api/items/7d437239-d851-426a-9882-6e3898edfbf6/cover?width=280&height=280&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:22.512 [DEBUG] MediaItemCell: Cover loaded for 'The ENTIRE Backrooms Iceberg EXPLAINED'
+02:16:22.529 [DEBUG] LibrarySectionTab: MediaDetailView created, pushing activity
+02:16:22.536 [DEBUG] Adding an inputs block token (tokens=1)
+02:16:22.546 [DEBUG] Pushing vitaabs::MediaItemCell to the focus stack
+02:16:22.572 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/7d437239-d851-426a-9882-6e3898edfbf6/cover?width=400&height=400&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:22.585 [DEBUG] Giving focus to brls::Button
+02:16:22.597 [DEBUG] Hiding vitaabs::MediaDetailView
+02:16:22.607 [DEBUG] push activity to the stack
+02:16:22.617 [DEBUG] Showing vitaabs::MediaDetailView
+02:16:22.628 [DEBUG] LibrarySectionTab: Activity pushed successfully
+02:16:22.639 [DEBUG] RecyclingGrid: onItemSelected completed
+02:16:22.677 [DEBUG] Removing an inputs block token (tokens=0)
+02:16:22.690 [DEBUG] HTTP response: 200 (32501 bytes)
+02:16:22.701 [DEBUG] ImageLoader: Successfully loaded 32501 bytes from http://192.168.1.28:13378/api/items/7d437239-d851-426a-9882-6e3898edfbf6/cover?width=400&height=400&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:47.822 [INFO] startDownloadAndPlay: itemId=7d437239-d851-426a-9882-6e3898edfbf6, episodeId=1b2d9077-beb1-4a12-8daa-7f3a3b2e9a25, startTime=-1, downloadOnly=false
+02:16:47.823 [INFO] Streaming directly from server (no cache)
+02:16:47.827 [DEBUG] PlayerActivity created for item: 7d437239-d851-426a-9882-6e3898edfbf6, episode: 1b2d9077-beb1-4a12-8daa-7f3a3b2e9a25
+02:16:47.836 [DEBUG] Adding an inputs block token (tokens=1)
+02:16:47.846 [DEBUG] Pushing brls::Button to the focus stack
+02:16:48.004 [DEBUG] PlayerActivity content available
+02:16:48.018 [DEBUG] Fetching item: 7d437239-d851-426a-9882-6e3898edfbf6
+02:16:48.023 [DEBUG] HTTP GET http://192.168.1.28:13378/api/items/7d437239-d851-426a-9882-6e3898edfbf6?expanded=1&include=progress
+02:16:48.063 [DEBUG] HTTP response: 200 (5258 bytes)
+02:16:48.070 [DEBUG] Response body length: 5258 chars
+02:16:48.079 [DEBUG] extractJsonObject: found object for 'media' with 3035 chars
+02:16:48.088 [DEBUG] extractJsonObject: found object for 'metadata' with 326 chars
+02:16:48.100 [DEBUG] extractJsonObject: found object for 'userMediaProgress' with 493 chars
+02:16:48.111 [DEBUG] extractJsonObject: found object for 'media' with 3035 chars
+02:16:48.122 [INFO] Media object found: yes (3035 chars)
+02:16:48.128 [DEBUG] Media object preview: {"id":"8b18f4db-7b55-49e3-8034-fb0dcb67ca85","libraryItemId":"7d437239-d851-426a-9882-6e3898edfbf6","metadata":{"title":"The ENTIRE Backrooms Iceberg EXPLAINED","author":"CreepyDemon","description":null,"releaseDate":null,"genres":[],"feedUrl":null,"imageUrl":null,"itunesPageUrl":null,"itunesId":nul
+02:16:48.133 [DEBUG] extractJsonArray: found array for 'chapters' with 2 chars
+02:16:48.140 [INFO] Chapters array: 2 chars
+02:16:48.149 [DEBUG] No chapters in media.chapters, will check audioFiles
+02:16:48.158 [DEBUG] extractJsonArray: key 'audioFiles' not found
+02:16:48.169 [WARNING] No chapters found in media.chapters or audioFiles
+02:16:48.180 [DEBUG] extractJsonArray: key 'audioFiles' not found
+02:16:48.192 [DEBUG] extractJsonArray: key 'audioFiles' not found
+02:16:48.197 [INFO] Fetched item: The ENTIRE Backrooms Iceberg EXPLAINED (0 chapters, 0 tracks)
+02:16:48.208 [DEBUG] Loading cover art: http://192.168.1.28:13378/api/items/7d437239-d851-426a-9882-6e3898edfbf6/cover?width=400&height=400&format=jpeg&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:48.446 [DEBUG] Cover art loaded
+02:16:48.455 [INFO] PlayerActivity: Starting playback session for item: 7d437239-d851-426a-9882-6e3898edfbf6, episode: 1b2d9077-beb1-4a12-8daa-7f3a3b2e9a25
+02:16:48.464 [DEBUG] Starting playback session for item: 7d437239-d851-426a-9882-6e3898edfbf6
+02:16:48.475 [DEBUG] HTTP POST http://192.168.1.28:13378/api/items/7d437239-d851-426a-9882-6e3898edfbf6/play/1b2d9077-beb1-4a12-8daa-7f3a3b2e9a25
+02:16:48.565 [DEBUG] HTTP response: 200 (7022 bytes)
+02:16:48.577 [DEBUG] extractJsonArray: found array for 'audioTracks' with 984 chars
+02:16:48.581 [DEBUG] audioTracks array length: 984
+02:16:48.587 [DEBUG] audioTracks preview: [{"index":1,"ino":"385761","metadata":{"filename":"The ENTIRE Backrooms Iceberg EXPLAINED.mp3","ext":".mp3","path":"/audiobooks/Podcasts/The ENTIRE Backrooms Iceberg EXPLAINED/The ENTIRE Backrooms Iceberg EXPLAINED.mp3","relPath":"The ENTIRE Backrooms Iceberg EXPLAINED.mp3","size":132861128,"mtimeMs
+02:16:48.594 [DEBUG] Track #1 object (982 chars): {"index":1,"ino":"385761","metadata":{"filename":"The ENTIRE Backrooms Iceberg EXPLAINED.mp3","ext":".mp3","path":"/audiobooks/Podcasts/The ENTIRE Backrooms Iceberg EXPLAINED/The ENTIRE Backrooms Iceb
+02:16:48.603 [DEBUG] Parsed track: index=1, title=The ENTIRE Backrooms Iceberg EXPLAINED.mp3, duration=4785.5396, contentUrl=/api/items/7d437239-d851-426a-9882-6e3898edfbf6/file/385761
+02:16:48.612 [DEBUG] Added audio track 1 url=/api/items/7d437239-d851-426a-9882-6e3898edfbf6/file/385761
+02:16:48.623 [DEBUG] Finished parsing audioTracks, found 1 track objects
+02:16:48.634 [INFO] Started playback session: ef07e39a-43b2-47b9-92db-da6040d605db with 1 audio tracks
+02:16:48.645 [INFO] PlayerActivity: Session created - id: ef07e39a-43b2-47b9-92db-da6040d605db, audioTracks: 1, playMethod: 0
+02:16:48.650 [DEBUG] PlayerActivity: Will resume from position: 0s
+02:16:48.656 [INFO] PlayerActivity: Streaming directly from URL: http://192.168.1.28:13378/api/items/7d437239-d851-426a-9882-6e3898edfbf6/file/385761?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o
+02:16:48.667 [INFO] PlayerActivity: Initializing MPV player...
+02:16:48.676 [DEBUG] MpvPlayer: Initializing libmpv...
+02:16:48.731 [DEBUG] MpvPlayer: mpv context created
+02:16:48.745 [DEBUG] MpvPlayer: Calling mpv_initialize...
+02:16:48.770 [DEBUG] MpvPlayer: mpv_initialize succeeded
+02:16:48.775 [INFO] MpvPlayer: Audio-only mode, skipping render context
+02:16:48.786 [INFO] MpvPlayer: Initialized successfully
+02:16:48.794 [INFO] PlayerActivity: MPV player initialized successfully
+02:16:48.807 [INFO] PlayerActivity: Loading stream URL (startTime=0s)
+02:16:48.818 [INFO] MpvPlayer: Loading URL: http://192.168.1.28:13378/api/items/7d437239-d851-426a-9882-6e3898edfbf6/file/385761?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIyZTQ0ZGViOC1kMTA4LTQ0NzQtOGU4OC1iNGExMmY5OTYzYjEiLCJ1c2VybmFtZSI6Ik5pY2siLCJpYXQiOjE3Mzk0MTU2MDF9.aVuXYJQ4QgQOtp6sGmX_auQMTtvIGnXqULwIhU3JJ-o (startTime=-1s)
+02:16:48.827 [DEBUG] MpvPlayer: State change: 0 -> 1
