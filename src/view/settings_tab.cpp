@@ -49,6 +49,7 @@ SettingsTab::SettingsTab() {
 
 void SettingsTab::createAccountSection() {
     Application& app = Application::getInstance();
+    AppSettings& settings = app.getSettings();
 
     // Section header
     auto* header = new brls::Header();
@@ -131,14 +132,39 @@ void SettingsTab::createAccountSection() {
         });
     m_contentBox->addView(urlSelector);
 
+    // Auto-switch URL toggle
+    auto* autoSwitchToggle = new brls::BooleanCell();
+    autoSwitchToggle->init("Auto-Switch URL on Failure", settings.autoSwitchUrl, [&settings](bool value) {
+        settings.autoSwitchUrl = value;
+        Application::getInstance().saveSettings();
+    });
+    m_contentBox->addView(autoSwitchToggle);
+
     // Info label
     auto* urlInfoLabel = new brls::Label();
-    urlInfoLabel->setText("Set both URLs to auto-switch when one is unavailable");
+    urlInfoLabel->setText("Auto-switch tries the other URL when connection fails");
     urlInfoLabel->setFontSize(14);
     urlInfoLabel->setMarginLeft(16);
     urlInfoLabel->setMarginTop(4);
     urlInfoLabel->setMarginBottom(16);
     m_contentBox->addView(urlInfoLabel);
+
+    // Connection timeout selector
+    auto* timeoutSelector = new brls::SelectorCell();
+    int timeoutIndex = 1; // default to 30s
+    if (settings.connectionTimeout <= 10) timeoutIndex = 0;
+    else if (settings.connectionTimeout <= 30) timeoutIndex = 1;
+    else if (settings.connectionTimeout <= 60) timeoutIndex = 2;
+    else timeoutIndex = 3;
+    timeoutSelector->init("Connection Timeout",
+        {"10 seconds", "30 seconds", "60 seconds", "120 seconds"},
+        timeoutIndex,
+        [&settings](int index) {
+            int timeouts[] = {10, 30, 60, 120};
+            settings.connectionTimeout = timeouts[index];
+            Application::getInstance().saveSettings();
+        });
+    m_contentBox->addView(timeoutSelector);
 
     // Logout button
     auto* logoutCell = new brls::DetailCell();
@@ -425,6 +451,23 @@ void SettingsTab::createDownloadsSection() {
         Application::getInstance().saveSettings();
     });
     m_contentBox->addView(m_autoStartDownloadsToggle);
+
+    // Download on play toggle
+    auto* downloadOnPlayToggle = new brls::BooleanCell();
+    downloadOnPlayToggle->init("Download on Play", settings.downloadOnPlay, [&settings](bool value) {
+        settings.downloadOnPlay = value;
+        Application::getInstance().saveSettings();
+    });
+    m_contentBox->addView(downloadOnPlayToggle);
+
+    // Info label for download on play
+    auto* downloadOnPlayInfo = new brls::Label();
+    downloadOnPlayInfo->setText("When enabled, pressing play also queues for download");
+    downloadOnPlayInfo->setFontSize(14);
+    downloadOnPlayInfo->setMarginLeft(16);
+    downloadOnPlayInfo->setMarginTop(4);
+    downloadOnPlayInfo->setMarginBottom(8);
+    m_contentBox->addView(downloadOnPlayInfo);
 
     // WiFi only toggle
     m_wifiOnlyToggle = new brls::BooleanCell();

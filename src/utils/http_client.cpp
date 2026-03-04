@@ -3,6 +3,7 @@
  */
 
 #include "utils/http_client.hpp"
+#include "app/application.hpp"
 
 #include <borealis.hpp>
 #include <curl/curl.h>
@@ -37,6 +38,11 @@ void HttpClient::globalCleanup() {
 HttpClient::HttpClient() {
     m_curl = curl_easy_init();
     m_userAgent = USER_AGENT;
+    // Apply connection timeout from user settings
+    int settingsTimeout = Application::getInstance().getSettings().connectionTimeout;
+    if (settingsTimeout > 0) {
+        m_timeout = settingsTimeout;
+    }
 }
 
 HttpClient::~HttpClient() {

@@ -1364,6 +1364,22 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
     // If not download-only, stream directly from server URL
     // mpv handles HTTP streaming natively (matching Vita_plex approach)
     if (!downloadOnly) {
+        // If downloadOnPlay setting is enabled, also queue for background download
+        if (Application::getInstance().getSettings().downloadOnPlay) {
+            DownloadsManager& dm = DownloadsManager::getInstance();
+            dm.init();
+            if (!dm.isDownloaded(itemId, episodeId)) {
+                std::string title = m_item.title;
+                std::string author = m_item.authorName;
+                float dur = m_item.duration;
+                std::string mediaType = m_item.type;
+                std::string series = m_item.seriesName;
+                if (dm.queueDownload(itemId, title, author, dur, mediaType, series, episodeId)) {
+                    dm.startDownloads();
+                    brls::Logger::info("downloadOnPlay: Queued {} for background download", title);
+                }
+            }
+        }
         brls::Logger::info("Streaming directly from server");
         Application::getInstance().pushPlayerActivity(itemId, episodeId, requestedStartTime);
         return;

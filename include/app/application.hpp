@@ -125,14 +125,16 @@ struct AppSettings {
     bool autoBookmark = true;          // Auto-bookmark when closing player
 
     // Network Settings
-    int connectionTimeout = 180;       // seconds
+    int connectionTimeout = 30;        // seconds (applied to HTTP client)
     bool downloadOverWifiOnly = false;
+    bool autoSwitchUrl = true;         // Auto-switch between local/remote URL on failure
 
     // Download Settings
     bool autoStartDownloads = true;
     int maxConcurrentDownloads = 1;
     bool deleteAfterFinish = false;    // Delete downloaded book after finishing
     bool syncProgressOnConnect = true;
+    bool downloadOnPlay = false;       // Queue download when pressing play (in addition to streaming)
 
     // Player UI Settings
     bool showDownloadProgress = true;  // Show background download progress in player for multi-file books

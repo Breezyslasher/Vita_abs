@@ -387,8 +387,9 @@ bool Application::loadSettings() {
 
     // Load network settings
     m_settings.connectionTimeout = extractInt("connectionTimeout");
-    if (m_settings.connectionTimeout <= 0) m_settings.connectionTimeout = 180;
+    if (m_settings.connectionTimeout <= 0) m_settings.connectionTimeout = 30;
     m_settings.downloadOverWifiOnly = extractBool("downloadOverWifiOnly", false);
+    m_settings.autoSwitchUrl = extractBool("autoSwitchUrl", true);
 
     // Load download settings
     m_settings.autoStartDownloads = extractBool("autoStartDownloads", true);
@@ -396,6 +397,7 @@ bool Application::loadSettings() {
     if (m_settings.maxConcurrentDownloads <= 0) m_settings.maxConcurrentDownloads = 1;
     m_settings.deleteAfterFinish = extractBool("deleteAfterFinish", false);
     m_settings.syncProgressOnConnect = extractBool("syncProgressOnConnect", true);
+    m_settings.downloadOnPlay = extractBool("downloadOnPlay", false);
 
     // Load player UI settings
     m_settings.showDownloadProgress = extractBool("showDownloadProgress", true);
@@ -473,12 +475,14 @@ bool Application::saveSettings() {
     // Network settings
     json += "  \"connectionTimeout\": " + std::to_string(m_settings.connectionTimeout) + ",\n";
     json += "  \"downloadOverWifiOnly\": " + std::string(m_settings.downloadOverWifiOnly ? "true" : "false") + ",\n";
+    json += "  \"autoSwitchUrl\": " + std::string(m_settings.autoSwitchUrl ? "true" : "false") + ",\n";
 
     // Download settings
     json += "  \"autoStartDownloads\": " + std::string(m_settings.autoStartDownloads ? "true" : "false") + ",\n";
     json += "  \"maxConcurrentDownloads\": " + std::to_string(m_settings.maxConcurrentDownloads) + ",\n";
     json += "  \"deleteAfterFinish\": " + std::string(m_settings.deleteAfterFinish ? "true" : "false") + ",\n";
     json += "  \"syncProgressOnConnect\": " + std::string(m_settings.syncProgressOnConnect ? "true" : "false") + ",\n";
+    json += "  \"downloadOnPlay\": " + std::string(m_settings.downloadOnPlay ? "true" : "false") + ",\n";
 
     // Player UI settings
     json += "  \"showDownloadProgress\": " + std::string(m_settings.showDownloadProgress ? "true" : "false") + ",\n";
@@ -555,14 +559,14 @@ bool Application::tryConnectToServer() {
         }
     }
 
-    // Try fallback URL if available
-    if (!fallbackUrl.empty()) {
-        brls::Logger::info("Primary failed, trying fallback URL: {}", fallbackUrl);
+    // Try fallback URL if auto-switch is enabled and both URLs are configured
+    if (m_settings.autoSwitchUrl && !fallbackUrl.empty()) {
+        brls::Logger::info("Auto-switch: Primary failed, trying fallback URL: {}", fallbackUrl);
         client.setServerUrl(fallbackUrl);
         if (client.validateToken()) {
             m_serverUrl = fallbackUrl;
             m_useLocalUrl = !m_useLocalUrl;  // Switch to the working URL
-            brls::Logger::info("Connected to fallback URL, switched to {}", m_useLocalUrl ? "local" : "remote");
+            brls::Logger::info("Auto-switch: Connected to fallback URL, switched to {}", m_useLocalUrl ? "local" : "remote");
             saveSettings();
             return true;
         }
