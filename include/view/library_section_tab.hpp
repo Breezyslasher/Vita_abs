@@ -66,8 +66,10 @@ private:
     brls::Button* m_downloadedBtn = nullptr;  // Downloaded items filter
     brls::Button* m_backBtn = nullptr;  // Back button when in filtered view
 
-    // Podcast management buttons
+    // Podcast management buttons and containers (with hint icons)
+    brls::Box* m_findPodcastsContainer = nullptr;
     brls::Button* m_findPodcastsBtn = nullptr;
+    brls::Box* m_checkEpisodesContainer = nullptr;
     brls::Button* m_checkEpisodesBtn = nullptr;
 
     // Main content grid
