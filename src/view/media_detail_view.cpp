@@ -379,7 +379,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         dlMenuIcon->setWidth(20);
         dlMenuIcon->setHeight(20);
         dlMenuIcon->setScalingType(brls::ImageScalingType::FIT);
-        dlMenuIcon->setImageFromFile("app0:resources/icons/download.png");
+        dlMenuIcon->setImageFromFile("app0:resources/icons/menu.png");
         dlMenuBtn->addView(dlMenuIcon);
         dlMenuBtn->registerClickAction([this](brls::View*) {
             showDownloadOptions();
