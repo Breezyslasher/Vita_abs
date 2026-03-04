@@ -600,6 +600,59 @@ bool DownloadsManager::cancelDownload(const std::string& itemId) {
     return false;
 }
 
+bool DownloadsManager::cancelDownload(const std::string& itemId, const std::string& episodeId) {
+    brls::Logger::info("DownloadsManager: Cancelling download itemId={}, episodeId={}", itemId, episodeId);
+
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        for (auto it = m_downloads.begin(); it != m_downloads.end(); ++it) {
+            if (it->itemId == itemId && (episodeId.empty() || it->episodeId == episodeId)) {
+                // If currently downloading, set cancellation flag
+                if (it->state == DownloadState::DOWNLOADING) {
+                    m_cancelledItemId = itemId;
+                    m_cancelledEpisodeId = it->episodeId;
+                    brls::Logger::info("DownloadsManager: Set cancellation flag for active download");
+                }
+
+                // Delete partial file if exists
+                if (!it->localPath.empty()) {
+#ifdef __vita__
+                    sceIoRemove(it->localPath.c_str());
+#else
+                    std::remove(it->localPath.c_str());
+#endif
+                }
+
+                // Delete multi-file folder if exists
+                if (it->numFiles > 1) {
+                    std::string folderPath = m_downloadsPath + "/" + it->itemId;
+                    for (const auto& fi : it->files) {
+                        if (!fi.localPath.empty()) {
+#ifdef __vita__
+                            sceIoRemove(fi.localPath.c_str());
+#else
+                            std::remove(fi.localPath.c_str());
+#endif
+                        }
+                    }
+#ifdef __vita__
+                    sceIoRmdir(folderPath.c_str());
+#else
+                    std::remove(folderPath.c_str());
+#endif
+                }
+
+                m_downloads.erase(it);
+                saveStateUnlocked();
+                brls::Logger::info("DownloadsManager: Download cancelled and removed");
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool DownloadsManager::deleteDownload(const std::string& itemId) {
     std::lock_guard<std::mutex> lock(m_mutex);
 

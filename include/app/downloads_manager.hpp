@@ -96,6 +96,9 @@ public:
     // Cancel a specific download
     bool cancelDownload(const std::string& itemId);
 
+    // Cancel a specific episode download (for podcasts where multiple episodes share same itemId)
+    bool cancelDownload(const std::string& itemId, const std::string& episodeId);
+
     // Delete a downloaded item
     bool deleteDownload(const std::string& itemId);
 
