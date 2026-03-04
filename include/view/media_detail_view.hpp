@@ -84,6 +84,7 @@ private:
     bool m_filterDownloaded = false;
     bool m_filterUnheard = false;
     bool m_sortDescending = true;  // newest first for episodes
+    brls::Image* m_sortIcon = nullptr;
 };
 
 } // namespace vitaabs

@@ -68,7 +68,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         // Select button hint above play button
         auto* selectHintContainer = new brls::Box();
         selectHintContainer->setAxis(brls::Axis::ROW);
-        selectHintContainer->setJustifyContent(brls::JustifyContent::CENTER);
+        selectHintContainer->setJustifyContent(brls::JustifyContent::FLEX_START);
         selectHintContainer->setMarginBottom(4);
         auto* selectHint = new brls::Image();
         selectHint->setSize(brls::Size(64, 16));
@@ -126,7 +126,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         // Select button hint above play button
         auto* selectHintContainer = new brls::Box();
         selectHintContainer->setAxis(brls::Axis::ROW);
-        selectHintContainer->setJustifyContent(brls::JustifyContent::CENTER);
+        selectHintContainer->setJustifyContent(brls::JustifyContent::FLEX_START);
         selectHintContainer->setMarginBottom(4);
         auto* selectHint = new brls::Image();
         selectHint->setSize(brls::Size(64, 16));
@@ -308,15 +308,17 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         sortBtn->setCornerRadius(8);
         sortBtn->setJustifyContent(brls::JustifyContent::CENTER);
         sortBtn->setAlignItems(brls::AlignItems::CENTER);
-        auto* sortIcon = new brls::Image();
-        sortIcon->setWidth(20);
-        sortIcon->setHeight(20);
-        sortIcon->setScalingType(brls::ImageScalingType::FIT);
-        sortIcon->setImageFromFile("app0:resources/icons/sort-calendar-descending.png");
-        sortBtn->addView(sortIcon);
+        m_sortIcon = new brls::Image();
+        m_sortIcon->setWidth(20);
+        m_sortIcon->setHeight(20);
+        m_sortIcon->setScalingType(brls::ImageScalingType::FIT);
+        m_sortIcon->setImageFromFile("app0:resources/icons/sort-9-1.png");
+        sortBtn->addView(m_sortIcon);
         sortBtn->registerClickAction([this](brls::View*) {
             m_sortDescending = !m_sortDescending;
-            brls::Application::notify(m_sortDescending ? "Newest first" : "Oldest first");
+            m_sortIcon->setImageFromFile(m_sortDescending
+                ? "app0:resources/icons/sort-9-1.png"
+                : "app0:resources/icons/sort-1-9.png");
             applyFilters();
             return true;
         });
@@ -470,7 +472,9 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         // Register R button to toggle sort order
         this->registerAction("Sort", brls::ControllerButton::BUTTON_RB, [this](brls::View*) {
             m_sortDescending = !m_sortDescending;
-            brls::Application::notify(m_sortDescending ? "Newest first" : "Oldest first");
+            m_sortIcon->setImageFromFile(m_sortDescending
+                ? "app0:resources/icons/sort-9-1.png"
+                : "app0:resources/icons/sort-1-9.png");
             applyFilters();
             return true;
         });
