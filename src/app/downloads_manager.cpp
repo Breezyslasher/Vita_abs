@@ -15,6 +15,7 @@
 #include <cstring>
 #include <thread>
 #include <utility>
+#include <atomic>
 
 #ifdef __vita__
 #include <psp2/io/fcntl.h>
@@ -457,16 +458,23 @@ bool DownloadsManager::queueDownload(const std::string& itemId, const std::strin
 }
 
 void DownloadsManager::startDownloads() {
-    if (m_downloading) return;
-    m_downloading = true;
+    // Use compare_exchange to atomically check and set m_downloading
+    // This prevents race conditions when multiple callers try to start downloads
+    bool expected = false;
+    if (!m_downloading.compare_exchange_strong(expected, true)) {
+        // Already downloading - new items will be picked up by existing thread
+        brls::Logger::debug("DownloadsManager: Download thread already running, items will be added to queue");
+        return;
+    }
 
     brls::Logger::info("DownloadsManager: Starting download queue");
 
     // Process downloads in background
     std::thread([this]() {
+        m_downloadThreadActive.store(true);
         brls::Logger::info("DownloadsManager: Download thread started");
 
-        while (m_downloading) {
+        while (m_downloading.load()) {
             DownloadItem* nextItem = nullptr;
 
             {
@@ -485,18 +493,35 @@ void DownloadsManager::startDownloads() {
                 brls::Logger::info("DownloadsManager: Starting download of {}", nextItem->title);
                 downloadItem(*nextItem);
             } else {
-                // No more queued items
-                brls::Logger::info("DownloadsManager: No more queued items");
-                break;
+                // No more items found - but re-check with lock held to prevent race condition
+                // where an item is queued just as we're about to exit
+                std::lock_guard<std::mutex> lock(m_mutex);
+
+                bool hasQueued = false;
+                for (const auto& item : m_downloads) {
+                    if (item.state == DownloadState::QUEUED) {
+                        hasQueued = true;
+                        break;
+                    }
+                }
+
+                if (!hasQueued) {
+                    // Truly no more items, safe to exit
+                    m_downloading.store(false);
+                    brls::Logger::info("DownloadsManager: All downloads complete");
+                    break;
+                }
+                // Found a queued item in re-check, continue the loop
+                continue;
             }
         }
-        m_downloading = false;
+        m_downloadThreadActive.store(false);
         brls::Logger::info("DownloadsManager: Download thread finished");
     }).detach();
 }
 
 void DownloadsManager::pauseDownloads() {
-    m_downloading = false;
+    m_downloading.store(false);
 
     std::lock_guard<std::mutex> lock(m_mutex);
     for (auto& item : m_downloads) {
@@ -504,7 +529,22 @@ void DownloadsManager::pauseDownloads() {
             item.state = DownloadState::PAUSED;
         }
     }
-    saveState();
+    saveStateUnlocked();
+}
+
+void DownloadsManager::waitForDownloadThread(int timeoutMs) {
+    if (!m_downloadThreadActive.load()) return;
+
+    const int sleepMs = 10;
+    int elapsed = 0;
+    while (m_downloadThreadActive.load() && elapsed < timeoutMs) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
+        elapsed += sleepMs;
+    }
+
+    if (m_downloadThreadActive.load()) {
+        brls::Logger::warning("DownloadsManager: Download thread did not exit within {}ms", timeoutMs);
+    }
 }
 
 bool DownloadsManager::cancelDownload(const std::string& itemId) {
@@ -896,7 +936,7 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
         std::string currentEpisodeId = item.episodeId;
         bool wasCancelled = false;
 
-        for (size_t i = 0; i < item.files.size() && m_downloading && !wasCancelled; ++i) {
+        for (size_t i = 0; i < item.files.size() && m_downloading.load() && !wasCancelled; ++i) {
             // Check for cancellation at start of each file
             if (isDownloadCancelled(currentItemId, currentEpisodeId)) {
                 brls::Logger::info("DownloadsManager: Download cancelled, stopping");
@@ -942,7 +982,7 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
                         m_progressCallback(static_cast<float>(item.downloadedBytes),
                                            static_cast<float>(item.totalBytes));
                     }
-                    return m_downloading && !wasCancelled;
+                    return m_downloading.load() && !wasCancelled;
                 },
                 [&](int64_t total) {
                     brls::Logger::debug("DownloadsManager: File size: {} bytes", total);
@@ -1054,16 +1094,27 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
                     }
                     brls::Logger::info("DownloadsManager: Stored {} chapters for offline use", item.chapters.size());
                 }
+
+                // Notify completion
+                if (m_itemCompletionCallback) {
+                    m_itemCompletionCallback(item.itemId, item.episodeId, true);
+                }
             } else {
                 brls::Logger::error("DownloadsManager: FFmpeg concatenation failed, falling back to first file");
                 // Fallback: use first file if concatenation fails
                 item.localPath = item.files[0].localPath;
                 item.state = DownloadState::COMPLETED;
+                if (m_itemCompletionCallback) {
+                    m_itemCompletionCallback(item.itemId, item.episodeId, true);
+                }
             }
-        } else if (!m_downloading) {
+        } else if (!m_downloading.load()) {
             item.state = DownloadState::PAUSED;
         } else {
             item.state = DownloadState::FAILED;
+            if (m_itemCompletionCallback) {
+                m_itemCompletionCallback(item.itemId, item.episodeId, false);
+            }
         }
         saveState();
         return;
@@ -1166,7 +1217,7 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
     file.close();
 #endif
 
-    if (success && m_downloading) {
+    if (success && m_downloading.load()) {
         item.state = DownloadState::COMPLETED;
         brls::Logger::info("DownloadsManager: Completed download of {}", item.title);
 
@@ -1190,7 +1241,12 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
             }
             brls::Logger::info("DownloadsManager: Stored {} chapters for offline use", item.chapters.size());
         }
-    } else if (!m_downloading) {
+
+        // Notify completion
+        if (m_itemCompletionCallback) {
+            m_itemCompletionCallback(item.itemId, item.episodeId, true);
+        }
+    } else if (!m_downloading.load()) {
         item.state = DownloadState::PAUSED;
         brls::Logger::info("DownloadsManager: Paused download of {}", item.title);
     } else {
@@ -1202,6 +1258,9 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
 #else
         std::remove(item.localPath.c_str());
 #endif
+        if (m_itemCompletionCallback) {
+            m_itemCompletionCallback(item.itemId, item.episodeId, false);
+        }
     }
 
     saveState();
@@ -1230,6 +1289,16 @@ void DownloadsManager::saveState() {
 }
 
 void DownloadsManager::saveStateUnlocked() {
+    // Debounce: Only save every 500ms minimum (Vita SD card I/O is slow)
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastSaveTime).count();
+    if (elapsed < 500 && m_lastSaveTime.time_since_epoch().count() != 0) {
+        m_saveStatePending = true;
+        return;
+    }
+    m_lastSaveTime = now;
+    m_saveStatePending = false;
+
     // Simple JSON-like format for state
     std::stringstream ss;
     ss << "{\n\"downloads\":[\n";
@@ -1480,6 +1549,11 @@ void DownloadsManager::loadState() {
 
         std::string stateStr = extractValue(itemJson, "state");
         item.state = stateStr.empty() ? DownloadState::QUEUED : static_cast<DownloadState>(std::stoi(stateStr));
+
+        // Convert DOWNLOADING to QUEUED (app was interrupted mid-download)
+        if (item.state == DownloadState::DOWNLOADING) {
+            item.state = DownloadState::QUEUED;
+        }
 
         std::string lastSyncedStr = extractValue(itemJson, "lastSynced");
         item.lastSynced = lastSyncedStr.empty() ? 0 : std::stoll(lastSyncedStr);
@@ -2110,8 +2184,77 @@ int DownloadsManager::updateMissingMetadata() {
     return updatedCount;
 }
 
+void DownloadsManager::resumeIncompleteDownloads() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    int resumed = 0;
+    for (auto& item : m_downloads) {
+        if (item.state == DownloadState::DOWNLOADING ||
+            item.state == DownloadState::PAUSED ||
+            item.state == DownloadState::FAILED) {
+            item.state = DownloadState::QUEUED;
+            resumed++;
+        }
+    }
+
+    if (resumed > 0) {
+        saveStateUnlocked();
+        brls::Logger::info("DownloadsManager: Re-queued {} incomplete downloads for resume", resumed);
+    }
+}
+
+void DownloadsManager::resumeDownloadsIfNeeded() {
+    AppSettings& settings = Application::getInstance().getSettings();
+    if (!settings.autoStartDownloads) {
+        brls::Logger::debug("DownloadsManager: Auto-resume disabled in settings");
+        return;
+    }
+
+    if (!hasIncompleteDownloads()) {
+        brls::Logger::debug("DownloadsManager: No incomplete downloads to resume");
+        return;
+    }
+
+    int count = countIncompleteDownloads();
+    brls::Logger::info("DownloadsManager: Auto-resuming {} incomplete downloads", count);
+
+    resumeIncompleteDownloads();
+    startDownloads();
+}
+
+bool DownloadsManager::hasIncompleteDownloads() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (const auto& item : m_downloads) {
+        if (item.state == DownloadState::QUEUED ||
+            item.state == DownloadState::DOWNLOADING ||
+            item.state == DownloadState::PAUSED ||
+            item.state == DownloadState::FAILED) {
+            return true;
+        }
+    }
+    return false;
+}
+
+int DownloadsManager::countIncompleteDownloads() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    int count = 0;
+    for (const auto& item : m_downloads) {
+        if (item.state == DownloadState::QUEUED ||
+            item.state == DownloadState::DOWNLOADING ||
+            item.state == DownloadState::PAUSED ||
+            item.state == DownloadState::FAILED) {
+            count++;
+        }
+    }
+    return count;
+}
+
 void DownloadsManager::setProgressCallback(DownloadProgressCallback callback) {
     m_progressCallback = callback;
+}
+
+void DownloadsManager::setItemCompletionCallback(ItemCompletionCallback callback) {
+    m_itemCompletionCallback = callback;
 }
 
 std::string DownloadsManager::getDownloadsPath() const {

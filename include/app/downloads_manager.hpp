@@ -1,6 +1,7 @@
 /**
  * VitaABS - Downloads Manager
  * Handles offline audiobook downloads and progress sync
+ * Based on Vita_Suwayomi download system with audiobook-specific features
  */
 
 #pragma once
@@ -9,6 +10,8 @@
 #include <vector>
 #include <functional>
 #include <mutex>
+#include <atomic>
+#include <chrono>
 
 namespace vitaabs {
 
@@ -67,6 +70,9 @@ struct DownloadItem {
 // Progress callback: (downloadedBytes, totalBytes)
 using DownloadProgressCallback = std::function<void(float, float)>;
 
+// Item completion callback: (itemId, episodeId, success)
+using ItemCompletionCallback = std::function<void(const std::string&, const std::string&, bool)>;
+
 class DownloadsManager {
 public:
     static DownloadsManager& getInstance();
@@ -81,7 +87,7 @@ public:
                        const std::string& seriesName = "",
                        const std::string& episodeId = "");
 
-    // Start downloading queued items
+    // Start downloading queued items (uses atomic flag to prevent double-start)
     void startDownloads();
 
     // Pause all downloads
@@ -131,6 +137,18 @@ public:
     void saveState();
     void loadState();
 
+    // Resume incomplete downloads (queues PAUSED/FAILED/interrupted items)
+    void resumeIncompleteDownloads();
+
+    // Auto-resume downloads if setting enabled and connected (called after connection established)
+    void resumeDownloadsIfNeeded();
+
+    // Check if there are any incomplete downloads
+    bool hasIncompleteDownloads() const;
+
+    // Count incomplete downloads (returns number of items to resume)
+    int countIncompleteDownloads() const;
+
     // Scan downloads folder for untracked files and add them
     // Returns number of new files found
     int scanDownloadsFolder();
@@ -141,6 +159,9 @@ public:
 
     // Set progress callback for UI updates
     void setProgressCallback(DownloadProgressCallback callback);
+
+    // Set item completion callback for UI refresh
+    void setItemCompletionCallback(ItemCompletionCallback callback);
 
     // Get downloads directory path
     std::string getDownloadsPath() const;
@@ -161,6 +182,12 @@ public:
     // Get local cover path for a download (returns empty if not available)
     std::string getLocalCoverPath(const std::string& itemId) const;
 
+    // Wait for the download thread to fully exit (call after pauseDownloads)
+    void waitForDownloadThread(int timeoutMs = 2000);
+
+    // Check if downloads are currently active
+    bool isDownloading() const { return m_downloading.load(); }
+
 private:
     DownloadsManager() = default;
     ~DownloadsManager() = default;
@@ -179,12 +206,18 @@ private:
 
     std::vector<DownloadItem> m_downloads;
     mutable std::mutex m_mutex;
-    bool m_downloading = false;
+    std::atomic<bool> m_downloading{false};
+    std::atomic<bool> m_downloadThreadActive{false};
     bool m_initialized = false;
     std::string m_cancelledItemId;  // Item ID to cancel (checked during download)
     std::string m_cancelledEpisodeId;  // Episode ID to cancel (for podcasts)
     DownloadProgressCallback m_progressCallback;
+    ItemCompletionCallback m_itemCompletionCallback;
     std::string m_downloadsPath;
+
+    // Debouncing for saveStateUnlocked
+    std::chrono::steady_clock::time_point m_lastSaveTime;
+    bool m_saveStatePending = false;
 };
 
 } // namespace vitaabs

@@ -67,6 +67,16 @@ void Application::run() {
         // Try to connect, with automatic URL switching if needed
         if (tryConnectToServer()) {
             brls::Logger::info("Restored session, connected to {}", m_serverUrl);
+
+            // Auto-resume incomplete downloads if setting enabled
+            auto& dm = DownloadsManager::getInstance();
+            if (!dm.getDownloads().empty()) {
+                // Sync progress from server for downloaded items
+                dm.syncProgressFromServer();
+                // Resume incomplete downloads
+                dm.resumeDownloadsIfNeeded();
+            }
+
             pushMainActivity();
         } else {
             // Connection failed - could be offline
@@ -99,6 +109,8 @@ void Application::run() {
 }
 
 void Application::shutdown() {
+    // Save any pending download state before shutting down
+    DownloadsManager::getInstance().saveState();
     saveSettings();
     m_initialized = false;
     brls::Logger::info("VitaABS shutting down");
