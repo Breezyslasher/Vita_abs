@@ -132,6 +132,9 @@ target_link_libraries(${PROJECT_NAME}
     avutil
     -Wl,--end-group
 
+    # Archive support (required by mpv's libarchive stream)
+    archive
+
     # Audio/compression libraries
     mp3lame
     zstd
