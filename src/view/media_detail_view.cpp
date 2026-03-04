@@ -49,7 +49,7 @@ private:
 namespace vitaabs {
 
 MediaDetailView::MediaDetailView(const MediaItem& item)
-    : m_item(item) {
+    : m_item(item), m_alive(std::make_shared<bool>(true)) {
     brls::Logger::info("MediaDetailView: Creating for '{}' id='{}' type='{}'",
                        item.title, item.id, item.type);
 
@@ -522,6 +522,91 @@ brls::HScrollingFrame* MediaDetailView::createMediaRow(const std::string& title,
 
 brls::View* MediaDetailView::create() {
     return nullptr; // Factory not used
+}
+
+void MediaDetailView::willAppear(bool resetState) {
+    brls::Box::willAppear(resetState);
+
+    // Re-arm alive flag
+    m_alive = std::make_shared<bool>(true);
+    m_lastProgressUpdate = std::chrono::steady_clock::now();
+
+    // Register download progress callback for live UI updates
+    DownloadsManager& mgr = DownloadsManager::getInstance();
+    std::weak_ptr<bool> aliveWeak = m_alive;
+
+    mgr.setProgressCallback([this, aliveWeak](float downloadedBytes, float totalBytes) {
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastProgressUpdate).count();
+
+        // Throttle to every 200ms for smooth but not excessive updates
+        if (elapsed < 200 && downloadedBytes < totalBytes) return;
+        m_lastProgressUpdate = now;
+
+        brls::sync([this, aliveWeak, downloadedBytes, totalBytes]() {
+            auto alive = aliveWeak.lock();
+            if (!alive || !*alive) return;
+
+            // Update download button text with live MB progress
+            if (m_downloadButton) {
+                double dlMB = downloadedBytes / (1024.0 * 1024.0);
+                double totMB = totalBytes / (1024.0 * 1024.0);
+                int dlInt = static_cast<int>(dlMB * 10);
+                int totInt = static_cast<int>(totMB * 10);
+                std::string text = std::to_string(dlInt / 10) + "." + std::to_string(dlInt % 10) + " / "
+                                 + std::to_string(totInt / 10) + "." + std::to_string(totInt % 10) + " MB";
+                m_downloadButton->setText(text);
+            }
+        });
+    });
+
+    // Register item completion callback for UI refresh
+    mgr.setItemCompletionCallback([this, aliveWeak](const std::string& itemId, const std::string& episodeId, bool success) {
+        brls::sync([this, aliveWeak, itemId, episodeId, success]() {
+            auto alive = aliveWeak.lock();
+            if (!alive || !*alive) return;
+
+            if (success) {
+                // Update download button for audiobooks
+                if (m_downloadButton && itemId == m_item.id && episodeId.empty()) {
+                    m_downloadButton->setText("Downloaded");
+                    m_downloadButton->setBackgroundColor(nvgRGBA(46, 204, 113, 200));
+                }
+
+                // Refresh episode list so download icons update (green checkmark)
+                if (m_item.mediaType == MediaType::PODCAST && m_childrenBox) {
+                    applyFilters();
+                }
+
+                // Update podcast download/delete button visibility
+                if (m_item.mediaType == MediaType::PODCAST) {
+                    bool allDownloaded = areAllEpisodesDownloaded();
+                    bool anyDownloaded = hasAnyDownloadedEpisodes();
+                    if (m_downloadButton) {
+                        m_downloadButton->setVisibility(allDownloaded ? brls::Visibility::GONE : brls::Visibility::VISIBLE);
+                    }
+                    if (m_deleteButton) {
+                        m_deleteButton->setVisibility(anyDownloaded ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+                    }
+                }
+            } else {
+                // Download failed - reset button
+                if (m_downloadButton) {
+                    m_downloadButton->setText("Download");
+                }
+            }
+        });
+    });
+}
+
+void MediaDetailView::willDisappear(bool resetState) {
+    brls::Box::willDisappear(resetState);
+
+    if (m_alive) *m_alive = false;
+
+    DownloadsManager& mgr = DownloadsManager::getInstance();
+    mgr.setProgressCallback(nullptr);
+    mgr.setItemCompletionCallback(nullptr);
 }
 
 void MediaDetailView::loadDetails() {
@@ -1097,12 +1182,14 @@ void MediaDetailView::applyFilters() {
 
         dlBtn->addView(dlIcon);
 
-        dlBtn->registerClickAction([this, child, epItemId, epId, isEpDownloaded](brls::View*) {
+        dlBtn->registerClickAction([this, child, epItemId, epId, isEpDownloaded, dlBtn, dlIcon](brls::View*) {
             if (isEpDownloaded) {
                 DownloadsManager::getInstance().deleteDownloadByEpisodeId(epItemId, epId);
                 brls::Application::notify("Deleted download");
                 applyFilters();
             } else {
+                // Show queued state immediately (yellow tint)
+                dlBtn->setBackgroundColor(nvgRGBA(200, 180, 60, 200));
                 startDownloadAndPlay(epItemId, epId, -1.0f, true);
             }
             return true;

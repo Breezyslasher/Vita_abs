@@ -7,6 +7,9 @@
 
 #include <borealis.hpp>
 #include "app/audiobookshelf_client.hpp"
+#include <memory>
+#include <atomic>
+#include <chrono>
 
 namespace vitaabs {
 
@@ -15,6 +18,9 @@ public:
     MediaDetailView(const MediaItem& item);
 
     static brls::View* create();
+
+    void willAppear(bool resetState) override;
+    void willDisappear(bool resetState) override;
 
 private:
     void loadDetails();
@@ -85,6 +91,12 @@ private:
     bool m_filterUnheard = false;
     bool m_sortDescending = true;  // newest first for episodes
     brls::Image* m_sortIcon = nullptr;
+
+    // Live download progress tracking
+    std::shared_ptr<bool> m_alive;
+    std::chrono::steady_clock::time_point m_lastProgressUpdate;
+    std::string m_activeDownloadItemId;   // Item currently being downloaded from this view
+    std::string m_activeDownloadEpisodeId;
 };
 
 } // namespace vitaabs
