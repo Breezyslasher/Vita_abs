@@ -34,11 +34,13 @@ private:
 
     // Continue Listening section (horizontal row)
     brls::Label* m_continueLabel = nullptr;
+    brls::HScrollingFrame* m_continueScroll = nullptr;
     brls::Box* m_continueBox = nullptr;
     std::vector<MediaItem> m_continueItems;
 
     // Recently Added Episodes section (horizontal row)
     brls::Label* m_recentEpisodesLabel = nullptr;
+    brls::HScrollingFrame* m_recentEpisodesScroll = nullptr;
     brls::Box* m_recentEpisodesBox = nullptr;
     std::vector<MediaItem> m_recentEpisodes;
 

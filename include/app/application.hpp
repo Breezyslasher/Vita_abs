@@ -98,6 +98,10 @@ struct AppSettings {
     bool showProgress = true;          // Show progress bars on items
     bool showOnlyDownloaded = false;   // Show only downloaded items in library
 
+    // Home Tab Settings
+    bool showHomeTab = true;           // Show the Home tab
+    int maxRecentEpisodes = 10;        // Max recently added episodes to show (0 = unlimited)
+
     // Playback Settings
     bool resumePlayback = true;        // Resume from last position
     PlaybackSpeed playbackSpeed = PlaybackSpeed::SPEED_1X;

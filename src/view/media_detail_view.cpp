@@ -251,7 +251,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         m_mainContent->addView(episodesLabel);
 
         auto* episodesScroll = new brls::HScrollingFrame();
-        episodesScroll->setHeight(180);
+        episodesScroll->setHeight(200);
         episodesScroll->setMarginBottom(20);
 
         m_childrenBox = new brls::Box();
@@ -526,9 +526,9 @@ void MediaDetailView::loadChildren() {
         for (const auto& child : m_children) {
             auto* cell = new MediaItemCell();
             cell->setItem(child);
-            cell->setWidth(120);
-            cell->setHeight(150);
-            cell->setMarginRight(10);
+            cell->setWidth(150);
+            cell->setHeight(180);
+            cell->setMarginRight(20);  // More space between episodes
 
             cell->registerClickAction([this, child](brls::View* view) {
                 // Navigate to episode detail or play directly

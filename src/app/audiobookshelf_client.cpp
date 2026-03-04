@@ -289,6 +289,45 @@ MediaItem AudiobookshelfClient::parseMediaItem(const std::string& json) {
         item.coverPath = extractJsonValue(mediaObj, "coverPath");
     }
 
+    // Podcast episode info
+    item.episodeId = extractJsonValue(json, "episodeId");
+    if (item.episodeId.empty()) {
+        // For recent episodes, the id field might be the episode ID
+        // Check if this looks like an episode by checking for recentEpisode wrapper
+        std::string recentEp = extractJsonObject(json, "recentEpisode");
+        if (!recentEp.empty()) {
+            item.episodeId = extractJsonValue(recentEp, "id");
+            // Get episode title from recentEpisode
+            std::string epTitle = extractJsonValue(recentEp, "title");
+            if (!epTitle.empty()) {
+                item.title = epTitle;  // Use episode title, not podcast title
+            }
+            item.episodeNumber = extractJsonInt(recentEp, "episode");
+            item.seasonNumber = extractJsonInt(recentEp, "season");
+            item.pubDate = extractJsonValue(recentEp, "pubDate");
+            // Episode duration
+            float epDuration = extractJsonFloat(recentEp, "duration");
+            if (epDuration > 0) {
+                item.duration = epDuration;
+            }
+            item.mediaType = MediaType::PODCAST_EPISODE;
+            item.type = "podcastEpisode";
+        }
+    }
+    item.podcastId = extractJsonValue(json, "podcastId");
+    if (item.podcastId.empty()) {
+        // For recent episodes, the libraryItemId is the podcast ID
+        item.podcastId = extractJsonValue(json, "libraryItemId");
+    }
+    // Episode number - try "episode" field (API uses this for episode number)
+    if (item.episodeNumber == 0) {
+        item.episodeNumber = extractJsonInt(json, "episode");
+    }
+    if (item.episodeNumber == 0 && !metadataObj.empty()) {
+        item.episodeNumber = extractJsonInt(metadataObj, "episode");
+    }
+    item.seasonNumber = extractJsonInt(json, "season");
+
     return item;
 }
 

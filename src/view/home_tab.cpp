@@ -44,13 +44,17 @@ HomeTab::HomeTab() {
     m_continueLabel->setVisibility(brls::Visibility::GONE);  // Hidden until loaded
     m_contentBox->addView(m_continueLabel);
 
-    // Horizontal box for Continue Listening (no ScrollingFrame - use focus-based scrolling)
+    // Horizontal scrolling container for Continue Listening
+    m_continueScroll = new brls::HScrollingFrame();
+    m_continueScroll->setHeight(200);
+    m_continueScroll->setVisibility(brls::Visibility::GONE);
+
     m_continueBox = new brls::Box();
     m_continueBox->setAxis(brls::Axis::ROW);  // Horizontal layout
     m_continueBox->setJustifyContent(brls::JustifyContent::FLEX_START);
-    m_continueBox->setHeight(200);
-    m_continueBox->setVisibility(brls::Visibility::GONE);
-    m_contentBox->addView(m_continueBox);
+
+    m_continueScroll->setContentView(m_continueBox);
+    m_contentBox->addView(m_continueScroll);
 
     // Recently Added Episodes section
     m_recentEpisodesLabel = new brls::Label();
@@ -61,13 +65,17 @@ HomeTab::HomeTab() {
     m_recentEpisodesLabel->setVisibility(brls::Visibility::GONE);  // Hidden until loaded
     m_contentBox->addView(m_recentEpisodesLabel);
 
-    // Horizontal box for Recently Added Episodes (no ScrollingFrame - use focus-based scrolling)
+    // Horizontal scrolling container for Recently Added Episodes
+    m_recentEpisodesScroll = new brls::HScrollingFrame();
+    m_recentEpisodesScroll->setHeight(200);
+    m_recentEpisodesScroll->setVisibility(brls::Visibility::GONE);
+
     m_recentEpisodesBox = new brls::Box();
     m_recentEpisodesBox->setAxis(brls::Axis::ROW);  // Horizontal layout
     m_recentEpisodesBox->setJustifyContent(brls::JustifyContent::FLEX_START);
-    m_recentEpisodesBox->setHeight(200);
-    m_recentEpisodesBox->setVisibility(brls::Visibility::GONE);
-    m_contentBox->addView(m_recentEpisodesBox);
+
+    m_recentEpisodesScroll->setContentView(m_recentEpisodesBox);
+    m_contentBox->addView(m_recentEpisodesScroll);
 
     m_scrollView->setContentView(m_contentBox);
     this->addView(m_scrollView);
@@ -168,15 +176,22 @@ void HomeTab::loadContent() {
             // Show Continue Listening section if we have items
             if (!m_continueItems.empty()) {
                 m_continueLabel->setVisibility(brls::Visibility::VISIBLE);
-                m_continueBox->setVisibility(brls::Visibility::VISIBLE);
+                m_continueScroll->setVisibility(brls::Visibility::VISIBLE);
                 populateHorizontalRow(m_continueBox, m_continueItems);
             }
 
             // Show Recently Added Episodes section if we have items
             if (!m_recentEpisodes.empty()) {
                 m_recentEpisodesLabel->setVisibility(brls::Visibility::VISIBLE);
-                m_recentEpisodesBox->setVisibility(brls::Visibility::VISIBLE);
-                populateHorizontalRow(m_recentEpisodesBox, m_recentEpisodes);
+                m_recentEpisodesScroll->setVisibility(brls::Visibility::VISIBLE);
+
+                // Apply max episodes limit from settings
+                int maxEpisodes = Application::getInstance().getSettings().maxRecentEpisodes;
+                std::vector<MediaItem> limitedEpisodes = m_recentEpisodes;
+                if (maxEpisodes > 0 && limitedEpisodes.size() > static_cast<size_t>(maxEpisodes)) {
+                    limitedEpisodes.resize(maxEpisodes);
+                }
+                populateHorizontalRow(m_recentEpisodesBox, limitedEpisodes);
             }
 
             // Show message if nothing to display
@@ -195,17 +210,17 @@ void HomeTab::populateHorizontalRow(brls::Box* container, const std::vector<Medi
     // Clear existing items
     container->clearViews();
 
-    // Set container width to fit all items (160px per item: 150 width + 10 margin)
-    float totalWidth = items.size() * 160.0f;
+    // Set container width to fit all items (180px per item: 160 width + 20 margin)
+    float totalWidth = items.size() * 180.0f;
     container->setWidth(totalWidth);
 
     // Add cells for each item
     for (size_t i = 0; i < items.size(); i++) {
         auto* cell = new MediaItemCell();
         cell->setItem(items[i]);
-        cell->setWidth(150);
-        cell->setHeight(185);  // Square cover (140) + labels (~45)
-        cell->setMarginRight(10);
+        cell->setWidth(160);
+        cell->setHeight(195);  // Square cover (140) + labels (~55)
+        cell->setMarginRight(20);  // More space between items
 
         // Store the item for click handler
         MediaItem itemCopy = items[i];
