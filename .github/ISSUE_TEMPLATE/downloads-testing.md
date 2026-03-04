@@ -24,6 +24,10 @@ assignees: ''
 - [ ] Concurrent downloads setting works (1-3)
 - [ ] Auto-start downloads setting works
 - [ ] WiFi-only downloads setting works
+- [ ] Sync Progress to Server button works (in Downloads tab)
+- [ ] Refresh Downloads List scans for untracked files
+- [ ] Clear All Downloads removes everything with confirmation
+- [ ] Storage path displays correctly
 
 ## Downloads - Multi-File
 
@@ -36,15 +40,11 @@ assignees: ''
 
 - [ ] App works without network (with downloads)
 - [ ] Downloaded content plays offline
-- [ ] Offline tabs show "(Offline)" suffix (not duplicated)
+- [ ] Offline mode shows separate Audiobooks and Podcasts tabs
 - [ ] Progress saves locally when offline
 - [ ] Progress syncs to server when back online
+- [ ] "Sync Progress Now" button uploads offline progress
 
-## Streaming Cache
+## Known Issue
 
-- [ ] Streamed files cache locally
-- [ ] Cached files play without re-downloading
-- [ ] Max cached files setting works
-- [ ] Max cache size setting works
-- [ ] "Save to Downloads" saves cached streams
-- [ ] Old cache files clean up automatically
+- [ ] Downloads tab exists but is not wired into main navigation tabs

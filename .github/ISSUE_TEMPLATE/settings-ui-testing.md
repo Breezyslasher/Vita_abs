@@ -6,12 +6,22 @@ labels: testing
 assignees: ''
 ---
 
-## Settings - Theme & UI
+## Settings - Account
+
+- [ ] Username displays correctly
+- [ ] Server URL displays correctly (with Local/Remote indicator)
+- [ ] Local URL setting editable via IME
+- [ ] Remote URL setting editable via IME
+- [ ] Use Server selector switches between Local/Remote
+- [ ] Auto-switch when one URL is unavailable
+- [ ] Logout button works with confirmation
+
+## Settings - User Interface
 
 - [ ] Theme selection works (System/Light/Dark)
-- [ ] Clock display toggle works
-- [ ] Animations toggle works
-- [ ] Debug logging toggle works
+- [ ] Show Clock toggle works
+- [ ] Enable Animations toggle works
+- [ ] Debug Logging toggle works
 
 ## Settings - Content Display
 
@@ -19,32 +29,46 @@ assignees: ''
 - [ ] Show Series toggle works
 - [ ] Show Authors toggle works
 - [ ] Show Progress Bars toggle works
-- [ ] Downloaded-Only filter works
+- [ ] Show Only Downloaded filter works
+- [ ] Show Home Tab toggle works (requires restart)
+- [ ] Max Recent Episodes selector works (5/10/15/20/Unlimited)
 
 ## Settings - Playback
 
-- [ ] Seek interval setting changes skip amount
-- [ ] Resume playback toggle works
-- [ ] Auto-play next chapter works (if applicable)
+- [ ] Resume Playback toggle works
+- [ ] Seek Interval setting changes skip amount (5s/10s/15s/30s/60s)
+- [ ] Playback Speed selector works (0.5x - 2.0x)
+- [ ] Podcast Auto-Complete threshold works (Disabled/10s/30s/60s/90%/95%/99%)
+- [ ] Prevent Screen Sleep toggle works
+- [ ] Show Download Progress toggle works
 
 ## Settings - Audio
 
-- [ ] Audio quality selection works
-- [ ] Volume boost toggle works
-- [ ] Volume boost level adjustment works
+- [ ] Audio Quality selection works (Original/High/Medium/Low)
+- [ ] Volume Boost toggle works
+- [ ] Show Chapter List toggle works
 
 ## Settings - Downloads
 
-- [ ] Auto-start downloads setting persists
-- [ ] WiFi-only downloads setting persists
-- [ ] Concurrent downloads setting persists
-- [ ] Delete after finish setting works
+- [ ] Auto-Start Downloads setting persists
+- [ ] Download Over WiFi Only setting persists
+- [ ] Max Concurrent Downloads setting persists (1/2/3)
+- [ ] Delete After Finishing setting works
+- [ ] Sync Progress on Connect toggle works
+- [ ] Sync Progress Now button uploads to server
+- [ ] Refresh Downloads List scans and updates
+- [ ] Clear All Downloads with confirmation dialog
+- [ ] Storage path displays correctly
 
-## Settings - Account
+## Settings - Debug
 
-- [ ] Username displays correctly
-- [ ] Server URL displays correctly
-- [ ] Logout button works
+- [ ] Test Local Playback button works (ux0:data/VitaABS/test.mp3)
+
+## Settings - About
+
+- [ ] Version displays correctly
+- [ ] App description shows
+- [ ] Borealis credit shows
 
 ## Navigation & UI
 

@@ -8,13 +8,16 @@ assignees: ''
 
 ## Quick Smoke Test (10 minutes)
 
-1. - [x] Start app → Login succeeds
-2. - [x] Libraries load with covers
-3. - [x] Select audiobook → Detail view shows
-4. - [ ] Play audiobook → Audio plays
-5. - [x] Seek forward/backward works
-6. - [x] Stop playback → Progress saves
-7. - [x] Download an item → Completes successfully
-8. - [x] Play downloaded item → Works offline
-9. - [x] Change a setting → Persists after restart
-10. - [x] Logout → Returns to login screen
+1. - [ ] Start app → Login succeeds
+2. - [ ] Libraries load with covers
+3. - [ ] Home tab shows Continue Listening / Recent Episodes
+4. - [ ] Select audiobook → Detail view shows
+5. - [ ] Stream audiobook → Audio plays from server
+6. - [ ] Seek forward/backward works
+7. - [ ] Stop playback → Progress saves
+8. - [ ] Download an item → Completes successfully
+9. - [ ] Play downloaded item → Works offline
+10. - [ ] Select podcast → Episode list shows
+11. - [ ] Play podcast episode → Audio streams
+12. - [ ] Change a setting → Persists after restart
+13. - [ ] Logout → Returns to login screen
