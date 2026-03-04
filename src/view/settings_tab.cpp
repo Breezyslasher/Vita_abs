@@ -65,13 +65,82 @@ void SettingsTab::createAccountSection() {
     m_userLabel->setMarginBottom(8);
     m_contentBox->addView(m_userLabel);
 
-    // Server info cell
+    // Current server info
     m_serverLabel = new brls::Label();
-    m_serverLabel->setText("Server: " + (app.getServerUrl().empty() ? "Not connected" : app.getServerUrl()));
+    std::string serverInfo = "Server: ";
+    if (app.getServerUrl().empty()) {
+        serverInfo += "Not connected";
+    } else {
+        serverInfo += app.getServerUrl();
+        serverInfo += app.isUsingLocalUrl() ? " (Local)" : " (Remote)";
+    }
+    m_serverLabel->setText(serverInfo);
     m_serverLabel->setFontSize(18);
     m_serverLabel->setMarginLeft(16);
     m_serverLabel->setMarginBottom(16);
     m_contentBox->addView(m_serverLabel);
+
+    // Local URL setting
+    auto* localUrlCell = new brls::DetailCell();
+    localUrlCell->setText("Local URL");
+    localUrlCell->setDetailText(app.getLocalServerUrl().empty() ? "Not set" : app.getLocalServerUrl());
+    localUrlCell->registerClickAction([localUrlCell](brls::View* view) {
+        Application& app = Application::getInstance();
+        brls::Application::getImeManager()->openForText([localUrlCell](std::string text) {
+            Application::getInstance().setLocalServerUrl(text);
+            Application::getInstance().saveSettings();
+            localUrlCell->setDetailText(text.empty() ? "Not set" : text);
+        }, "Enter Local Server URL", "http://192.168.1.100:13378", 256, app.getLocalServerUrl());
+        return true;
+    });
+    m_contentBox->addView(localUrlCell);
+
+    // Remote URL setting
+    auto* remoteUrlCell = new brls::DetailCell();
+    remoteUrlCell->setText("Remote URL");
+    remoteUrlCell->setDetailText(app.getRemoteServerUrl().empty() ? "Not set" : app.getRemoteServerUrl());
+    remoteUrlCell->registerClickAction([remoteUrlCell](brls::View* view) {
+        Application& app = Application::getInstance();
+        brls::Application::getImeManager()->openForText([remoteUrlCell](std::string text) {
+            Application::getInstance().setRemoteServerUrl(text);
+            Application::getInstance().saveSettings();
+            remoteUrlCell->setDetailText(text.empty() ? "Not set" : text);
+        }, "Enter Remote Server URL", "https://abs.example.com", 256, app.getRemoteServerUrl());
+        return true;
+    });
+    m_contentBox->addView(remoteUrlCell);
+
+    // URL selector (local vs remote)
+    auto* urlSelector = new brls::SelectorCell();
+    urlSelector->init("Use Server",
+        {"Local URL", "Remote URL"},
+        app.isUsingLocalUrl() ? 0 : 1,
+        [this](int index) {
+            Application::getInstance().setUseLocalUrl(index == 0);
+            Application::getInstance().saveSettings();
+            // Update the server label
+            Application& app = Application::getInstance();
+            std::string serverInfo = "Server: ";
+            if (app.getServerUrl().empty()) {
+                serverInfo += "Not connected";
+            } else {
+                serverInfo += app.getServerUrl();
+                serverInfo += app.isUsingLocalUrl() ? " (Local)" : " (Remote)";
+            }
+            if (m_serverLabel) {
+                m_serverLabel->setText(serverInfo);
+            }
+        });
+    m_contentBox->addView(urlSelector);
+
+    // Info label
+    auto* urlInfoLabel = new brls::Label();
+    urlInfoLabel->setText("Set both URLs to auto-switch when one is unavailable");
+    urlInfoLabel->setFontSize(14);
+    urlInfoLabel->setMarginLeft(16);
+    urlInfoLabel->setMarginTop(4);
+    urlInfoLabel->setMarginBottom(16);
+    m_contentBox->addView(urlInfoLabel);
 
     // Logout button
     auto* logoutCell = new brls::DetailCell();
@@ -197,14 +266,6 @@ void SettingsTab::createPlaybackSection() {
     auto* header = new brls::Header();
     header->setTitle("Playback");
     m_contentBox->addView(header);
-
-    // Auto-play next toggle
-    m_autoPlayToggle = new brls::BooleanCell();
-    m_autoPlayToggle->init("Auto-Play Next Chapter", settings.autoPlayNext, [&settings](bool value) {
-        settings.autoPlayNext = value;
-        Application::getInstance().saveSettings();
-    });
-    m_contentBox->addView(m_autoPlayToggle);
 
     // Resume playback toggle
     m_resumeToggle = new brls::BooleanCell();
@@ -492,6 +553,33 @@ void SettingsTab::createDownloadsSection() {
         return true;
     });
     m_contentBox->addView(syncNowCell);
+
+    // Refresh downloads list button
+    auto* refreshDownloadsCell = new brls::DetailCell();
+    refreshDownloadsCell->setText("Refresh Downloads List");
+    refreshDownloadsCell->setDetailText("Scan folder for untracked files");
+    refreshDownloadsCell->registerClickAction([this](brls::View* view) {
+        // Reload state first, then scan for untracked files
+        DownloadsManager::getInstance().loadState();
+        int newFiles = DownloadsManager::getInstance().scanDownloadsFolder();
+        // Also update metadata for items that are missing it
+        int updatedMetadata = DownloadsManager::getInstance().updateMissingMetadata();
+        auto downloads = DownloadsManager::getInstance().getDownloads();
+        if (m_clearDownloadsCell) {
+            m_clearDownloadsCell->setDetailText(std::to_string(downloads.size()) + " items");
+        }
+        std::string message;
+        if (newFiles > 0 || updatedMetadata > 0) {
+            message = "Found " + std::to_string(newFiles) + " new, updated " +
+                      std::to_string(updatedMetadata) + " metadata (" +
+                      std::to_string(downloads.size()) + " total)";
+        } else {
+            message = "Downloads list refreshed (" + std::to_string(downloads.size()) + " items)";
+        }
+        brls::Application::notify(message);
+        return true;
+    });
+    m_contentBox->addView(refreshDownloadsCell);
 
     // Clear all downloads
     m_clearDownloadsCell = new brls::DetailCell();

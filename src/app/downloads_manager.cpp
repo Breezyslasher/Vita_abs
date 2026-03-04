@@ -12,6 +12,7 @@
 #include <sstream>
 #include <ctime>
 #include <cstdlib>
+#include <cstring>
 #include <thread>
 #include <utility>
 
@@ -20,6 +21,9 @@
 #include <psp2/io/stat.h>
 #include <psp2/io/dirent.h>
 #include <psp2/kernel/threadmgr.h>
+#else
+#include <dirent.h>
+#include <sys/stat.h>
 #endif
 
 // FFmpeg for audio concatenation
@@ -504,21 +508,53 @@ void DownloadsManager::pauseDownloads() {
 }
 
 bool DownloadsManager::cancelDownload(const std::string& itemId) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    brls::Logger::info("DownloadsManager: Cancelling download {}", itemId);
 
-    for (auto it = m_downloads.begin(); it != m_downloads.end(); ++it) {
-        if (it->itemId == itemId) {
-            // Delete partial file if exists
-            if (!it->localPath.empty()) {
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        for (auto it = m_downloads.begin(); it != m_downloads.end(); ++it) {
+            if (it->itemId == itemId) {
+                // If currently downloading, set cancellation flag
+                if (it->state == DownloadState::DOWNLOADING) {
+                    m_cancelledItemId = itemId;
+                    m_cancelledEpisodeId = it->episodeId;
+                    brls::Logger::info("DownloadsManager: Set cancellation flag for active download");
+                }
+
+                // Delete partial file if exists
+                if (!it->localPath.empty()) {
 #ifdef __vita__
-                sceIoRemove(it->localPath.c_str());
+                    sceIoRemove(it->localPath.c_str());
 #else
-                std::remove(it->localPath.c_str());
+                    std::remove(it->localPath.c_str());
 #endif
+                }
+
+                // Delete multi-file folder if exists
+                if (it->numFiles > 1) {
+                    std::string folderPath = m_downloadsPath + "/" + it->itemId;
+                    for (const auto& fi : it->files) {
+                        if (!fi.localPath.empty()) {
+#ifdef __vita__
+                            sceIoRemove(fi.localPath.c_str());
+#else
+                            std::remove(fi.localPath.c_str());
+#endif
+                        }
+                    }
+#ifdef __vita__
+                    sceIoRmdir(folderPath.c_str());
+#else
+                    std::remove(folderPath.c_str());
+#endif
+                }
+
+                m_downloads.erase(it);
+                saveStateUnlocked();
+                brls::Logger::info("DownloadsManager: Download cancelled and removed");
+                return true;
             }
-            m_downloads.erase(it);
-            saveState();
-            return true;
         }
     }
     return false;
@@ -776,10 +812,30 @@ bool DownloadsManager::fetchProgressFromServer(const std::string& itemId, const 
     return false;
 }
 
+// Helper to check if the current download should be cancelled
+bool DownloadsManager::isDownloadCancelled(const std::string& itemId, const std::string& episodeId) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_cancelledItemId == itemId) {
+        if (episodeId.empty() || m_cancelledEpisodeId == episodeId) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void DownloadsManager::clearCancelFlag() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_cancelledItemId.clear();
+    m_cancelledEpisodeId.clear();
+}
+
 void DownloadsManager::downloadItem(DownloadItem& item) {
     brls::Logger::info("DownloadsManager: Starting download of {}", item.title);
     brls::Logger::info("DownloadsManager: Item ID: {}, Episode ID: {}, Type: {}",
                        item.itemId, item.episodeId.empty() ? "(none)" : item.episodeId, item.mediaType);
+
+    // Clear any previous cancel flag for this item
+    clearCancelFlag();
 
     AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
     std::string serverUrl = client.getServerUrl();
@@ -835,7 +891,19 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
         HttpClient http;
         http.setDefaultHeader("Authorization", "Bearer " + token);
 
-        for (size_t i = 0; i < item.files.size() && m_downloading; ++i) {
+        // Store item info for cancellation checking
+        std::string currentItemId = item.itemId;
+        std::string currentEpisodeId = item.episodeId;
+        bool wasCancelled = false;
+
+        for (size_t i = 0; i < item.files.size() && m_downloading && !wasCancelled; ++i) {
+            // Check for cancellation at start of each file
+            if (isDownloadCancelled(currentItemId, currentEpisodeId)) {
+                brls::Logger::info("DownloadsManager: Download cancelled, stopping");
+                wasCancelled = true;
+                break;
+            }
+
             auto& fi = item.files[i];
             item.currentFileIndex = static_cast<int>(i);
 
@@ -859,6 +927,11 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
 
             bool success = http.downloadFile(url,
                 [&](const char* data, size_t size) {
+                    // Check for cancellation during download
+                    if (isDownloadCancelled(currentItemId, currentEpisodeId)) {
+                        wasCancelled = true;
+                        return false;  // Stop download
+                    }
 #ifdef __vita__
                     sceIoWrite(fd, data, size);
 #else
@@ -869,7 +942,7 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
                         m_progressCallback(static_cast<float>(item.downloadedBytes),
                                            static_cast<float>(item.totalBytes));
                     }
-                    return m_downloading;
+                    return m_downloading && !wasCancelled;
                 },
                 [&](int64_t total) {
                     brls::Logger::debug("DownloadsManager: File size: {} bytes", total);
@@ -882,7 +955,13 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
             file.close();
 #endif
 
-            fi.downloaded = success;
+            fi.downloaded = success && !wasCancelled;
+        }
+
+        // If cancelled, clean up and return
+        if (wasCancelled) {
+            brls::Logger::info("DownloadsManager: Multi-file download was cancelled");
+            return;
         }
 
         // Check if all files downloaded
@@ -1033,8 +1112,19 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
     // Set auth header
     http.setDefaultHeader("Authorization", "Bearer " + token);
 
+    // Store item info for cancellation checking
+    std::string currentItemId = item.itemId;
+    std::string currentEpisodeId = item.episodeId;
+    bool wasCancelled = false;
+
     bool success = http.downloadFile(url,
         [&](const char* data, size_t size) {
+            // Check for cancellation during download
+            if (isDownloadCancelled(currentItemId, currentEpisodeId)) {
+                wasCancelled = true;
+                return false;  // Stop download
+            }
+
             // Write chunk to file
 #ifdef __vita__
             sceIoWrite(fd, data, size);
@@ -1049,13 +1139,26 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
                                    static_cast<float>(item.totalBytes));
             }
 
-            return m_downloading; // Return false to cancel
+            return m_downloading && !wasCancelled;
         },
         [&](int64_t total) {
             item.totalBytes = total;
             brls::Logger::debug("DownloadsManager: Total size: {} bytes", total);
         }
     );
+
+    // Check if cancelled
+    if (wasCancelled) {
+        brls::Logger::info("DownloadsManager: Single file download was cancelled");
+#ifdef __vita__
+        sceIoClose(fd);
+        sceIoRemove(item.localPath.c_str());
+#else
+        file.close();
+        std::remove(item.localPath.c_str());
+#endif
+        return;
+    }
 
 #ifdef __vita__
     sceIoClose(fd);
@@ -1237,6 +1340,12 @@ void DownloadsManager::loadState() {
 
     brls::Logger::info("DownloadsManager: Loading saved state...");
 
+    // Clear existing downloads before loading to prevent duplicates
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_downloads.clear();
+    }
+
     // Helper to extract string value from JSON
     auto extractValue = [](const std::string& json, const std::string& key) -> std::string {
         std::string searchKey = "\"" + key + "\":";
@@ -1278,17 +1387,28 @@ void DownloadsManager::loadState() {
 
     // Parse each download item object
     size_t pos = arrStart;
+    int parsedCount = 0;
+    int skippedCount = 0;
     while (true) {
         size_t objStart = content.find('{', pos);
-        if (objStart == std::string::npos) break;
+        if (objStart == std::string::npos) {
+            brls::Logger::debug("DownloadsManager: No more objects found after position {}", pos);
+            break;
+        }
 
         // Skip the files array objects - look for itemId to identify download items
         size_t itemIdPos = content.find("\"itemId\"", objStart);
-        if (itemIdPos == std::string::npos) break;
+        if (itemIdPos == std::string::npos) {
+            brls::Logger::debug("DownloadsManager: No more itemId found after position {}", objStart);
+            break;
+        }
 
         // Check if this itemId is within a reasonable distance (not a nested object)
         if (itemIdPos - objStart > 50) {
+            brls::Logger::debug("DownloadsManager: Skipping nested object at {} (itemId at {}, distance: {})",
+                               objStart, itemIdPos, itemIdPos - objStart);
             pos = objStart + 1;
+            skippedCount++;
             continue;
         }
 
@@ -1438,15 +1558,556 @@ void DownloadsManager::loadState() {
         }
 
         if (!item.itemId.empty()) {
-            m_downloads.push_back(item);
-            brls::Logger::debug("DownloadsManager: Loaded download: {} (state: {})",
-                               item.title, static_cast<int>(item.state));
+            // Check for duplicates - skip if already have this itemId/episodeId combo
+            bool isDuplicate = false;
+            for (const auto& existing : m_downloads) {
+                if (existing.itemId == item.itemId && existing.episodeId == item.episodeId) {
+                    isDuplicate = true;
+                    brls::Logger::warning("DownloadsManager: Skipping duplicate item: {} ({})",
+                                         item.title, item.itemId);
+                    break;
+                }
+            }
+            if (!isDuplicate) {
+                m_downloads.push_back(item);
+                parsedCount++;
+                brls::Logger::debug("DownloadsManager: Loaded download: {} (itemId: {}, state: {})",
+                                   item.title, item.itemId, static_cast<int>(item.state));
+            }
+        } else {
+            brls::Logger::warning("DownloadsManager: Skipping item with empty itemId (title: {})", item.title);
         }
 
         pos = objEnd;
     }
 
-    brls::Logger::info("DownloadsManager: Loaded {} downloads from state", m_downloads.size());
+    brls::Logger::info("DownloadsManager: Loaded {} downloads from state (parsed: {}, skipped nested: {})",
+                       m_downloads.size(), parsedCount, skippedCount);
+}
+
+int DownloadsManager::scanDownloadsFolder() {
+    brls::Logger::info("DownloadsManager: Scanning downloads folder for untracked files...");
+
+    if (m_downloadsPath.empty()) {
+        init();
+    }
+
+    int newFilesFound = 0;
+    std::vector<std::string> audioExtensions = {".m4b", ".mp3", ".m4a", ".ogg", ".flac", ".opus"};
+
+    // Helper to check if an item is already tracked (by itemId OR localPath)
+    auto isItemTracked = [this](const std::string& itemId, const std::string& filePath) -> bool {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        for (const auto& item : m_downloads) {
+            // Check by item ID first (primary key)
+            if (!itemId.empty() && item.itemId == itemId) {
+                brls::Logger::debug("DownloadsManager: Item {} already tracked by ID", itemId);
+                return true;
+            }
+            // Also check by path as fallback
+            if (!filePath.empty() && item.localPath == filePath) {
+                brls::Logger::debug("DownloadsManager: Item already tracked by path: {}", filePath);
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // Helper to check if local cover exists
+    auto getLocalCoverPath = [this](const std::string& itemId) -> std::string {
+        std::string coverPath = m_downloadsPath + "/" + itemId + "_cover.jpg";
+#ifdef __vita__
+        SceIoStat stat;
+        if (sceIoGetstat(coverPath.c_str(), &stat) >= 0) {
+            return coverPath;
+        }
+#else
+        struct stat st;
+        if (stat(coverPath.c_str(), &st) == 0) {
+            return coverPath;
+        }
+#endif
+        return "";
+    };
+
+    // Helper to extract item ID from filename (filename without extension)
+    auto extractItemId = [](const std::string& filename) -> std::string {
+        // Remove extension
+        size_t dotPos = filename.rfind('.');
+        std::string nameWithoutExt = (dotPos != std::string::npos) ? filename.substr(0, dotPos) : filename;
+        // Skip cover images
+        if (nameWithoutExt.length() > 6 && nameWithoutExt.substr(nameWithoutExt.length() - 6) == "_cover") {
+            return "";
+        }
+        // Skip metadata files
+        if (nameWithoutExt.length() > 9 && nameWithoutExt.substr(nameWithoutExt.length() - 9) == "_metadata") {
+            return "";
+        }
+        return nameWithoutExt;
+    };
+
+    // Helper to load local metadata from file
+    auto loadLocalMetadata = [this](const std::string& itemId, DownloadItem& item) -> bool {
+        std::string metadataPath = m_downloadsPath + "/" + itemId + "_metadata.json";
+        std::string content;
+
+#ifdef __vita__
+        SceUID fd = sceIoOpen(metadataPath.c_str(), SCE_O_RDONLY, 0);
+        if (fd < 0) return false;
+
+        char buffer[4096];
+        int read;
+        while ((read = sceIoRead(fd, buffer, sizeof(buffer))) > 0) {
+            content.append(buffer, read);
+        }
+        sceIoClose(fd);
+#else
+        std::ifstream file(metadataPath);
+        if (!file.is_open()) return false;
+
+        std::stringstream ss;
+        ss << file.rdbuf();
+        content = ss.str();
+        file.close();
+#endif
+
+        if (content.empty()) return false;
+
+        brls::Logger::info("DownloadsManager: Loading local metadata for {}", itemId);
+
+        // Helper to extract string value from JSON
+        auto extractValue = [](const std::string& json, const std::string& key) -> std::string {
+            std::string searchKey = "\"" + key + "\":";
+            size_t keyPos = json.find(searchKey);
+            if (keyPos == std::string::npos) return "";
+
+            size_t valueStart = json.find_first_not_of(" \t\n\r", keyPos + searchKey.length());
+            if (valueStart == std::string::npos) return "";
+
+            if (json[valueStart] == '"') {
+                size_t valueEnd = valueStart + 1;
+                while (valueEnd < json.length()) {
+                    if (json[valueEnd] == '"' && json[valueEnd - 1] != '\\') break;
+                    valueEnd++;
+                }
+                return json.substr(valueStart + 1, valueEnd - valueStart - 1);
+            } else {
+                size_t valueEnd = json.find_first_of(",}]", valueStart);
+                if (valueEnd == std::string::npos) return "";
+                std::string value = json.substr(valueStart, valueEnd - valueStart);
+                while (!value.empty() && (value.back() == ' ' || value.back() == '\n' || value.back() == '\r')) {
+                    value.pop_back();
+                }
+                return value;
+            }
+        };
+
+        item.title = extractValue(content, "title");
+        item.authorName = extractValue(content, "authorName");
+        item.parentTitle = extractValue(content, "parentTitle");
+        item.mediaType = extractValue(content, "mediaType");
+        item.seriesName = extractValue(content, "seriesName");
+        item.description = extractValue(content, "description");
+
+        std::string durationStr = extractValue(content, "duration");
+        if (!durationStr.empty()) {
+            item.duration = std::stof(durationStr);
+        }
+
+        std::string numChaptersStr = extractValue(content, "numChapters");
+        if (!numChaptersStr.empty()) {
+            item.numChapters = std::stoi(numChaptersStr);
+        }
+
+        return !item.title.empty();
+    };
+
+    // Helper to save local metadata to file
+    auto saveLocalMetadata = [this](const std::string& itemId, const DownloadItem& item) {
+        std::string metadataPath = m_downloadsPath + "/" + itemId + "_metadata.json";
+
+        std::stringstream ss;
+        ss << "{\n";
+        ss << "  \"title\": \"" << item.title << "\",\n";
+        ss << "  \"authorName\": \"" << item.authorName << "\",\n";
+        ss << "  \"parentTitle\": \"" << item.parentTitle << "\",\n";
+        ss << "  \"mediaType\": \"" << item.mediaType << "\",\n";
+        ss << "  \"seriesName\": \"" << item.seriesName << "\",\n";
+        ss << "  \"description\": \"\",\n";
+        ss << "  \"duration\": " << item.duration << ",\n";
+        ss << "  \"numChapters\": " << item.numChapters << "\n";
+        ss << "}\n";
+
+#ifdef __vita__
+        SceUID fd = sceIoOpen(metadataPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+        if (fd >= 0) {
+            std::string content = ss.str();
+            sceIoWrite(fd, content.c_str(), content.length());
+            sceIoClose(fd);
+            brls::Logger::info("DownloadsManager: Saved local metadata for {}", itemId);
+        }
+#else
+        std::ofstream file(metadataPath);
+        if (file.is_open()) {
+            file << ss.str();
+            file.close();
+            brls::Logger::info("DownloadsManager: Saved local metadata for {}", itemId);
+        }
+#endif
+    };
+
+    // Collect new items first, then add them (to avoid holding lock during network calls)
+    std::vector<DownloadItem> newItems;
+
+#ifdef __vita__
+    SceUID dir = sceIoDopen(m_downloadsPath.c_str());
+    if (dir < 0) {
+        brls::Logger::error("DownloadsManager: Failed to open downloads directory: {}", m_downloadsPath);
+        return 0;
+    }
+
+    SceIoDirent entry;
+    memset(&entry, 0, sizeof(entry));
+    while (sceIoDread(dir, &entry) > 0) {
+        std::string filename = entry.d_name;
+
+        // Skip directories and special files
+        if (SCE_S_ISDIR(entry.d_stat.st_mode)) continue;
+        if (filename == "." || filename == "..") continue;
+        if (filename == "state.json") continue;
+
+        // Check if it's an audio file
+        bool isAudioFile = false;
+        std::string fileExt;
+        for (const auto& ext : audioExtensions) {
+            if (filename.length() > ext.length() &&
+                filename.substr(filename.length() - ext.length()) == ext) {
+                isAudioFile = true;
+                fileExt = ext;
+                break;
+            }
+        }
+
+        if (!isAudioFile) continue;
+
+        std::string fullPath = m_downloadsPath + "/" + filename;
+        std::string itemId = extractItemId(filename);
+
+        if (itemId.empty()) {
+            brls::Logger::debug("DownloadsManager: Skipping file with empty itemId: {}", filename);
+            continue;
+        }
+
+        // Check if already tracked
+        if (isItemTracked(itemId, fullPath)) {
+            brls::Logger::debug("DownloadsManager: Already tracked: {}", filename);
+            continue;
+        }
+
+        // Get file size
+        int64_t fileSize = entry.d_stat.st_size;
+
+        brls::Logger::info("DownloadsManager: Found untracked file: {} (itemId: {}, size: {})",
+                          filename, itemId, fileSize);
+
+        // Create download entry
+        DownloadItem item;
+        item.itemId = itemId;
+        item.localPath = fullPath;
+        item.totalBytes = fileSize;
+        item.downloadedBytes = fileSize;
+        item.state = DownloadState::COMPLETED;
+        item.numFiles = 1;
+        item.mediaType = "book";
+
+        // First check for local cover
+        std::string localCover = getLocalCoverPath(itemId);
+        if (!localCover.empty()) {
+            item.localCoverPath = localCover;
+            brls::Logger::info("DownloadsManager: Found local cover for {}", itemId);
+        }
+
+        // First try to load local metadata
+        bool hasLocalMetadata = loadLocalMetadata(itemId, item);
+        if (hasLocalMetadata) {
+            brls::Logger::info("DownloadsManager: Using local metadata for {}", itemId);
+        } else {
+            // Try to fetch metadata from server if connected
+            AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+            if (client.isAuthenticated()) {
+                MediaItem mediaInfo;
+                if (client.fetchItem(itemId, mediaInfo)) {
+                    brls::Logger::info("DownloadsManager: Fetched metadata for {} from server", itemId);
+                    item.title = mediaInfo.title;
+                    item.authorName = mediaInfo.authorName;
+                    item.parentTitle = mediaInfo.authorName;
+                    item.duration = mediaInfo.duration;
+                    item.mediaType = mediaInfo.type;
+
+                    // Download cover if we don't have a local one
+                    if (item.localCoverPath.empty()) {
+                        std::string coverUrl = client.getCoverUrl(itemId);
+                        if (!coverUrl.empty()) {
+                            item.coverUrl = coverUrl;
+                            item.localCoverPath = downloadCoverImage(itemId, coverUrl);
+                        }
+                    }
+
+                    // Store chapters
+                    for (const auto& ch : mediaInfo.chapters) {
+                        DownloadChapter dch;
+                        dch.title = ch.title;
+                        dch.start = ch.start;
+                        dch.end = ch.end;
+                        item.chapters.push_back(dch);
+                    }
+                    item.numChapters = static_cast<int>(item.chapters.size());
+
+                    // Save metadata locally for future offline use
+                    saveLocalMetadata(itemId, item);
+                } else {
+                    brls::Logger::warning("DownloadsManager: Could not fetch metadata for {} from server", itemId);
+                    item.title = itemId;  // Use item ID as fallback title
+                }
+            } else {
+                brls::Logger::info("DownloadsManager: Not connected to server, using itemId as title");
+                item.title = itemId;  // Use item ID as fallback title
+            }
+        }
+
+        newItems.push_back(item);
+        brls::Logger::info("DownloadsManager: Prepared to register: {} ({})", item.title, itemId);
+    }
+
+    sceIoDclose(dir);
+#else
+    // Desktop implementation using dirent
+    DIR* dir = opendir(m_downloadsPath.c_str());
+    if (!dir) {
+        brls::Logger::error("DownloadsManager: Failed to open downloads directory: {}", m_downloadsPath);
+        return 0;
+    }
+
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != nullptr) {
+        std::string filename = entry->d_name;
+
+        // Skip directories and special files
+        if (entry->d_type == DT_DIR) continue;
+        if (filename == "." || filename == "..") continue;
+        if (filename == "state.json") continue;
+
+        // Check if it's an audio file
+        bool isAudioFile = false;
+        std::string fileExt;
+        for (const auto& ext : audioExtensions) {
+            if (filename.length() > ext.length() &&
+                filename.substr(filename.length() - ext.length()) == ext) {
+                isAudioFile = true;
+                fileExt = ext;
+                break;
+            }
+        }
+
+        if (!isAudioFile) continue;
+
+        std::string fullPath = m_downloadsPath + "/" + filename;
+        std::string itemId = extractItemId(filename);
+
+        if (itemId.empty()) {
+            brls::Logger::debug("DownloadsManager: Skipping file with empty itemId: {}", filename);
+            continue;
+        }
+
+        // Check if already tracked
+        if (isItemTracked(itemId, fullPath)) {
+            brls::Logger::debug("DownloadsManager: Already tracked: {}", filename);
+            continue;
+        }
+
+        // Get file size
+        struct stat st;
+        int64_t fileSize = 0;
+        if (stat(fullPath.c_str(), &st) == 0) {
+            fileSize = st.st_size;
+        }
+
+        brls::Logger::info("DownloadsManager: Found untracked file: {} (itemId: {}, size: {})",
+                          filename, itemId, fileSize);
+
+        // Create download entry
+        DownloadItem item;
+        item.itemId = itemId;
+        item.localPath = fullPath;
+        item.totalBytes = fileSize;
+        item.downloadedBytes = fileSize;
+        item.state = DownloadState::COMPLETED;
+        item.numFiles = 1;
+        item.mediaType = "book";
+
+        // First check for local cover
+        std::string localCover = getLocalCoverPath(itemId);
+        if (!localCover.empty()) {
+            item.localCoverPath = localCover;
+            brls::Logger::info("DownloadsManager: Found local cover for {}", itemId);
+        }
+
+        // First try to load local metadata
+        bool hasLocalMetadata = loadLocalMetadata(itemId, item);
+        if (hasLocalMetadata) {
+            brls::Logger::info("DownloadsManager: Using local metadata for {}", itemId);
+        } else {
+            // Try to fetch metadata from server if connected
+            AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+            if (client.isAuthenticated()) {
+                MediaItem mediaInfo;
+                if (client.fetchItem(itemId, mediaInfo)) {
+                    brls::Logger::info("DownloadsManager: Fetched metadata for {} from server", itemId);
+                    item.title = mediaInfo.title;
+                    item.authorName = mediaInfo.authorName;
+                    item.parentTitle = mediaInfo.authorName;
+                    item.duration = mediaInfo.duration;
+                    item.mediaType = mediaInfo.type;
+
+                    // Download cover if we don't have a local one
+                    if (item.localCoverPath.empty()) {
+                        std::string coverUrl = client.getCoverUrl(itemId);
+                        if (!coverUrl.empty()) {
+                            item.coverUrl = coverUrl;
+                            item.localCoverPath = downloadCoverImage(itemId, coverUrl);
+                        }
+                    }
+
+                    // Store chapters
+                    for (const auto& ch : mediaInfo.chapters) {
+                        DownloadChapter dch;
+                        dch.title = ch.title;
+                        dch.start = ch.start;
+                        dch.end = ch.end;
+                        item.chapters.push_back(dch);
+                    }
+                    item.numChapters = static_cast<int>(item.chapters.size());
+
+                    // Save metadata locally for future offline use
+                    saveLocalMetadata(itemId, item);
+                } else {
+                    brls::Logger::warning("DownloadsManager: Could not fetch metadata for {} from server", itemId);
+                    item.title = itemId;  // Use item ID as fallback title
+                }
+            } else {
+                brls::Logger::info("DownloadsManager: Not connected to server, using itemId as title");
+                item.title = itemId;  // Use item ID as fallback title
+            }
+        }
+
+        newItems.push_back(item);
+        brls::Logger::info("DownloadsManager: Prepared to register: {} ({})", item.title, itemId);
+    }
+
+    closedir(dir);
+#endif
+
+    // Now add all new items to the downloads list
+    if (!newItems.empty()) {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            for (const auto& item : newItems) {
+                m_downloads.push_back(item);
+                newFilesFound++;
+                brls::Logger::info("DownloadsManager: Added to library: {} ({})", item.title, item.itemId);
+            }
+        }
+
+        // Save state outside the lock
+        saveState();
+        brls::Logger::info("DownloadsManager: Saved state with {} new files (total: {})",
+                          newFilesFound, m_downloads.size());
+    } else {
+        brls::Logger::info("DownloadsManager: No untracked files found in {}", m_downloadsPath);
+    }
+
+    return newFilesFound;
+}
+
+int DownloadsManager::updateMissingMetadata() {
+    brls::Logger::info("DownloadsManager: Checking for items with missing metadata...");
+
+    AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+    if (!client.isAuthenticated()) {
+        brls::Logger::info("DownloadsManager: Not connected to server, cannot update metadata");
+        return 0;
+    }
+
+    int updatedCount = 0;
+    std::vector<std::string> itemsToUpdate;
+
+    // Find items that need metadata update (title == itemId)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        for (const auto& item : m_downloads) {
+            // If title equals itemId, it means metadata wasn't fetched
+            if (item.title == item.itemId || item.title.empty()) {
+                itemsToUpdate.push_back(item.itemId);
+                brls::Logger::info("DownloadsManager: Item {} needs metadata update", item.itemId);
+            }
+        }
+    }
+
+    if (itemsToUpdate.empty()) {
+        brls::Logger::info("DownloadsManager: All items have metadata");
+        return 0;
+    }
+
+    // Update each item
+    for (const auto& itemId : itemsToUpdate) {
+        MediaItem mediaInfo;
+        if (client.fetchItem(itemId, mediaInfo)) {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            for (auto& item : m_downloads) {
+                if (item.itemId == itemId) {
+                    brls::Logger::info("DownloadsManager: Updating metadata for {} -> {}",
+                                       itemId, mediaInfo.title);
+                    item.title = mediaInfo.title;
+                    item.authorName = mediaInfo.authorName;
+                    item.parentTitle = mediaInfo.authorName;
+                    item.duration = mediaInfo.duration;
+                    item.mediaType = mediaInfo.type;
+
+                    // Download cover if needed
+                    if (item.localCoverPath.empty()) {
+                        std::string coverUrl = client.getCoverUrl(itemId);
+                        if (!coverUrl.empty()) {
+                            item.coverUrl = coverUrl;
+                            item.localCoverPath = downloadCoverImage(itemId, coverUrl);
+                        }
+                    }
+
+                    // Store chapters
+                    item.chapters.clear();
+                    for (const auto& ch : mediaInfo.chapters) {
+                        DownloadChapter dch;
+                        dch.title = ch.title;
+                        dch.start = ch.start;
+                        dch.end = ch.end;
+                        item.chapters.push_back(dch);
+                    }
+                    item.numChapters = static_cast<int>(item.chapters.size());
+
+                    updatedCount++;
+                    break;
+                }
+            }
+        } else {
+            brls::Logger::warning("DownloadsManager: Could not fetch metadata for {}", itemId);
+        }
+    }
+
+    if (updatedCount > 0) {
+        saveState();
+        brls::Logger::info("DownloadsManager: Updated metadata for {} items", updatedCount);
+    }
+
+    return updatedCount;
 }
 
 void DownloadsManager::setProgressCallback(DownloadProgressCallback callback) {
