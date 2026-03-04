@@ -108,6 +108,11 @@ add_executable(${PROJECT_NAME} ${APP_SOURCES})
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${APP_INCLUDES})
 
+# Wrap pthread_create to enforce minimum 512KB stack for mpv/FFmpeg threads
+# Vita's default pthread stack is 32KB which causes stack overflow crashes
+# during HTTP streaming (demuxer, decoder, and network I/O threads)
+target_link_options(${PROJECT_NAME} PRIVATE "-Wl,--wrap=pthread_create")
+
 # Link libraries - borealis + app platform libs from toolchain
 # Use linker groups to handle circular dependencies between mpv/FFmpeg
 target_link_libraries(${PROJECT_NAME}
