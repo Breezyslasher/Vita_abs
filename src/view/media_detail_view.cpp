@@ -71,7 +71,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         selectHintContainer->setJustifyContent(brls::JustifyContent::CENTER);
         selectHintContainer->setMarginBottom(4);
         auto* selectHint = new brls::Image();
-        selectHint->setSize(brls::Size(22, 22));
+        selectHint->setSize(brls::Size(32, 32));
         selectHint->setScalingType(brls::ImageScalingType::FIT);
         selectHint->setImageFromFile("app0:resources/images/select_button.png");
         selectHintContainer->addView(selectHint);
@@ -129,7 +129,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         selectHintContainer->setJustifyContent(brls::JustifyContent::CENTER);
         selectHintContainer->setMarginBottom(4);
         auto* selectHint = new brls::Image();
-        selectHint->setSize(brls::Size(22, 22));
+        selectHint->setSize(brls::Size(32, 32));
         selectHint->setScalingType(brls::ImageScalingType::FIT);
         selectHint->setImageFromFile("app0:resources/images/select_button.png");
         selectHintContainer->addView(selectHint);
