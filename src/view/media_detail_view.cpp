@@ -455,33 +455,10 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
 }
 
 brls::HScrollingFrame* MediaDetailView::createMediaRow(const std::string& title, brls::Box** contentOut) {
-    auto* label = new brls::Label();
-    label->setText(title);
-    label->setFontSize(20);
-    label->setMarginBottom(10);
-    label->setMarginTop(15);
-    if (m_musicCategoriesBox) {
-        m_musicCategoriesBox->addView(label);
-    }
-
-    auto* scrollFrame = new brls::HScrollingFrame();
-    scrollFrame->setHeight(150);
-    scrollFrame->setMarginBottom(10);
-
-    auto* content = new brls::Box();
-    content->setAxis(brls::Axis::ROW);
-    content->setJustifyContent(brls::JustifyContent::FLEX_START);
-
-    scrollFrame->setContentView(content);
-    if (m_musicCategoriesBox) {
-        m_musicCategoriesBox->addView(scrollFrame);
-    }
-
-    if (contentOut) {
-        *contentOut = content;
-    }
-
-    return scrollFrame;
+    // Unused - kept for interface compatibility
+    (void)title;
+    if (contentOut) *contentOut = nullptr;
+    return nullptr;
 }
 
 brls::View* MediaDetailView::create() {
@@ -997,7 +974,7 @@ void MediaDetailView::applyFilters() {
 
         dlBtn->registerClickAction([this, child, epItemId, epId, isEpDownloaded](brls::View*) {
             if (isEpDownloaded) {
-                DownloadsManager::getInstance().deleteDownload(epItemId, epId);
+                DownloadsManager::getInstance().deleteDownloadByEpisodeId(epItemId, epId);
                 brls::Application::notify("Deleted download");
                 applyFilters();
             } else {
