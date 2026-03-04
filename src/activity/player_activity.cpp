@@ -6,7 +6,6 @@
 #include "app/audiobookshelf_client.hpp"
 #include "app/application.hpp"
 #include "app/downloads_manager.hpp"
-#include "app/temp_file_manager.hpp"
 #include "player/mpv_player.hpp"
 #include "utils/image_loader.hpp"
 #include "view/video_view.hpp"
@@ -263,15 +262,7 @@ void PlayerActivity::willDisappear(bool resetState) {
 
     m_isPlaying = false;
 
-    // Update last access time for cached temp file (don't delete - we want to cache)
-    // Only touch temp files if not using downloads (downloads persist permanently)
-    if (!m_tempFilePath.empty()) {
-        AppSettings& settings = Application::getInstance().getSettings();
-        if (!settings.saveToDownloads) {
-            TempFileManager::getInstance().touchTempFile(m_itemId, m_episodeId);
-        }
-        m_tempFilePath.clear();
-    }
+    m_tempFilePath.clear();
 }
 
 void PlayerActivity::loadMedia() {

@@ -21,7 +21,6 @@ private:
     void createPlaybackSection();
     void createAudioSection();
     void createTranscodeSection();
-    void createStreamingSection();
     void createDownloadsSection();
     void createAboutSection();
     void createDebugSection();

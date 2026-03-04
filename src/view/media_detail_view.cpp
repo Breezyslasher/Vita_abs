@@ -8,7 +8,6 @@
 #include "view/progress_dialog.hpp"
 #include "app/application.hpp"
 #include "app/downloads_manager.hpp"
-#include "app/temp_file_manager.hpp"
 #include "utils/image_loader.hpp"
 #include "utils/http_client.hpp"
 #include "utils/audio_utils.hpp"
@@ -91,8 +90,8 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         AppSettings& settings = Application::getInstance().getSettings();
         bool isDownloaded = DownloadsManager::getInstance().isDownloaded(m_item.id);
 
-        if (!settings.saveToDownloads && !isDownloaded) {
-            // Show Download button only if not already downloaded and not auto-saving
+        if (!isDownloaded) {
+            // Show Download button if not already downloaded
             m_downloadButton = new brls::Button();
             m_downloadButton->setText("Download");
             m_downloadButton->setWidth(115);
@@ -749,48 +748,14 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
     brls::Logger::info("startDownloadAndPlay: itemId={}, episodeId={}, startTime={}, downloadOnly={}",
                        itemId, episodeId, requestedStartTime, downloadOnly);
 
-    // Get settings
-    AppSettings& settings = Application::getInstance().getSettings();
-    // If downloadOnly mode, always save to downloads folder
-    bool useDownloads = downloadOnly ? true : settings.saveToDownloads;
-
-    // Initialize managers
-    TempFileManager& tempMgr = TempFileManager::getInstance();
+    // Initialize downloads manager
     DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
-    tempMgr.init();
     downloadsMgr.init();
 
-    // Check if we have a cached version - ALWAYS check downloads first, then temp
-    std::string cachedPath;
-    bool isFromDownloads = false;
-
-    // First check downloads folder (regardless of saveToDownloads setting)
-    if (downloadsMgr.isDownloaded(itemId, episodeId)) {
-        cachedPath = downloadsMgr.getPlaybackPath(itemId);
-        isFromDownloads = true;
+    // Check if item is downloaded - if so, play from local file
+    if (!downloadOnly && downloadsMgr.isDownloaded(itemId, episodeId)) {
+        std::string cachedPath = downloadsMgr.getPlaybackPath(itemId);
         brls::Logger::info("Found in downloads: {}", cachedPath);
-    }
-
-    // If not in downloads, check temp cache
-    if (cachedPath.empty()) {
-        cachedPath = tempMgr.getCachedFilePath(itemId, episodeId);
-        if (!cachedPath.empty()) {
-            // If save to downloads is enabled and we're playing (not download only),
-            // delete the temp file and re-download to downloads folder
-            if (useDownloads && !downloadOnly) {
-                brls::Logger::info("Deleting temp file to re-download to downloads folder: {}", cachedPath);
-                tempMgr.deleteTempFile(itemId, episodeId);
-                cachedPath.clear();
-            } else {
-                tempMgr.touchTempFile(itemId, episodeId);
-                brls::Logger::info("Found in temp cache: {}", cachedPath);
-            }
-        }
-    }
-
-    // If cached, play immediately (fetch progress from server first if online)
-    if (!cachedPath.empty()) {
-        brls::Logger::info("Using cached file: {}", cachedPath);
 
         // Fetch latest progress from server before playing
         float startTime = requestedStartTime;
@@ -805,8 +770,8 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                 }
             }
 
-            // Also check local progress if from downloads
-            if (isFromDownloads && startTime <= 0) {
+            // Also check local progress
+            if (startTime <= 0) {
                 DownloadItem* download = downloadsMgr.getDownload(itemId);
                 if (download && download->currentTime > 0) {
                     startTime = download->currentTime;
@@ -819,7 +784,15 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
         return;
     }
 
-    // Need to download - show progress dialog
+    // If not download-only, stream directly from URL (no temp file caching)
+    if (!downloadOnly) {
+        brls::Logger::info("Streaming directly from server (no cache)");
+        // Push the player activity - it will handle URL streaming via playback session
+        Application::getInstance().pushPlayerActivity(itemId, episodeId, requestedStartTime);
+        return;
+    }
+
+    // Download-only mode: download to downloads folder
     auto* progressDialog = ProgressDialog::showDownloading(m_item.title);
 
     // Store necessary data for the async operation
@@ -841,7 +814,7 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
     }
 
     // Run download in background
-    asyncRun([this, progressDialog, itemId, episodeId, title, authorName, itemType, duration, useDownloads, requestedStartTime, coverUrl, description, downloadChapters, downloadOnly]() {
+    asyncRun([this, progressDialog, itemId, episodeId, title, authorName, itemType, duration, coverUrl, description, downloadChapters]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
         // Start playback session
@@ -876,33 +849,20 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
         }
 
         // For multi-file audiobooks, use mp4 container only for m4a sources
-        // For mp3/ogg/flac sources, keep the same format (Vita FFmpeg lacks mp4 muxer)
         std::string finalExt = ext;
         if (isMultiFile && ext == ".m4a") {
-            finalExt = ".m4b";  // Only use m4b for m4a sources
+            finalExt = ".m4b";
         }
 
-        // Determine destination path
-        TempFileManager& tempMgr = TempFileManager::getInstance();
+        // Determine destination path (always downloads folder)
         DownloadsManager& downloadsMgr = DownloadsManager::getInstance();
         std::string destPath;
-
-        if (useDownloads) {
-            std::string filename = itemId;
-            if (!episodeId.empty()) {
-                filename += "_" + episodeId;
-            }
-            filename += finalExt;
-            destPath = downloadsMgr.getDownloadsPath() + "/" + filename;
-        } else {
-            tempMgr.cleanupTempFiles();  // Clean up before downloading
-            destPath = tempMgr.getTempFilePath(itemId, episodeId, finalExt);
+        std::string filename = itemId;
+        if (!episodeId.empty()) {
+            filename += "_" + episodeId;
         }
-
-        // Use requested start time if specified, otherwise use session's current time
-        float startTime = (requestedStartTime >= 0) ? requestedStartTime : session.currentTime;
-        brls::Logger::info("Using startTime={}s (requested={}, session={}s)",
-                          startTime, requestedStartTime, session.currentTime);
+        filename += finalExt;
+        destPath = downloadsMgr.getDownloadsPath() + "/" + filename;
 
 #ifdef __vita__
         HttpClient httpClient;
@@ -915,428 +875,139 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
             int numTracks = static_cast<int>(session.audioTracks.size());
             std::vector<std::string> trackFiles;
 
-            // Check if combined file already exists on disk (from previous incomplete registration)
-            std::string combinedPath;
-            if (useDownloads) {
-                combinedPath = downloadsMgr.getDownloadsPath() + "/" + itemId + finalExt;
-            } else {
-                combinedPath = tempMgr.getTempFilePath(itemId, episodeId, finalExt);
-            }
+            // Check if combined file already exists on disk
+            std::string combinedPath = downloadsMgr.getDownloadsPath() + "/" + itemId + finalExt;
 
             SceIoStat existingStat;
             if (sceIoGetstat(combinedPath.c_str(), &existingStat) >= 0 && existingStat.st_size > 0) {
                 brls::Logger::info("Found existing combined file: {} ({} bytes)", combinedPath, existingStat.st_size);
 
-                // Register it if not already registered
-                if (useDownloads) {
-                    downloadsMgr.registerCompletedDownload(itemId, episodeId, title, authorName,
-                        combinedPath, existingStat.st_size, duration, itemType, coverUrl, description, downloadChapters);
-                } else {
-                    tempMgr.registerTempFile(itemId, episodeId, combinedPath, title, existingStat.st_size);
-                }
+                downloadsMgr.registerCompletedDownload(itemId, episodeId, title, authorName,
+                    combinedPath, existingStat.st_size, duration, itemType, coverUrl, description, downloadChapters);
 
-                // Play the existing file
-                float seekTime = (requestedStartTime >= 0) ? requestedStartTime : session.currentTime;
-                brls::sync([progressDialog, itemId, episodeId, combinedPath, seekTime]() {
-                    progressDialog->dismiss();
-                    Application::getInstance().pushPlayerActivityWithFile(itemId, episodeId, combinedPath, seekTime);
+                brls::sync([progressDialog, this]() {
+                    progressDialog->setStatus("Download complete!");
+                    if (m_downloadButton) m_downloadButton->setText("Downloaded");
+                    brls::delay(1500, [progressDialog]() { progressDialog->dismiss(); });
                 });
                 return;
             }
 
-            if (downloadOnly) {
-                // Download-only mode: download ALL tracks first, combine, register, no playback
-                brls::Logger::info("Download-only mode: Downloading all {} tracks for multi-file audiobook", numTracks);
+            // Download all tracks sequentially
+            brls::Logger::info("Download-only mode: Downloading all {} tracks for multi-file audiobook", numTracks);
 
-                // Download all tracks sequentially
-                for (int trackIdx = 0; trackIdx < numTracks && downloadSuccess; trackIdx++) {
-                    const AudioTrack& track = session.audioTracks[trackIdx];
-                    std::string trackUrl = client.getStreamUrl(track.contentUrl, "");
+            for (int trackIdx = 0; trackIdx < numTracks && downloadSuccess; trackIdx++) {
+                const AudioTrack& track = session.audioTracks[trackIdx];
+                std::string trackUrl = client.getStreamUrl(track.contentUrl, "");
 
-                    if (trackUrl.empty()) {
-                        brls::Logger::error("Failed to get URL for track {}", trackIdx);
-                        downloadSuccess = false;
-                        break;
+                if (trackUrl.empty()) {
+                    brls::Logger::error("Failed to get URL for track {}", trackIdx);
+                    downloadSuccess = false;
+                    break;
+                }
+
+                std::string trackExt = ext;
+                if (!track.mimeType.empty() && (track.mimeType.find("mp4") != std::string::npos ||
+                    track.mimeType.find("m4a") != std::string::npos)) {
+                    trackExt = ".m4a";
+                }
+
+                // Use downloads temp path for track files
+                std::string trackPath = downloadsMgr.getDownloadsPath() + "/" + itemId + "_track" + std::to_string(trackIdx) + trackExt;
+                trackFiles.push_back(trackPath);
+
+                int currentTrack = trackIdx;
+                brls::sync([progressDialog, currentTrack, numTracks]() {
+                    char buf[64];
+                    snprintf(buf, sizeof(buf), "Downloading track %d/%d...", currentTrack + 1, numTracks);
+                    progressDialog->setStatus(buf);
+                });
+
+                SceUID fd = sceIoOpen(trackPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+                if (fd < 0) {
+                    brls::Logger::error("Failed to create track file: {}", trackPath);
+                    downloadSuccess = false;
+                    break;
+                }
+
+                int64_t trackDownloaded = 0;
+                int64_t trackSize = 0;
+
+                bool trackOk = httpClient.downloadFile(trackUrl,
+                    [&](const char* data, size_t size) -> bool {
+                        int written = sceIoWrite(fd, data, size);
+                        if (written < 0) return false;
+                        trackDownloaded += size;
+
+                        if (trackSize > 0) {
+                            int64_t currentTrackNum = currentTrack;
+                            brls::sync([progressDialog, trackDownloaded, trackSize, currentTrackNum, numTracks]() {
+                                char buf[96];
+                                int percent = static_cast<int>((trackDownloaded * 100) / trackSize);
+                                int dlMB = static_cast<int>(trackDownloaded / (1024 * 1024));
+                                int totalMB = static_cast<int>(trackSize / (1024 * 1024));
+                                snprintf(buf, sizeof(buf), "Track %d/%d: %d%% (%d/%d MB)",
+                                        static_cast<int>(currentTrackNum) + 1, numTracks, percent, dlMB, totalMB);
+                                progressDialog->setStatus(buf);
+                            });
+                        }
+                        return true;
+                    },
+                    [&](int64_t size) {
+                        if (size > 0) trackSize = size;
                     }
+                );
 
-                    std::string trackExt = ext;
-                    if (!track.mimeType.empty() && (track.mimeType.find("mp4") != std::string::npos ||
-                        track.mimeType.find("m4a") != std::string::npos)) {
-                        trackExt = ".m4a";
-                    }
+                sceIoClose(fd);
 
-                    std::string trackPath = tempMgr.getTempFilePath(itemId + "_track" + std::to_string(trackIdx), "", trackExt);
-                    trackFiles.push_back(trackPath);
+                if (!trackOk) {
+                    brls::Logger::error("Failed to download track {}", trackIdx);
+                    sceIoRemove(trackPath.c_str());
+                    downloadSuccess = false;
+                } else {
+                    totalDownloaded += trackDownloaded;
+                    brls::Logger::info("Track {}/{} complete ({} bytes)", trackIdx + 1, numTracks, trackDownloaded);
+                }
+            }
 
-                    int currentTrack = trackIdx;
-                    brls::sync([progressDialog, currentTrack, numTracks]() {
+            // Combine all tracks if all downloaded successfully
+            if (downloadSuccess) {
+                brls::sync([progressDialog]() {
+                    progressDialog->setStatus("Combining audio files...");
+                });
+
+                brls::Logger::info("Combining {} tracks into {}", numTracks, destPath);
+
+                int totalTracks = numTracks;
+                if (concatenateAudioFiles(trackFiles, destPath, [progressDialog, totalTracks](int current, int total) {
+                    brls::sync([progressDialog, current, totalTracks]() {
                         char buf[64];
-                        snprintf(buf, sizeof(buf), "Downloading track %d/%d...", currentTrack + 1, numTracks);
+                        snprintf(buf, sizeof(buf), "Combining file %d/%d...", current, totalTracks);
                         progressDialog->setStatus(buf);
                     });
+                })) {
+                    brls::Logger::info("Successfully combined {} tracks", numTracks);
 
-                    SceUID fd = sceIoOpen(trackPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
-                    if (fd < 0) {
-                        brls::Logger::error("Failed to create track file: {}", trackPath);
-                        downloadSuccess = false;
-                        break;
+                    SceIoStat stat;
+                    if (sceIoGetstat(destPath.c_str(), &stat) >= 0) {
+                        totalDownloaded = stat.st_size;
                     }
 
-                    int64_t trackDownloaded = 0;
-                    int64_t trackSize = 0;
-
-                    bool trackOk = httpClient.downloadFile(trackUrl,
-                        [&](const char* data, size_t size) -> bool {
-                            int written = sceIoWrite(fd, data, size);
-                            if (written < 0) return false;
-                            trackDownloaded += size;
-
-                            // Update progress for this track
-                            if (trackSize > 0) {
-                                int64_t currentTrackNum = currentTrack;
-                                brls::sync([progressDialog, trackDownloaded, trackSize, currentTrackNum, numTracks]() {
-                                    char buf[96];
-                                    int percent = static_cast<int>((trackDownloaded * 100) / trackSize);
-                                    int dlMB = static_cast<int>(trackDownloaded / (1024 * 1024));
-                                    int totalMB = static_cast<int>(trackSize / (1024 * 1024));
-                                    snprintf(buf, sizeof(buf), "Track %d/%d: %d%% (%d/%d MB)",
-                                            static_cast<int>(currentTrackNum) + 1, numTracks, percent, dlMB, totalMB);
-                                    progressDialog->setStatus(buf);
-                                });
-                            }
-                            return true;
-                        },
-                        [&](int64_t size) {
-                            if (size > 0) trackSize = size;
-                        }
-                    );
-
-                    sceIoClose(fd);
-
-                    if (!trackOk) {
-                        brls::Logger::error("Failed to download track {}", trackIdx);
-                        sceIoRemove(trackPath.c_str());
-                        downloadSuccess = false;
-                    } else {
-                        totalDownloaded += trackDownloaded;
-                        brls::Logger::info("Track {}/{} complete ({} bytes)", trackIdx + 1, numTracks, trackDownloaded);
-                    }
-                }
-
-                // Combine all tracks if all downloaded successfully
-                if (downloadSuccess) {
-                    brls::sync([progressDialog]() {
-                        progressDialog->setStatus("Combining audio files...");
-                    });
-
-                    brls::Logger::info("Combining {} tracks into {}", numTracks, destPath);
-
-                    int totalTracks = numTracks;
-                    if (concatenateAudioFiles(trackFiles, destPath, [progressDialog, totalTracks](int current, int total) {
-                        brls::sync([progressDialog, current, totalTracks]() {
-                            char buf[64];
-                            snprintf(buf, sizeof(buf), "Combining file %d/%d...", current, totalTracks);
-                            progressDialog->setStatus(buf);
-                        });
-                    })) {
-                        brls::Logger::info("Successfully combined {} tracks", numTracks);
-
-                        // Get final file size
-                        SceIoStat stat;
-                        if (sceIoGetstat(destPath.c_str(), &stat) >= 0) {
-                            totalDownloaded = stat.st_size;
-                        }
-
-                        // Clean up individual track files
-                        for (const auto& trackFile : trackFiles) {
-                            sceIoRemove(trackFile.c_str());
-                        }
-                    } else {
-                        brls::Logger::error("Failed to combine tracks");
-                        downloadSuccess = false;
-                        // Clean up partial files
-                        for (const auto& trackFile : trackFiles) {
-                            sceIoRemove(trackFile.c_str());
-                        }
+                    for (const auto& trackFile : trackFiles) {
+                        sceIoRemove(trackFile.c_str());
                     }
                 } else {
-                    // Clean up partial downloads
+                    brls::Logger::error("Failed to combine tracks");
+                    downloadSuccess = false;
                     for (const auto& trackFile : trackFiles) {
-                        if (!trackFile.empty()) {
-                            sceIoRemove(trackFile.c_str());
-                        }
+                        sceIoRemove(trackFile.c_str());
                     }
                 }
-
-                // Continue to the result handling below (will register download and update UI)
-
             } else {
-                // Play mode: download track containing resume position, start playback, download rest in background
-                std::string currentTrackPath;
-                int currentTrackIdx = 0;
-                float trackSeekTime = 0.0f;  // Initialize to 0 for safety
-                bool foundTrack = false;
-
-                brls::Logger::info("Multi-file play mode: Finding track for resume position {}s", startTime);
-
-                // Find which track contains the current playback position
-                for (size_t i = 0; i < session.audioTracks.size(); i++) {
-                    const AudioTrack& track = session.audioTracks[i];
-                    float trackEnd = track.startOffset + track.duration;
-
-                    brls::Logger::debug("Track {}: startOffset={}s, duration={}s, end={}s",
-                                       i, track.startOffset, track.duration, trackEnd);
-
-                    if (startTime >= track.startOffset && startTime < trackEnd) {
-                        currentTrackIdx = static_cast<int>(i);
-                        trackSeekTime = startTime - track.startOffset;
-                        foundTrack = true;
-                        brls::Logger::info("Resume position {}s is in track {} (offset {}s, seek within track {}s)",
-                                          startTime, currentTrackIdx + 1, track.startOffset, trackSeekTime);
-                        break;
+                for (const auto& trackFile : trackFiles) {
+                    if (!trackFile.empty()) {
+                        sceIoRemove(trackFile.c_str());
                     }
-                }
-
-                // If no track found (startTime is 0 or beyond all tracks), use first track from start
-                if (!foundTrack) {
-                    currentTrackIdx = 0;
-                    trackSeekTime = 0.0f;
-                    brls::Logger::info("No matching track found for {}s, starting from track 1 at 0s", startTime);
-                }
-
-                // Download track containing resume position first, then rest in background
-                brls::Logger::info("Downloading track {}/{} for multi-file audiobook (seek to {}s within track)",
-                                  currentTrackIdx + 1, numTracks, trackSeekTime);
-
-                // First, download the track containing resume position so we can start playing
-                {
-                    const AudioTrack& track = session.audioTracks[currentTrackIdx];
-                    std::string trackUrl = client.getStreamUrl(track.contentUrl, "");
-
-                    if (trackUrl.empty()) {
-                        brls::Logger::error("Failed to get URL for current track {}", currentTrackIdx);
-                        downloadSuccess = false;
-                    } else {
-                        std::string trackExt = ext;
-                        if (!track.mimeType.empty() && (track.mimeType.find("mp4") != std::string::npos ||
-                            track.mimeType.find("m4a") != std::string::npos)) {
-                            trackExt = ".m4a";
-                        }
-
-                        currentTrackPath = tempMgr.getTempFilePath(itemId + "_track" + std::to_string(currentTrackIdx), "", trackExt);
-
-                        brls::sync([progressDialog, currentTrackIdx, numTracks]() {
-                            char buf[64];
-                            snprintf(buf, sizeof(buf), "Downloading track %d/%d...", currentTrackIdx + 1, numTracks);
-                            progressDialog->setStatus(buf);
-                        });
-
-                        SceUID fd = sceIoOpen(currentTrackPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
-                        if (fd >= 0) {
-                            int64_t totalSize = 0;
-                            downloadSuccess = httpClient.downloadFile(trackUrl,
-                                [&](const char* data, size_t size) -> bool {
-                                    int written = sceIoWrite(fd, data, size);
-                                    if (written < 0) return false;
-                                    totalDownloaded += size;
-                                    if (totalSize > 0) {
-                                        brls::sync([progressDialog, totalDownloaded, totalSize]() {
-                                            progressDialog->updateDownloadProgress(totalDownloaded, totalSize);
-                                        });
-                                    }
-                                    return true;
-                                },
-                                [&](int64_t size) { totalSize = size; }
-                            );
-                            sceIoClose(fd);
-                            if (!downloadSuccess) {
-                                sceIoRemove(currentTrackPath.c_str());
-                            }
-                        } else {
-                            downloadSuccess = false;
-                        }
-                    }
-                }
-
-                if (downloadSuccess) {
-                    // Start playback immediately with the current track
-                    float seekTime = trackSeekTime;
-                    brls::sync([progressDialog, itemId, episodeId, currentTrackPath, seekTime]() {
-                        progressDialog->dismiss();
-                        Application::getInstance().pushPlayerActivityWithFile(itemId, episodeId, currentTrackPath, seekTime);
-                    });
-
-                    // Now download remaining tracks in background and combine when done
-                    std::vector<AudioTrack> allTracks = session.audioTracks;
-                    std::string baseExt = ext;
-                    std::string combinedExt = finalExt;  // Use the correct extension based on source format
-                    std::string finalPath = useDownloads
-                        ? downloadsMgr.getDownloadsPath() + "/" + itemId + combinedExt
-                        : tempMgr.getTempFilePath(itemId, episodeId, combinedExt);
-
-                    asyncRunLargeStack([allTracks, currentTrackIdx, currentTrackPath, itemId, episodeId, baseExt, finalPath, title, authorName, duration, itemType, useDownloads, coverUrl, description, downloadChapters]() {
-                        brls::Logger::info("Background: Downloading remaining tracks...");
-
-                        HttpClient bgHttpClient;
-                        bgHttpClient.setTimeout(300);
-                        TempFileManager& bgTempMgr = TempFileManager::getInstance();
-                        DownloadsManager& bgDownloadsMgr = DownloadsManager::getInstance();
-
-                        std::vector<std::string> allTrackFiles(allTracks.size());
-                        allTrackFiles[currentTrackIdx] = currentTrackPath;
-
-                        // Track progress by track count (we don't have size info from AudioTrack)
-                        int tracksDownloaded = 1;  // Already downloaded current track
-                        int totalTracksToDownload = static_cast<int>(allTracks.size());
-
-                        // Set initial background progress
-                        BackgroundDownloadProgress bgProgress;
-                        bgProgress.active = true;
-                        bgProgress.itemId = itemId;
-                        bgProgress.currentTrack = currentTrackIdx + 1;
-                        bgProgress.totalTracks = totalTracksToDownload;
-                        bgProgress.downloadedBytes = 0;  // Will track per-track progress
-                        bgProgress.totalBytes = 0;       // Unknown total
-                        bgProgress.status = "Downloading remaining tracks...";
-                        Application::getInstance().setBackgroundDownloadProgress(bgProgress);
-
-                        // Download all other tracks
-                        AudiobookshelfClient& bgClient = AudiobookshelfClient::getInstance();
-                        bool allDownloaded = true;
-
-                        for (size_t i = 0; i < allTracks.size() && allDownloaded; i++) {
-                            if (static_cast<int>(i) == currentTrackIdx) continue;  // Already downloaded
-
-                            const AudioTrack& track = allTracks[i];
-                            std::string trackUrl = bgClient.getStreamUrl(track.contentUrl, "");
-
-                            if (trackUrl.empty()) {
-                                brls::Logger::error("Background: Failed to get URL for track {}", i);
-                                allDownloaded = false;
-                                break;
-                            }
-
-                            std::string trackExt = baseExt;
-                            if (!track.mimeType.empty() && (track.mimeType.find("mp4") != std::string::npos ||
-                                track.mimeType.find("m4a") != std::string::npos)) {
-                                trackExt = ".m4a";
-                            }
-
-                            std::string trackPath = bgTempMgr.getTempFilePath(itemId + "_track" + std::to_string(i), "", trackExt);
-                            allTrackFiles[i] = trackPath;
-
-                            brls::Logger::info("Background: Downloading track {}/{}...", i + 1, allTracks.size());
-
-                            // Update background progress
-                            bgProgress.currentTrack = static_cast<int>(i) + 1;
-                            char statusBuf[64];
-                            snprintf(statusBuf, sizeof(statusBuf), "Downloading track %d/%d...",
-                                    static_cast<int>(i) + 1, static_cast<int>(allTracks.size()));
-                            bgProgress.status = statusBuf;
-                            Application::getInstance().setBackgroundDownloadProgress(bgProgress);
-
-                            SceUID fd = sceIoOpen(trackPath.c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
-                            if (fd < 0) {
-                                allDownloaded = false;
-                                break;
-                            }
-
-                            int64_t trackDownloaded = 0;
-                            int64_t trackTotalSize = 0;
-                            bool trackOk = bgHttpClient.downloadFile(trackUrl,
-                                [&](const char* data, size_t size) -> bool {
-                                    int written = sceIoWrite(fd, data, size);
-                                    if (written < 0) return false;
-                                    trackDownloaded += size;
-                                    // Update progress periodically (every 64KB)
-                                    if ((trackDownloaded % (64 * 1024)) < size) {
-                                        bgProgress.downloadedBytes = trackDownloaded;
-                                        bgProgress.totalBytes = trackTotalSize;
-                                        Application::getInstance().setBackgroundDownloadProgress(bgProgress);
-                                    }
-                                    return true;
-                                },
-                                [&](int64_t size) {
-                                    if (size > 0) trackTotalSize = size;
-                                }
-                            );
-
-                            sceIoClose(fd);
-
-                            if (!trackOk) {
-                                brls::Logger::error("Background: Failed to download track {}", i);
-                                sceIoRemove(trackPath.c_str());
-                                allDownloaded = false;
-                            } else {
-                                tracksDownloaded++;
-                                bgProgress.downloadedBytes = 0;  // Reset for next track
-                                bgProgress.totalBytes = 0;
-                                Application::getInstance().setBackgroundDownloadProgress(bgProgress);
-                            }
-                        }
-
-                        // Combine all tracks if all downloaded successfully
-                        if (allDownloaded) {
-                            brls::Logger::info("Background: Combining {} tracks...", allTracks.size());
-
-                            bgProgress.status = "Combining audio files...";
-                            Application::getInstance().setBackgroundDownloadProgress(bgProgress);
-
-                            int totalFiles = static_cast<int>(allTrackFiles.size());
-                            if (concatenateAudioFiles(allTrackFiles, finalPath, [&bgProgress, totalFiles](int current, int total) {
-                                char statusBuf[64];
-                                snprintf(statusBuf, sizeof(statusBuf), "Combining file %d/%d...", current, totalFiles);
-                                bgProgress.status = statusBuf;
-                                bgProgress.currentTrack = current;
-                                bgProgress.totalTracks = totalFiles;
-                                Application::getInstance().setBackgroundDownloadProgress(bgProgress);
-                            })) {
-                                brls::Logger::info("Background: Successfully combined into {}", finalPath);
-
-                                // Get total file size
-                                SceIoStat stat;
-                                int64_t totalSize = 0;
-                                if (sceIoGetstat(finalPath.c_str(), &stat) >= 0) {
-                                    totalSize = stat.st_size;
-                                }
-
-                                // Register the combined file
-                                if (useDownloads) {
-                                    bgDownloadsMgr.registerCompletedDownload(itemId, episodeId, title,
-                                        authorName, finalPath, totalSize, duration, itemType,
-                                        coverUrl, description, downloadChapters);
-                                } else {
-                                    bgTempMgr.registerTempFile(itemId, episodeId, finalPath, title, totalSize);
-                                }
-
-                                // Clean up individual track files
-                                for (const auto& trackFile : allTrackFiles) {
-                                    sceIoRemove(trackFile.c_str());
-                                }
-
-                                // Clear background progress
-                                Application::getInstance().clearBackgroundDownloadProgress();
-
-                                brls::sync([]() {
-                                    brls::Application::notify("Audiobook fully downloaded");
-                                });
-                            } else {
-                                brls::Logger::error("Background: Failed to combine tracks");
-                                Application::getInstance().clearBackgroundDownloadProgress();
-                            }
-                        } else {
-                            // Clean up partial downloads
-                            for (const auto& trackFile : allTrackFiles) {
-                                if (!trackFile.empty()) {
-                                    sceIoRemove(trackFile.c_str());
-                                }
-                            }
-                            Application::getInstance().clearBackgroundDownloadProgress();
-                        }
-                    });
-
-                    // Return early - playback already started
-                    return;
                 }
             }
 
@@ -1366,7 +1037,6 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
                             if (written < 0) return false;
                             totalDownloaded += size;
 
-                            // Update progress with speed display
                             if (totalSize > 0) {
                                 brls::sync([progressDialog, totalDownloaded, totalSize]() {
                                     progressDialog->updateDownloadProgress(totalDownloaded, totalSize);
@@ -1391,51 +1061,30 @@ void MediaDetailView::startDownloadAndPlay(const std::string& itemId, const std:
 
         // Handle result
         if (downloadSuccess) {
-            // Register the file
-            if (useDownloads) {
-                downloadsMgr.registerCompletedDownload(itemId, episodeId, title,
-                    authorName, destPath, totalDownloaded, duration, itemType,
-                    coverUrl, description, downloadChapters);
-            } else {
-                tempMgr.registerTempFile(itemId, episodeId, destPath, title, totalDownloaded);
-            }
+            downloadsMgr.registerCompletedDownload(itemId, episodeId, title,
+                authorName, destPath, totalDownloaded, duration, itemType,
+                coverUrl, description, downloadChapters);
 
             brls::Logger::info("Download complete: {}", destPath);
 
-            if (downloadOnly) {
-                // Download only mode - just show success and update button
-                brls::sync([progressDialog, this]() {
-                    progressDialog->setStatus("Download complete!");
-                    if (m_downloadButton) m_downloadButton->setText("Downloaded");
-                    brls::delay(1500, [progressDialog]() { progressDialog->dismiss(); });
-                });
-            } else {
-                // Push to player with pre-downloaded file
-                float seekTime = startTime;
-                brls::sync([progressDialog, itemId, episodeId, destPath, seekTime]() {
-                    progressDialog->dismiss();
-                    Application::getInstance().pushPlayerActivityWithFile(itemId, episodeId, destPath, seekTime);
-                });
-            }
+            brls::sync([progressDialog, this]() {
+                progressDialog->setStatus("Download complete!");
+                if (m_downloadButton) m_downloadButton->setText("Downloaded");
+                brls::delay(1500, [progressDialog]() { progressDialog->dismiss(); });
+            });
         } else {
-            brls::sync([progressDialog, downloadOnly, this]() {
+            brls::sync([progressDialog, this]() {
                 progressDialog->setStatus("Download failed");
-                if (downloadOnly && m_downloadButton) m_downloadButton->setText("Download");
+                if (m_downloadButton) m_downloadButton->setText("Download");
                 brls::delay(2000, [progressDialog]() { progressDialog->dismiss(); });
             });
         }
 #else
-        // Non-Vita: just use streaming URL directly
-        std::string streamUrl;
-        if (!session.audioTracks.empty() && !session.audioTracks[0].contentUrl.empty()) {
-            streamUrl = client.getStreamUrl(session.audioTracks[0].contentUrl, "");
-        } else {
-            streamUrl = client.getDirectStreamUrl(itemId, 0);
-        }
-
-        brls::sync([progressDialog, itemId, episodeId, streamUrl, startTime]() {
-            progressDialog->dismiss();
-            Application::getInstance().pushPlayerActivityWithFile(itemId, episodeId, streamUrl, startTime);
+        // Non-Vita: just show success
+        brls::sync([progressDialog, this]() {
+            progressDialog->setStatus("Download complete!");
+            if (m_downloadButton) m_downloadButton->setText("Downloaded");
+            brls::delay(1500, [progressDialog]() { progressDialog->dismiss(); });
         });
 #endif
     });
@@ -1477,15 +1126,6 @@ void MediaDetailView::onDeleteDownload() {
         // Update UI - hide delete button
         if (m_deleteButton) {
             m_deleteButton->setVisibility(brls::Visibility::GONE);
-        }
-
-        // Show download button if saveToDownloads is not enabled
-        AppSettings& settings = Application::getInstance().getSettings();
-        if (!settings.saveToDownloads) {
-            // Re-create the download button if it doesn't exist
-            if (!m_downloadButton) {
-                // Will be visible on next view load
-            }
         }
 
         dialog->close();

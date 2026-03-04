@@ -66,7 +66,6 @@ set(APP_SOURCES
     src/app/application.cpp
     src/app/audiobookshelf_client.cpp
     src/app/downloads_manager.cpp
-    src/app/temp_file_manager.cpp
 
     # Activities
     src/activity/main_activity.cpp
