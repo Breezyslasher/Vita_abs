@@ -42,5 +42,5 @@ jobs:
       - name: Upload VPK
         uses: actions/upload-artifact@v4
         with:
-          name: VitaSuwayomi-${{ github.run_number }}
-          path: build/VitaSuwayomi.vpk
+          name: VitaABS-${{ github.run_number }}
+          path: build/VitaABS.vpk
