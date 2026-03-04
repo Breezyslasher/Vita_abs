@@ -119,9 +119,6 @@ struct AppSettings {
     bool showChapterList = true;       // Show chapter list in player
     bool skipChapterTransitions = false; // Skip chapter intro/outro silence
 
-    // Bookmark Settings
-    bool autoBookmark = true;          // Auto-bookmark when closing player
-
     // Network Settings
     int connectionTimeout = 30;        // seconds (applied to HTTP client)
     bool downloadOverWifiOnly = false;
@@ -129,9 +126,7 @@ struct AppSettings {
 
     // Download Settings
     bool autoStartDownloads = true;
-    int maxConcurrentDownloads = 1;
     bool deleteAfterFinish = false;    // Delete downloaded book after finishing
-    bool syncProgressOnConnect = true;
     bool downloadOnPlay = false;       // Queue download when pressing play (in addition to streaming)
 
     // Player UI Settings

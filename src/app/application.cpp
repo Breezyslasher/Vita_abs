@@ -68,10 +68,12 @@ void Application::run() {
         if (tryConnectToServer()) {
             brls::Logger::info("Restored session, connected to {}", m_serverUrl);
 
-            // Auto-resume incomplete downloads if setting enabled
+            // Auto-sync progress both directions on startup
             auto& dm = DownloadsManager::getInstance();
             if (!dm.getDownloads().empty()) {
-                // Sync progress from server for downloaded items
+                // First push local progress to server (offline playback resume points)
+                dm.syncProgressToServer();
+                // Then pull latest progress from server (played on other devices)
                 dm.syncProgressFromServer();
                 // Resume incomplete downloads
                 dm.resumeDownloadsIfNeeded();
@@ -380,9 +382,6 @@ bool Application::loadSettings() {
     m_settings.showChapterList = extractBool("showChapterList", true);
     m_settings.skipChapterTransitions = extractBool("skipChapterTransitions", false);
 
-    // Load bookmark settings
-    m_settings.autoBookmark = extractBool("autoBookmark", true);
-
     // Load network settings
     m_settings.connectionTimeout = extractInt("connectionTimeout");
     if (m_settings.connectionTimeout <= 0) m_settings.connectionTimeout = 30;
@@ -391,10 +390,7 @@ bool Application::loadSettings() {
 
     // Load download settings
     m_settings.autoStartDownloads = extractBool("autoStartDownloads", true);
-    m_settings.maxConcurrentDownloads = extractInt("maxConcurrentDownloads");
-    if (m_settings.maxConcurrentDownloads <= 0) m_settings.maxConcurrentDownloads = 1;
     m_settings.deleteAfterFinish = extractBool("deleteAfterFinish", false);
-    m_settings.syncProgressOnConnect = extractBool("syncProgressOnConnect", true);
     m_settings.downloadOnPlay = extractBool("downloadOnPlay", false);
 
     // Load player UI settings
@@ -465,9 +461,6 @@ bool Application::saveSettings() {
     json += "  \"showChapterList\": " + std::string(m_settings.showChapterList ? "true" : "false") + ",\n";
     json += "  \"skipChapterTransitions\": " + std::string(m_settings.skipChapterTransitions ? "true" : "false") + ",\n";
 
-    // Bookmark settings
-    json += "  \"autoBookmark\": " + std::string(m_settings.autoBookmark ? "true" : "false") + ",\n";
-
     // Network settings
     json += "  \"connectionTimeout\": " + std::to_string(m_settings.connectionTimeout) + ",\n";
     json += "  \"downloadOverWifiOnly\": " + std::string(m_settings.downloadOverWifiOnly ? "true" : "false") + ",\n";
@@ -475,9 +468,7 @@ bool Application::saveSettings() {
 
     // Download settings
     json += "  \"autoStartDownloads\": " + std::string(m_settings.autoStartDownloads ? "true" : "false") + ",\n";
-    json += "  \"maxConcurrentDownloads\": " + std::to_string(m_settings.maxConcurrentDownloads) + ",\n";
     json += "  \"deleteAfterFinish\": " + std::string(m_settings.deleteAfterFinish ? "true" : "false") + ",\n";
-    json += "  \"syncProgressOnConnect\": " + std::string(m_settings.syncProgressOnConnect ? "true" : "false") + ",\n";
     json += "  \"downloadOnPlay\": " + std::string(m_settings.downloadOnPlay ? "true" : "false") + ",\n";
 
     // Player UI settings

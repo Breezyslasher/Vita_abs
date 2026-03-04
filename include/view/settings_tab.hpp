@@ -67,9 +67,7 @@ private:
     // Downloads section
     brls::BooleanCell* m_autoStartDownloadsToggle = nullptr;
     brls::BooleanCell* m_wifiOnlyToggle = nullptr;
-    brls::SelectorCell* m_concurrentDownloadsSelector = nullptr;
     brls::BooleanCell* m_deleteAfterWatchToggle = nullptr;
-    brls::BooleanCell* m_syncProgressToggle = nullptr;
     brls::DetailCell* m_clearDownloadsCell = nullptr;
 };
 

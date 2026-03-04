@@ -461,17 +461,6 @@ void SettingsTab::createDownloadsSection() {
     });
     m_contentBox->addView(m_wifiOnlyToggle);
 
-    // Concurrent downloads selector
-    m_concurrentDownloadsSelector = new brls::SelectorCell();
-    m_concurrentDownloadsSelector->init("Max Concurrent Downloads",
-        {"1", "2", "3"},
-        settings.maxConcurrentDownloads - 1,
-        [&settings](int index) {
-            settings.maxConcurrentDownloads = index + 1;
-            Application::getInstance().saveSettings();
-        });
-    m_contentBox->addView(m_concurrentDownloadsSelector);
-
     // Delete after finish toggle
     m_deleteAfterWatchToggle = new brls::BooleanCell();
     m_deleteAfterWatchToggle->init("Delete After Finishing", settings.deleteAfterFinish, [&settings](bool value) {
@@ -479,25 +468,6 @@ void SettingsTab::createDownloadsSection() {
         Application::getInstance().saveSettings();
     });
     m_contentBox->addView(m_deleteAfterWatchToggle);
-
-    // Sync progress toggle
-    m_syncProgressToggle = new brls::BooleanCell();
-    m_syncProgressToggle->init("Sync Progress on Connect", settings.syncProgressOnConnect, [&settings](bool value) {
-        settings.syncProgressOnConnect = value;
-        Application::getInstance().saveSettings();
-    });
-    m_contentBox->addView(m_syncProgressToggle);
-
-    // Sync progress now button
-    auto* syncNowCell = new brls::DetailCell();
-    syncNowCell->setText("Sync Progress Now");
-    syncNowCell->setDetailText("Upload offline progress to server");
-    syncNowCell->registerClickAction([](brls::View* view) {
-        DownloadsManager::getInstance().syncProgressToServer();
-        brls::Application::notify("Progress synced to server");
-        return true;
-    });
-    m_contentBox->addView(syncNowCell);
 
     // Refresh downloads list button
     auto* refreshDownloadsCell = new brls::DetailCell();
