@@ -105,6 +105,9 @@ brls::View* PlayerActivity::createContentView() {
 void PlayerActivity::onContentAvailable() {
     brls::Logger::debug("PlayerActivity content available");
 
+    // Cancel pending background thumbnail loads to free network bandwidth for streaming
+    ImageLoader::cancelAll();
+
     // Load media details
     loadMedia();
 
@@ -262,6 +265,9 @@ void PlayerActivity::willDisappear(bool resetState) {
 
     m_isPlaying = false;
 
+    // Re-enable background thumbnail loading
+    ImageLoader::setPaused(false);
+
     m_tempFilePath.clear();
 }
 
@@ -334,11 +340,17 @@ void PlayerActivity::loadMedia() {
             }
         }
 
+        // Pause image loading to free resources for MPV
+        ImageLoader::setPaused(true);
+        ImageLoader::cancelAll();
+        ImageLoader::clearCache();
+
         // Initialize and load player
         MpvPlayer& player = MpvPlayer::getInstance();
         if (!player.isInitialized()) {
             if (!player.init()) {
                 brls::Logger::error("Failed to initialize MPV player");
+                ImageLoader::setPaused(false);
                 m_loadingMedia = false;
                 return;
             }
@@ -660,6 +672,11 @@ void PlayerActivity::loadMedia() {
             chapterInfoLabel->setText("Streaming...");
         }
 
+        // Pause image loading and free cache to reclaim memory/bandwidth for MPV streaming
+        ImageLoader::setPaused(true);
+        ImageLoader::cancelAll();
+        ImageLoader::clearCache();
+
         // Initialize and play via direct URL streaming (mpv handles HTTP natively)
         MpvPlayer& player = MpvPlayer::getInstance();
 
@@ -667,6 +684,7 @@ void PlayerActivity::loadMedia() {
             brls::Logger::info("PlayerActivity: Initializing MPV player...");
             if (!player.init()) {
                 brls::Logger::error("Failed to initialize MPV player");
+                ImageLoader::setPaused(false);
                 m_loadingMedia = false;
                 return;
             }

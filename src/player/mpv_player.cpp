@@ -96,25 +96,34 @@ bool MpvPlayer::init() {
     // Audio output configuration
     // ========================================
 
+#ifdef __vita__
+    mpv_set_option_string(m_mpv, "ao", "vita");            // Vita-specific audio output driver
+#endif
     mpv_set_option_string(m_mpv, "audio-channels", "stereo");
     mpv_set_option_string(m_mpv, "volume", "100");
     mpv_set_option_string(m_mpv, "volume-max", "150");
 
     // ========================================
     // Cache and demuxer settings
-    // Matching Vita_plex's working audio streaming config
+    // Matching latest Vita_plex working audio streaming config
     // ========================================
 
 #ifdef __vita__
     // Audio-specific buffer settings (from Vita_plex)
-    mpv_set_option_string(m_mpv, "audio-buffer", "0.5");
-    mpv_set_option_string(m_mpv, "demuxer-readahead-secs", "5");
-    mpv_set_option_string(m_mpv, "demuxer-max-bytes", "512KiB");
+    mpv_set_option_string(m_mpv, "audio-buffer", "1.5");
+    mpv_set_option_string(m_mpv, "demuxer-readahead-secs", "15");
 
-    // General cache settings (from Vita_plex)
+    // Cache settings (from Vita_plex)
     mpv_set_option_string(m_mpv, "cache", "yes");
-    mpv_set_option_string(m_mpv, "demuxer-max-bytes", "1MiB");
+    mpv_set_option_string(m_mpv, "cache-secs", "10");
+    mpv_set_option_string(m_mpv, "cache-pause-initial", "yes");
+    mpv_set_option_string(m_mpv, "cache-pause-wait", "3");
+    mpv_set_option_string(m_mpv, "demuxer-max-bytes", "2MiB");
     mpv_set_option_string(m_mpv, "demuxer-max-back-bytes", "512KiB");
+
+    // Seek settings
+    mpv_set_option_string(m_mpv, "hr-seek", "no");
+    mpv_set_option_string(m_mpv, "hr-seek-framedrop", "yes");
 #else
     mpv_set_option_string(m_mpv, "cache", "yes");
     mpv_set_option_string(m_mpv, "demuxer-max-bytes", "4MiB");
