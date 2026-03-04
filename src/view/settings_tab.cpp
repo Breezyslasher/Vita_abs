@@ -391,17 +391,6 @@ void SettingsTab::createAudioSection() {
     header->setTitle("Audio");
     m_contentBox->addView(header);
 
-    // Audio quality selector
-    auto* qualitySelector = new brls::SelectorCell();
-    qualitySelector->init("Audio Quality",
-        {"Original", "High (256 kbps)", "Medium (128 kbps)", "Low (64 kbps)"},
-        static_cast<int>(settings.audioQuality),
-        [&settings](int index) {
-            settings.audioQuality = static_cast<AudioQuality>(index);
-            Application::getInstance().saveSettings();
-        });
-    m_contentBox->addView(qualitySelector);
-
     // Volume boost toggle
     auto* boostToggle = new brls::BooleanCell();
     boostToggle->init("Volume Boost", settings.boostVolume, [&settings](bool value) {
@@ -452,14 +441,6 @@ void SettingsTab::createDownloadsSection() {
     downloadOnPlayInfo->setMarginTop(4);
     downloadOnPlayInfo->setMarginBottom(8);
     m_contentBox->addView(downloadOnPlayInfo);
-
-    // WiFi only toggle
-    m_wifiOnlyToggle = new brls::BooleanCell();
-    m_wifiOnlyToggle->init("Download Over WiFi Only", settings.downloadOverWifiOnly, [&settings](bool value) {
-        settings.downloadOverWifiOnly = value;
-        Application::getInstance().saveSettings();
-    });
-    m_contentBox->addView(m_wifiOnlyToggle);
 
     // Delete after finish toggle
     m_deleteAfterWatchToggle = new brls::BooleanCell();

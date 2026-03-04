@@ -29,15 +29,6 @@ enum class AppTheme {
     DARK = 2
 };
 
-// Audio quality options for streaming
-enum class AudioQuality {
-    ORIGINAL = 0,      // Direct play (no transcoding)
-    HIGH = 1,          // High quality (320kbps)
-    MEDIUM = 2,        // Medium quality (192kbps)
-    LOW = 3,           // Low quality (128kbps)
-    VERY_LOW = 4       // Very low quality (64kbps)
-};
-
 // Playback speed options
 enum class PlaybackSpeed {
     SPEED_0_5X = 0,    // 0.5x
@@ -111,7 +102,6 @@ struct AppSettings {
     AutoCompleteThreshold podcastAutoComplete = AutoCompleteThreshold::LAST_30_SEC;  // When to mark podcasts as complete
 
     // Audio Settings
-    AudioQuality audioQuality = AudioQuality::ORIGINAL;
     bool boostVolume = false;          // Volume boost for quiet audiobooks
     int volumeBoostDb = 0;             // Volume boost in dB (0-12)
 
@@ -121,7 +111,6 @@ struct AppSettings {
 
     // Network Settings
     int connectionTimeout = 30;        // seconds (applied to HTTP client)
-    bool downloadOverWifiOnly = false;
     bool autoSwitchUrl = true;         // Auto-switch between local/remote URL on failure
 
     // Download Settings
@@ -197,7 +186,7 @@ public:
     void applyLogLevel();
 
     // Get quality string for display
-    static std::string getAudioQualityString(AudioQuality quality);
+
     static std::string getThemeString(AppTheme theme);
     static std::string getPlaybackSpeedString(PlaybackSpeed speed);
     static std::string getSleepTimerString(SleepTimer timer);

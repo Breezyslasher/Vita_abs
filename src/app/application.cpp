@@ -167,16 +167,6 @@ void Application::applyLogLevel() {
     }
 }
 
-std::string Application::getAudioQualityString(AudioQuality quality) {
-    switch (quality) {
-        case AudioQuality::ORIGINAL: return "Original (Direct Play)";
-        case AudioQuality::HIGH: return "High (320 kbps)";
-        case AudioQuality::MEDIUM: return "Medium (192 kbps)";
-        case AudioQuality::LOW: return "Low (128 kbps)";
-        case AudioQuality::VERY_LOW: return "Very Low (64 kbps)";
-        default: return "Unknown";
-    }
-}
 
 std::string Application::getThemeString(AppTheme theme) {
     switch (theme) {
@@ -374,7 +364,6 @@ bool Application::loadSettings() {
     m_settings.podcastAutoComplete = static_cast<AutoCompleteThreshold>(extractInt("podcastAutoComplete"));
 
     // Load audio settings
-    m_settings.audioQuality = static_cast<AudioQuality>(extractInt("audioQuality"));
     m_settings.boostVolume = extractBool("boostVolume", false);
     m_settings.volumeBoostDb = extractInt("volumeBoostDb");
 
@@ -385,7 +374,6 @@ bool Application::loadSettings() {
     // Load network settings
     m_settings.connectionTimeout = extractInt("connectionTimeout");
     if (m_settings.connectionTimeout <= 0) m_settings.connectionTimeout = 30;
-    m_settings.downloadOverWifiOnly = extractBool("downloadOverWifiOnly", false);
     m_settings.autoSwitchUrl = extractBool("autoSwitchUrl", true);
 
     // Load download settings
@@ -453,7 +441,6 @@ bool Application::saveSettings() {
     json += "  \"podcastAutoComplete\": " + std::to_string(static_cast<int>(m_settings.podcastAutoComplete)) + ",\n";
 
     // Audio settings
-    json += "  \"audioQuality\": " + std::to_string(static_cast<int>(m_settings.audioQuality)) + ",\n";
     json += "  \"boostVolume\": " + std::string(m_settings.boostVolume ? "true" : "false") + ",\n";
     json += "  \"volumeBoostDb\": " + std::to_string(m_settings.volumeBoostDb) + ",\n";
 
@@ -463,7 +450,6 @@ bool Application::saveSettings() {
 
     // Network settings
     json += "  \"connectionTimeout\": " + std::to_string(m_settings.connectionTimeout) + ",\n";
-    json += "  \"downloadOverWifiOnly\": " + std::string(m_settings.downloadOverWifiOnly ? "true" : "false") + ",\n";
     json += "  \"autoSwitchUrl\": " + std::string(m_settings.autoSwitchUrl ? "true" : "false") + ",\n";
 
     // Download settings
