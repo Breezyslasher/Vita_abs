@@ -80,50 +80,30 @@ bool MpvPlayer::init() {
 
     // ========================================
     // AUDIO-ONLY MODE - Disable all video
-    // Matching Vita_plex's proven working audio streaming config
     // ========================================
 
-    mpv_set_option_string(m_mpv, "vo", "null");            // No video output
-    mpv_set_option_string(m_mpv, "vid", "no");             // No video track selection
-    mpv_set_option_string(m_mpv, "video", "no");           // Disable video decoding entirely
-    mpv_set_option_string(m_mpv, "audio-display", "no");   // Don't try to display album art
-    mpv_set_option_string(m_mpv, "hwdec", "no");           // No hardware video decoding
-    mpv_set_option_string(m_mpv, "aid", "auto");           // Auto-select audio track
-    mpv_set_option_string(m_mpv, "ytdl", "no");            // Disable youtube-dl
-    mpv_set_option_string(m_mpv, "reset-on-next-file", "speed,pause");  // Reset state between files
+    mpv_set_option_string(m_mpv, "video", "no");       // Disable video decoding entirely
+    mpv_set_option_string(m_mpv, "vo", "null");        // No video output
+    mpv_set_option_string(m_mpv, "aid", "auto");       // Auto-select audio track
+    mpv_set_option_string(m_mpv, "vid", "no");         // No video track selection
 
     // ========================================
     // Audio output configuration
     // ========================================
 
-#ifdef __vita__
-    mpv_set_option_string(m_mpv, "ao", "vita");            // Vita-specific audio output driver
-#endif
     mpv_set_option_string(m_mpv, "audio-channels", "stereo");
     mpv_set_option_string(m_mpv, "volume", "100");
     mpv_set_option_string(m_mpv, "volume-max", "150");
 
     // ========================================
     // Cache and demuxer settings
-    // Matching latest Vita_plex working audio streaming config
     // ========================================
 
 #ifdef __vita__
-    // Audio-specific buffer settings (from Vita_plex)
-    mpv_set_option_string(m_mpv, "audio-buffer", "1.5");
-    mpv_set_option_string(m_mpv, "demuxer-readahead-secs", "15");
-
-    // Cache settings (from Vita_plex)
     mpv_set_option_string(m_mpv, "cache", "yes");
-    mpv_set_option_string(m_mpv, "cache-secs", "10");
-    mpv_set_option_string(m_mpv, "cache-pause-initial", "yes");
-    mpv_set_option_string(m_mpv, "cache-pause-wait", "3");
     mpv_set_option_string(m_mpv, "demuxer-max-bytes", "2MiB");
     mpv_set_option_string(m_mpv, "demuxer-max-back-bytes", "512KiB");
-
-    // Seek settings
-    mpv_set_option_string(m_mpv, "hr-seek", "no");
-    mpv_set_option_string(m_mpv, "hr-seek-framedrop", "yes");
+    mpv_set_option_string(m_mpv, "cache-secs", "10");
 #else
     mpv_set_option_string(m_mpv, "cache", "yes");
     mpv_set_option_string(m_mpv, "demuxer-max-bytes", "4MiB");
@@ -136,6 +116,13 @@ bool MpvPlayer::init() {
 
     mpv_set_option_string(m_mpv, "network-timeout", "30");
     mpv_set_option_string(m_mpv, "user-agent", "VitaABS/1.0");
+
+    // ========================================
+    // Subtitle settings
+    // ========================================
+
+    mpv_set_option_string(m_mpv, "sub-auto", "fuzzy");
+    mpv_set_option_string(m_mpv, "subs-fallback", "yes");
 
     // ========================================
     // Request log messages (verbose for debugging crashes)
