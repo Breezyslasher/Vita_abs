@@ -216,6 +216,25 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
 
     rightPanel->addView(metaBox);
 
+    // Genre tags (blue text labels in a horizontal row, max 6)
+    // Always create the box so it can be populated when full details load
+    m_genreBox = new brls::Box();
+    m_genreBox->setAxis(brls::Axis::ROW);
+    m_genreBox->setMarginBottom(10);
+    if (!m_item.genres.empty()) {
+        for (size_t i = 0; i < m_item.genres.size() && i < 6; i++) {
+            auto* genreLabel = new brls::Label();
+            genreLabel->setText(m_item.genres[i]);
+            genreLabel->setFontSize(11);
+            genreLabel->setTextColor(nvgRGB(74, 159, 255));
+            genreLabel->setMarginRight(12);
+            m_genreBox->addView(genreLabel);
+        }
+    } else {
+        m_genreBox->setVisibility(brls::Visibility::GONE);
+    }
+    rightPanel->addView(m_genreBox);
+
     // Summary/Description (truncated by default, L button expands)
     if (!m_item.description.empty()) {
         m_fullDescription = m_item.description;
@@ -488,6 +507,20 @@ void MediaDetailView::loadDetails() {
             } else {
                 m_summaryLabel->setText(m_fullDescription);
             }
+        }
+
+        // Update genre tags if now available from full item details
+        if (m_genreBox && !m_item.genres.empty()) {
+            m_genreBox->clearViews();
+            for (size_t i = 0; i < m_item.genres.size() && i < 6; i++) {
+                auto* genreLabel = new brls::Label();
+                genreLabel->setText(m_item.genres[i]);
+                genreLabel->setFontSize(11);
+                genreLabel->setTextColor(nvgRGB(74, 159, 255));
+                genreLabel->setMarginRight(12);
+                m_genreBox->addView(genreLabel);
+            }
+            m_genreBox->setVisibility(brls::Visibility::VISIBLE);
         }
 
         // Update download button state

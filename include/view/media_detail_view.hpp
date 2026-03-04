@@ -74,6 +74,7 @@ private:
     brls::Button* m_findEpisodesButton = nullptr;
     brls::Box* m_childrenBox = nullptr;       // Podcast episode rows
     brls::Box* m_chaptersBox = nullptr;       // Audiobook chapter rows
+    brls::Box* m_genreBox = nullptr;          // Genre tags row
 
     // Description expand/collapse
     std::string m_fullDescription;
