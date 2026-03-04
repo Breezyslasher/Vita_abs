@@ -214,23 +214,34 @@ DownloadsTab::DownloadsTab() {
     m_clearBtn->registerClickAction([this](brls::View*) {
         DownloadsManager& mgr = DownloadsManager::getInstance();
 
-        // Stop downloads first and wait
+        // Pause downloads - the actual wait + clear runs off the UI thread
         mgr.pauseDownloads();
-        mgr.waitForDownloadThread();
-
-        // Cancel all non-completed downloads
-        auto downloads = mgr.getDownloads();
-        for (const auto& item : downloads) {
-            if (item.state != DownloadState::COMPLETED) {
-                mgr.cancelDownload(item.itemId);
-            }
-        }
 
         m_downloaderRunning = false;
         if (m_startStopLabel) m_startStopLabel->setText("Start");
-        if (m_downloadStatusLabel) m_downloadStatusLabel->setText("");
-        brls::Application::notify("Queue cleared");
-        refresh();
+        if (m_downloadStatusLabel) m_downloadStatusLabel->setText("- Clearing...");
+
+        std::weak_ptr<bool> aliveWeak = m_alive;
+        asyncRun([this, aliveWeak]() {
+            DownloadsManager& mgr = DownloadsManager::getInstance();
+            mgr.waitForDownloadThread();
+
+            // Cancel all non-completed downloads
+            auto downloads = mgr.getDownloadStates();
+            for (const auto& item : downloads) {
+                if (item.state != DownloadState::COMPLETED) {
+                    mgr.cancelDownload(item.itemId);
+                }
+            }
+
+            brls::sync([this, aliveWeak]() {
+                auto alive = aliveWeak.lock();
+                if (!alive || !*alive) return;
+                if (m_downloadStatusLabel) m_downloadStatusLabel->setText("");
+                brls::Application::notify("Queue cleared");
+                refresh();
+            });
+        });
         return true;
     });
     m_actionsRow->addView(m_clearBtn);
@@ -345,6 +356,9 @@ void DownloadsTab::willAppear(bool resetState) {
     // Re-arm alive flag
     m_alive = std::make_shared<bool>(true);
 
+    // Initialize downloads manager once (not on every refresh)
+    DownloadsManager::getInstance().init();
+
     // Clear tracking vectors for fresh start
     m_serverRowElements.clear();
     m_lastServerItems.clear();
@@ -365,8 +379,8 @@ void DownloadsTab::willAppear(bool resetState) {
         auto now = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastProgressRefresh).count();
 
-        // Update every 100ms for smooth live progress
-        const int FAST_PROGRESS_INTERVAL_MS = 100;
+        // Update every 500ms to avoid flooding the UI thread
+        const int FAST_PROGRESS_INTERVAL_MS = 500;
         if (elapsed >= FAST_PROGRESS_INTERVAL_MS || downloadedBytes >= totalBytes) {
             m_lastProgressRefresh = now;
             if (m_autoRefreshEnabled.load()) {
@@ -395,6 +409,7 @@ void DownloadsTab::willAppear(bool resetState) {
     });
 
     refresh();
+    refreshServerDownloads();  // Fetch ABS server download queue (network, only on tab appear)
     startAutoRefresh();
 }
 
@@ -421,14 +436,15 @@ void DownloadsTab::willDisappear(bool resetState) {
 
 void DownloadsTab::refresh() {
     refreshServerQueue();
-    refreshServerDownloads();
+    // Note: refreshServerDownloads() is NOT called here - it makes network requests
+    // and should only be called on tab appear, not on every auto-refresh/progress tick
 }
 
 void DownloadsTab::refreshServerQueue() {
     DownloadsManager& mgr = DownloadsManager::getInstance();
-    mgr.init();
 
-    auto downloads = mgr.getDownloads();
+    // Use lightweight state snapshot (no deep copy of chapters/files)
+    auto downloads = mgr.getDownloadStates();
 
     // Build list of active (non-completed) items for server queue
     struct ServerInfo {

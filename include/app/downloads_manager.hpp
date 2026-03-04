@@ -105,8 +105,22 @@ public:
     // Delete a downloaded episode by episodeId (for podcasts where multiple episodes share same itemId)
     bool deleteDownloadByEpisodeId(const std::string& itemId, const std::string& episodeId);
 
-    // Get all download items
+    // Get all download items (deep copy - use sparingly)
     std::vector<DownloadItem> getDownloads() const;
+
+    // Lightweight download state for UI progress updates (no deep copy of chapters/files)
+    struct DownloadStateInfo {
+        std::string itemId;
+        std::string episodeId;
+        std::string title;
+        std::string authorName;
+        std::string coverUrl;
+        std::string localCoverPath;
+        int64_t downloadedBytes = 0;
+        int64_t totalBytes = 0;
+        DownloadState state = DownloadState::QUEUED;
+    };
+    std::vector<DownloadStateInfo> getDownloadStates() const;
 
     // Get a specific download by item ID
     DownloadItem* getDownload(const std::string& itemId);
@@ -203,16 +217,19 @@ private:
     // Internal save without locking (caller must hold m_mutex)
     void saveStateUnlocked();
 
-    // Check if current download should be cancelled
-    bool isDownloadCancelled(const std::string& itemId, const std::string& episodeId);
+    // Check if current download should be cancelled (lock-free for per-chunk checks)
+    bool isDownloadCancelled() const;
+    // Set cancel flag for a specific item (acquires mutex to set the IDs, then sets atomic)
+    void setCancelFlag(const std::string& itemId, const std::string& episodeId);
     void clearCancelFlag();
 
     std::vector<DownloadItem> m_downloads;
     mutable std::mutex m_mutex;
     std::atomic<bool> m_downloading{false};
     std::atomic<bool> m_downloadThreadActive{false};
+    std::atomic<bool> m_cancelRequested{false};  // Lock-free cancel check for download loop
     bool m_initialized = false;
-    std::string m_cancelledItemId;  // Item ID to cancel (checked during download)
+    std::string m_cancelledItemId;  // Item ID to cancel (set under mutex, read by download thread after atomic check)
     std::string m_cancelledEpisodeId;  // Episode ID to cancel (for podcasts)
     DownloadProgressCallback m_progressCallback;
     ItemCompletionCallback m_itemCompletionCallback;
