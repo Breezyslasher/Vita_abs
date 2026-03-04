@@ -1,0 +1,50 @@
+---
+name: Downloads Testing Checklist
+about: Track testing status of download and offline features
+title: "[Testing] Downloads & Offline Testing"
+labels: testing
+assignees: ''
+---
+
+## Downloads - Basic
+
+- [ ] Download button queues item
+- [ ] Download progress shows percentage
+- [ ] Download completes successfully
+- [ ] Downloaded item appears in Downloads tab
+- [ ] Downloaded item plays offline
+- [ ] Delete downloaded item works
+
+## Downloads - Management
+
+- [ ] Downloads tab shows all downloaded items
+- [ ] Download queue processes items
+- [ ] Pause downloads works
+- [ ] Cancel download works
+- [ ] Concurrent downloads setting works (1-3)
+- [ ] Auto-start downloads setting works
+- [ ] WiFi-only downloads setting works
+- [ ] Sync Progress to Server button works (in Downloads tab)
+- [ ] Refresh Downloads List scans for untracked files
+- [ ] Clear All Downloads removes everything with confirmation
+- [ ] Storage path displays correctly
+
+## Downloads - Multi-File
+
+- [ ] Multi-file audiobook downloads all tracks
+- [ ] Tracks combine into single file
+- [ ] Combined file registered as download
+- [ ] Can play combined downloaded file
+
+## Offline Mode
+
+- [ ] App works without network (with downloads)
+- [ ] Downloaded content plays offline
+- [ ] Offline mode shows separate Audiobooks and Podcasts tabs
+- [ ] Progress saves locally when offline
+- [ ] Progress syncs to server when back online
+- [ ] "Sync Progress Now" button uploads offline progress
+
+## Known Issue
+
+- [ ] Downloads tab exists but is not wired into main navigation tabs
