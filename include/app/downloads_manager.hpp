@@ -216,11 +216,13 @@ private:
 
     // Internal save without locking (caller must hold m_mutex)
     void saveStateUnlocked();
+    // Serialize state to JSON string under lock (returns empty if debounced)
+    std::string serializeStateUnlocked(size_t& outItemCount);
+    // Write serialized state to disk (can be called outside mutex)
+    void writeStateToDisk(const std::string& data, size_t itemCount);
 
     // Check if current download should be cancelled (lock-free for per-chunk checks)
     bool isDownloadCancelled() const;
-    // Set cancel flag for a specific item (acquires mutex to set the IDs, then sets atomic)
-    void setCancelFlag(const std::string& itemId, const std::string& episodeId);
     void clearCancelFlag();
 
     std::vector<DownloadItem> m_downloads;
