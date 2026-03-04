@@ -18,11 +18,11 @@ assignees: ''
 
 ## Authentication & Login
 
-- [x] Login with username/password
-- [x] Login credentials persist after app restart
-- [x] Logout works correctly
-- [x] App handles invalid credentials gracefully
-- [x] App starts in offline mode when no network (with downloaded content)
+- [ ] Login with username/password
+- [ ] Login credentials persist after app restart
+- [ ] Logout works correctly
+- [ ] App handles invalid credentials gracefully
+- [ ] App starts in offline mode when no network (with downloaded content)
 
 ## Home Tab
 
@@ -35,12 +35,12 @@ assignees: ''
 
 ## Library Browsing
 
-- [x] All libraries from server appear as tabs
-- [x] Audiobook libraries show book content
-- [x] Podcast libraries show podcast content
-- [x] Browse all items in a library (scroll through grid)
-- [x] Recently added items display correctly
-- [x] Item covers load properly
+- [ ] All libraries from server appear as tabs
+- [ ] Audiobook libraries show book content
+- [ ] Podcast libraries show podcast content
+- [ ] Browse all items in a library (scroll through grid)
+- [ ] Recently added items display correctly
+- [ ] Item covers load properly
 - [ ] Progress bars show on partially-played items
 - [ ] "Downloaded" filter button shows only downloaded items
 - [ ] Collections button shows collections view
@@ -57,54 +57,54 @@ assignees: ''
 
 ## Search
 
-- [x] Search tab opens correctly
-- [x] Search returns results from server
-- [x] Search results show covers and titles
+- [ ] Search tab opens correctly
+- [ ] Search returns results from server
+- [ ] Search results show covers and titles
 - [ ] Results categorized by type (Books / Podcasts / Episodes)
-- [x] Clicking search result opens detail view
+- [ ] Clicking search result opens detail view
 - [ ] Clicking podcast episode in search starts playback directly
 
 ## Media Detail View
 
-- [x] Cover image displays
-- [x] Title and author display correctly
+- [ ] Cover image displays
+- [ ] Title and author display correctly
 - [ ] Published year displays
-- [x] Duration shows correctly
-- [x] Description/summary displays
-- [x] Chapter list shows (for audiobooks with chapters)
+- [ ] Duration shows correctly
+- [ ] Description/summary displays
+- [ ] Chapter list shows (for audiobooks with chapters)
 - [ ] Clicking a chapter starts playback from that position
 - [ ] Play button starts streaming playback
-- [x] Download button queues download
-- [x] Delete button removes downloaded content
+- [ ] Download button queues download
+- [ ] Delete button removes downloaded content
 
 ## Podcast Features
 
-- [x] Podcast detail shows episode list
-- [x] Episode list scrolls properly
-- [x] Individual episode download works
+- [ ] Podcast detail shows episode list
+- [ ] Episode list scrolls properly
+- [ ] Individual episode download works
 - [ ] Download dialog shows options (All / Unheard / Next 5 / Individual)
-- [x] "Find New Episodes" checks for new content
+- [ ] "Find New Episodes" checks for new content
 - [ ] New episodes dialog shows with "Download All to Server" option
-- [x] Batch download episodes works
+- [ ] Batch download episodes works
 - [ ] "Remove" button deletes all downloaded episodes
-- [x] Episode progress shows correctly
+- [ ] Episode progress shows correctly
 
 ## Playback - Basic Controls
 
-- [x] Play/Pause toggle works
-- [x] Progress slider shows current position
-- [x] Elapsed time displays correctly
-- [x] Remaining time displays correctly
-- [x] Cover art shows in player
-- [x] Title and author show in player
+- [ ] Play/Pause toggle works
+- [ ] Progress slider shows current position
+- [ ] Elapsed time displays correctly
+- [ ] Remaining time displays correctly
+- [ ] Cover art shows in player
+- [ ] Title and author show in player
 
 ## Playback - Seeking
 
-- [x] Skip forward button works
-- [x] Skip backward button works
+- [ ] Skip forward button works
+- [ ] Skip backward button works
 - [ ] L1/R1 shoulder buttons seek backward/forward
-- [x] Dragging progress slider seeks correctly
-- [x] Seek interval setting changes skip amount (5s/10s/15s/30s/60s)
+- [ ] Dragging progress slider seeks correctly
+- [ ] Seek interval setting changes skip amount (5s/10s/15s/30s/60s)
 
 ## Playback - Speed Control
 
@@ -128,12 +128,12 @@ assignees: ''
 
 ## Playback - Progress & Resume
 
-- [x] Progress saves when stopping playback
-- [x] Progress saves periodically during playback (every 30s)
-- [x] Progress syncs to server (when online)
-- [x] Resume playback starts at saved position
-- [x] Progress syncs FROM server on app start
-- [x] Finishing content marks it as complete
+- [ ] Progress saves when stopping playback
+- [ ] Progress saves periodically during playback (every 30s)
+- [ ] Progress syncs to server (when online)
+- [ ] Resume playback starts at saved position
+- [ ] Progress syncs FROM server on app start
+- [ ] Finishing content marks it as complete
 - [ ] Podcast auto-complete marks episode finished near end
 
 ## Multi-Track Audiobooks
