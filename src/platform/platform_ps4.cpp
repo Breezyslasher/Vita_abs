@@ -18,7 +18,7 @@ namespace platform {
 
 // ── Paths ──────────────────────────────────────────────────────────────
 
-static constexpr const char* DATA_DIR = "/data/VitaSuwayomi";
+static constexpr const char* DATA_DIR = "/data/VitaABS";
 
 const std::string& dataDir() {
     static const std::string s(DATA_DIR);

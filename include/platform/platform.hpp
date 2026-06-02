@@ -1,5 +1,5 @@
 /**
- * VitaSuwayomi - Platform abstraction layer
+ * VitaABS - Platform abstraction layer
  *
  * Provides a clean interface for all platform-varying functionality.
  * Each platform has its own .cpp implementing these functions,
@@ -26,11 +26,11 @@ namespace platform {
 // ── Paths ──────────────────────────────────────────────────────────────
 
 /// Root data directory for all persistent storage.
-/// e.g. "ux0:data/VitaSuwayomi", "sdmc:/VitaSuwayomi", "$HOME/.local/share/VitaSuwayomi"
+/// e.g. "ux0:data/VitaABS", "sdmc:/VitaABS", "$HOME/.local/share/VitaABS"
 const std::string& dataDir();
 
 /// Build a full path rooted at the data directory.
-/// e.g. platformPath("downloads") → "ux0:data/VitaSuwayomi/downloads"
+/// e.g. platformPath("downloads") → "ux0:data/VitaABS/downloads"
 std::string path(const char* relative);
 std::string path(const std::string& relative);
 
