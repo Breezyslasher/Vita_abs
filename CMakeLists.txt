@@ -339,6 +339,36 @@ endif()
 
 if(PLATFORM_PSV)
     target_link_libraries(${PROJECT_NAME}
+        curl
+        mbedtls
+        mbedx509
+        mbedcrypto
+    
+        # Use linker group for mpv/FFmpeg circular dependencies
+        -Wl,--start-group
+        mpv
+        avfilter
+        avformat
+        avcodec
+        swresample
+        swscale
+        avutil
+        -Wl,--end-group
+    
+        # Archive support (required by mpv's libarchive stream)
+        archive
+    
+        # Audio/compression libraries
+        mp3lame
+        zstd
+        ass
+        freetype
+        harfbuzz
+        fribidi
+        png
+        bz2
+    
+        # Vita SDK stubs (provide symbols for above libraries)
         vita2d
         SceNet_stub
         SceNetCtl_stub
@@ -347,14 +377,17 @@ if(PLATFORM_PSV)
         ScePgf_stub
         SceRtc_stub
         SceShellSvc_stub
-        SceAppMgr_stub
-        SceTouch_stub
         SceAudiodec_stub
         SceVideodec_stub
         SceAvcodec_stub
         SceCodecEngine_stub
         SceAudio_stub
         SceVshBridge_stub
+        SceAppMgr_stub
+    
+        # Standard libraries last
+        z
+        c
     )
 elseif(PLATFORM_SWITCH)
     target_link_libraries(${PROJECT_NAME} nx dav1d)
