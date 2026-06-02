@@ -77,7 +77,7 @@ if(NOT DEFINED APP_VERSION)
     set(APP_VERSION "1.0.0")
 endif()
 string(REGEX REPLACE "^v" "" APP_VERSION "${APP_VERSION}")
-project(VitaSuwayomi VERSION ${APP_VERSION} LANGUAGES C CXX)
+project(VitaABS VERSION ${APP_VERSION} LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -100,7 +100,7 @@ set(APP_SFO_VERSION "${_SFO_MAJOR}.${_SFO_MINOR}")
 # Vita VPK metadata
 # ---------------------------------------------------------------------------
 if(PLATFORM_PSV)
-    set(VITA_APP_NAME "VitaSuwayomi")
+    set(VITA_APP_NAME "VitaABS")
     set(VITA_TITLEID  "VSWY00001")
     set(VITA_VERSION  "${APP_SFO_VERSION}")
     set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d PARENTAL_LEVEL=1 -d ATTRIBUTE2=12")
@@ -246,7 +246,7 @@ elseif(UNIX AND NOT APPLE AND NOT PLATFORM_PS4)
     # versions (e.g. SteamOS ships FFmpeg 7.x, CI builds against 6.x).
     set(APP_FFMPEG_LIBS)
     set(APP_FFMPEG_LINK_BLOCK)
-    add_definitions(-DVITASUWAYOMI_NO_FFMPEG)
+    add_definitions(-DVitaABS_NO_FFMPEG)
 else()
     set(APP_FFMPEG_LIBS
         mpv
@@ -474,7 +474,7 @@ elseif(PLATFORM_PS4)
         add_pkg(${PROJECT_NAME}
             ${CMAKE_BINARY_DIR}/ps4
             "VSWY00002"
-            "VitaSuwayomi"
+            "VitaABS"
             "${APP_SFO_VERSION}"
             # https://psdevwiki.com/ps4/param.sfo#ATTRIBUTE - Support PS4 Pro
             8388608
@@ -502,7 +502,7 @@ elseif(PLATFORM_SWITCH)
     endif()
     add_custom_target(${PROJECT_NAME}.nro ALL DEPENDS ${PROJECT_NAME}
         # Generate NACP metadata (author, version shown in hbmenu)
-        COMMAND ${NX_NACPTOOL_EXE} --create "VitaSuwayomi" "Breezyslasher"
+        COMMAND ${NX_NACPTOOL_EXE} --create "VitaABS" "Breezyslasher"
             "${PROJECT_VERSION}" ${PROJECT_NAME}.nacp
         # Assemble romfs: app resources + borealis system resources
         COMMAND ${CMAKE_COMMAND} -E copy_directory
