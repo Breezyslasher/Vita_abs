@@ -46,7 +46,7 @@ set(APP_PLATFORM_LIB
 # borealis toolchain include, and sets BRLS_PLATFORM_RESOURCES_PATH for
 # Android.  The variables below just satisfy CMake-time checks in the
 # borealis build scripts; they have no effect at runtime.
-set(LIBROMFS_PROJECT_NAME "VitaSuwayomi" CACHE STRING "" FORCE)
+set(LIBROMFS_PROJECT_NAME "VitaABS" CACHE STRING "" FORCE)
 set(LIBROMFS_RESOURCE_LOCATION "${APP_SOURCE_ROOT}/resources" CACHE PATH "" FORCE)
 
 # app option
@@ -63,4 +63,4 @@ set(SIMPLE_HIGHLIGHT ON CACHE BOOL "")
 # if (ANDROID_ABI STREQUAL armeabi-v7a)
 #     set(HAVE_FSEEKO 0)
 # endif()
-add_subdirectory("${APP_SOURCE_ROOT}" "${CMAKE_BINARY_DIR}/vitasuwayomi")
+add_subdirectory("${APP_SOURCE_ROOT}" "${CMAKE_BINARY_DIR}/VitaABS")
