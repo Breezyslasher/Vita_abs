@@ -126,38 +126,43 @@ add_subdirectory(${BOREALIS_LIBRARY})
 # Application sources
 # ---------------------------------------------------------------------------
 set(APP_SOURCES
+    # Main entry
     src/main.cpp
+
+    # Application
     src/app/application.cpp
-    src/app/suwayomi_client.cpp
+    src/app/audiobookshelf_client.cpp
     src/app/downloads_manager.cpp
+
+    # Activities
     src/activity/main_activity.cpp
     src/activity/login_activity.cpp
-    src/activity/reader_activity.cpp
+    src/activity/player_activity.cpp
+
+    # Views
+    src/view/home_tab.cpp
     src/view/library_section_tab.cpp
-    src/view/history_tab.cpp
     src/view/search_tab.cpp
     src/view/settings_tab.cpp
     src/view/media_detail_view.cpp
+    src/view/media_item_cell.cpp
     src/view/recycling_grid.cpp
-    src/view/manga_item_cell.cpp
-    src/view/rotatable_box.cpp
-    src/view/rotatable_image.cpp
-    src/view/rotatable_label.cpp
-    src/view/webtoon_scroll_view.cpp
+    src/view/video_view.cpp
     src/view/downloads_tab.cpp
-    src/view/extensions_tab.cpp
-    src/view/source_browse_tab.cpp
-    src/view/horizontal_scroll_row.cpp
-    src/view/tracking_search_view.cpp
-    src/view/migrate_search_view.cpp
-    src/view/storage_view.cpp
-    src/view/long_press_gesture.cpp
-    src/view/pinch_gesture.cpp
+    src/view/progress_dialog.cpp
+    src/view/podcast_search_tab.cpp
+
+    # Player
+    src/player/mpv_player.cpp
+
+    # Utils
     src/utils/http_client.cpp
     src/utils/image_loader.cpp
-    src/utils/library_cache.cpp
-    src/utils/perf_overlay.cpp
+    src/utils/jwt_auth.cpp
+    src/utils/audio_utils.cpp
+    src/utils/vita_stubs.c
 )
+
 
 # vita_stubs.c only needed on Vita (no-op stdio locks, SDL_OpenURL stub)
 if(PLATFORM_PSV)
