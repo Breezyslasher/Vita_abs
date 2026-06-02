@@ -4,8 +4,20 @@
  * Using software rendering with NanoVG display
  */
 
+/**
+ * VitaPlex - MPV Video Player Implementation
+ * Based on switchfin's MPV implementation for PS Vita
+ * Using software rendering with NanoVG display
+ */
+
 #include "player/mpv_player.hpp"
+#include "app/application.hpp"
+#include "platform/platform.hpp"
+#ifdef __PS4__
+#include "utils/https_proxy.h"
+#endif
 #include <borealis.hpp>
+
 
 #ifdef __vita__
 #include <psp2/kernel/clib.h>
@@ -17,9 +29,27 @@
 #include <borealis/platforms/psv/psv_video.hpp>
 #endif
 
+#ifdef __ANDROID__
+#include <nanovg.h>
+#include <GLES3/gl3.h>
+#include <SDL2/SDL.h>
+// nanovg's GLES3 texture accessor is declared inside nanovg_gl.h only when
+// NANOVG_GLES3 is defined, and that header pulls in the whole GL shader
+// implementation chain. Forward-declare it directly — the symbol is compiled
+// into borealis via lib/platforms/sdl/sdl_video.cpp.
+extern "C" GLuint nvglImageHandleGLES3(NVGcontext* ctx, int image);
+
+static void* mpvGlGetProcAddress(void* ctx, const char* name) {
+    (void)ctx;
+    return SDL_GL_GetProcAddress(name);
+}
+#endif
+
 #include <cstring>
 #include <cstdlib>
 #include <clocale>
+#include <mutex>
+#include <vector>
 
 namespace vitaabs {
 
