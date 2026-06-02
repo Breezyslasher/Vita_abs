@@ -1,6 +1,6 @@
 /**
  * VitaABS - Downloads Tab
- * View for managing downloads with server queue + local downloads sections (like Suwayomi)
+ * View for managing local (Vita) and server (ABS) downloads
  */
 
 #pragma once
@@ -25,23 +25,22 @@ public:
 private:
     void refresh();
     void refreshServerQueue();
-    void refreshLocalDownloads();
+    void refreshServerDownloads();
     void startAutoRefresh();
     void stopAutoRefresh();
 
-    // Server download queue section (items downloading from server)
+    // Local downloads section (items downloading from ABS server to Vita)
     brls::Box* m_serverSection = nullptr;
     brls::Label* m_serverHeader = nullptr;
     brls::ScrollingFrame* m_serverScroll = nullptr;
     brls::Box* m_serverContainer = nullptr;
     brls::Label* m_serverEmptyLabel = nullptr;
 
-    // Local downloads section (completed items stored on device)
-    brls::Box* m_localSection = nullptr;
-    brls::Label* m_localHeader = nullptr;
-    brls::ScrollingFrame* m_localScroll = nullptr;
-    brls::Box* m_localContainer = nullptr;
-    brls::Label* m_localEmptyLabel = nullptr;
+    // Server downloads section (ABS server downloading podcast episodes)
+    brls::Box* m_absSection = nullptr;
+    brls::Label* m_absHeader = nullptr;
+    brls::Box* m_absContainer = nullptr;
+    brls::Label* m_absEmptyLabel = nullptr;
 
     // Empty state (shown when both sections are empty)
     brls::Box* m_emptyStateBox = nullptr;
@@ -78,13 +77,6 @@ private:
     };
     std::vector<CachedServerItem> m_lastServerItems;
 
-    struct CachedLocalItem {
-        std::string itemId;
-        std::string episodeId;
-        float currentTime = 0.0f;
-    };
-    std::vector<CachedLocalItem> m_lastLocalItems;
-
     // UI element tracking for incremental updates
     struct ServerRowElements {
         brls::Box* row = nullptr;
@@ -95,27 +87,12 @@ private:
     };
     std::vector<ServerRowElements> m_serverRowElements;
 
-    struct LocalRowElements {
-        brls::Box* row = nullptr;
-        brls::Label* statusLabel = nullptr;
-        brls::Image* xButtonIcon = nullptr;
-        std::string itemId;
-        std::string episodeId;
-    };
-    std::vector<LocalRowElements> m_localRowElements;
-
     // Helper methods
     brls::Box* createServerRow(const std::string& itemId, const std::string& episodeId,
                                const std::string& title, const std::string& authorName,
                                int64_t downloadedBytes, int64_t totalBytes, int state,
                                const std::string& coverUrl, const std::string& localCoverPath,
                                brls::Label*& outProgressLabel, brls::Image*& outXButtonIcon);
-    brls::Box* createLocalRow(const std::string& itemId, const std::string& episodeId,
-                              const std::string& title, const std::string& authorName,
-                              float currentTime, float duration,
-                              const std::string& coverUrl, const std::string& localCoverPath,
-                              const std::string& mediaType,
-                              brls::Label*& outStatusLabel, brls::Image*& outXButtonIcon);
     void updateNavigationRoutes();
 
     // Async lifetime guard

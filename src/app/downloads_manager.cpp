@@ -559,6 +559,7 @@ bool DownloadsManager::cancelDownload(const std::string& itemId) {
                 if (it->state == DownloadState::DOWNLOADING) {
                     m_cancelledItemId = itemId;
                     m_cancelledEpisodeId = it->episodeId;
+                    m_cancelRequested.store(true, std::memory_order_release);
                     brls::Logger::info("DownloadsManager: Set cancellation flag for active download");
                 }
 
@@ -612,6 +613,7 @@ bool DownloadsManager::cancelDownload(const std::string& itemId, const std::stri
                 if (it->state == DownloadState::DOWNLOADING) {
                     m_cancelledItemId = itemId;
                     m_cancelledEpisodeId = it->episodeId;
+                    m_cancelRequested.store(true, std::memory_order_release);
                     brls::Logger::info("DownloadsManager: Set cancellation flag for active download");
                 }
 
@@ -721,6 +723,26 @@ bool DownloadsManager::deleteDownloadByEpisodeId(const std::string& itemId, cons
 std::vector<DownloadItem> DownloadsManager::getDownloads() const {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_downloads;
+}
+
+std::vector<DownloadsManager::DownloadStateInfo> DownloadsManager::getDownloadStates() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    std::vector<DownloadStateInfo> states;
+    states.reserve(m_downloads.size());
+    for (const auto& item : m_downloads) {
+        DownloadStateInfo info;
+        info.itemId = item.itemId;
+        info.episodeId = item.episodeId;
+        info.title = item.title;
+        info.authorName = item.authorName;
+        info.coverUrl = item.coverUrl;
+        info.localCoverPath = item.localCoverPath;
+        info.downloadedBytes = item.downloadedBytes;
+        info.totalBytes = item.totalBytes;
+        info.state = item.state;
+        states.push_back(std::move(info));
+    }
+    return states;
 }
 
 DownloadItem* DownloadsManager::getDownload(const std::string& itemId) {
@@ -905,19 +927,14 @@ bool DownloadsManager::fetchProgressFromServer(const std::string& itemId, const 
     return false;
 }
 
-// Helper to check if the current download should be cancelled
-bool DownloadsManager::isDownloadCancelled(const std::string& itemId, const std::string& episodeId) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    if (m_cancelledItemId == itemId) {
-        if (episodeId.empty() || m_cancelledEpisodeId == episodeId) {
-            return true;
-        }
-    }
-    return false;
+// Lock-free check for per-chunk cancel polling (no mutex!)
+bool DownloadsManager::isDownloadCancelled() const {
+    return m_cancelRequested.load(std::memory_order_relaxed);
 }
 
 void DownloadsManager::clearCancelFlag() {
     std::lock_guard<std::mutex> lock(m_mutex);
+    m_cancelRequested.store(false, std::memory_order_release);
     m_cancelledItemId.clear();
     m_cancelledEpisodeId.clear();
 }
@@ -991,7 +1008,7 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
 
         for (size_t i = 0; i < item.files.size() && m_downloading.load() && !wasCancelled; ++i) {
             // Check for cancellation at start of each file
-            if (isDownloadCancelled(currentItemId, currentEpisodeId)) {
+            if (isDownloadCancelled()) {
                 brls::Logger::info("DownloadsManager: Download cancelled, stopping");
                 wasCancelled = true;
                 break;
@@ -1021,7 +1038,7 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
             bool success = http.downloadFile(url,
                 [&](const char* data, size_t size) {
                     // Check for cancellation during download
-                    if (isDownloadCancelled(currentItemId, currentEpisodeId)) {
+                    if (isDownloadCancelled()) {
                         wasCancelled = true;
                         return false;  // Stop download
                     }
@@ -1224,7 +1241,7 @@ void DownloadsManager::downloadItem(DownloadItem& item) {
     bool success = http.downloadFile(url,
         [&](const char* data, size_t size) {
             // Check for cancellation during download
-            if (isDownloadCancelled(currentItemId, currentEpisodeId)) {
+            if (isDownloadCancelled()) {
                 wasCancelled = true;
                 return false;  // Stop download
             }
@@ -1337,22 +1354,46 @@ static std::string escapeJsonString(const std::string& str) {
 }
 
 void DownloadsManager::saveState() {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    saveStateUnlocked();
+    // Serialize under lock, then write to disk outside the lock
+    std::string data;
+    size_t itemCount = 0;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        data = serializeStateUnlocked(itemCount);
+        if (data.empty()) return;  // Debounced, nothing to write
+    }
+
+    // Disk I/O happens outside the mutex so download thread and UI thread
+    // aren't blocked by slow SD card writes
+    writeStateToDisk(data, itemCount);
 }
 
 void DownloadsManager::saveStateUnlocked() {
+    // Called from code that already holds m_mutex
+    size_t itemCount = 0;
+    std::string data = serializeStateUnlocked(itemCount);
+    if (data.empty()) return;  // Debounced
+
+    // Note: When called from the download thread (which holds m_mutex),
+    // we still do disk I/O under lock here. This is acceptable because:
+    // 1) The 500ms debounce limits frequency
+    // 2) The UI thread now uses getDownloadStates() which is fast
+    // 3) The download thread is the only one calling this path frequently
+    writeStateToDisk(data, itemCount);
+}
+
+std::string DownloadsManager::serializeStateUnlocked(size_t& outItemCount) {
     // Debounce: Only save every 500ms minimum (Vita SD card I/O is slow)
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastSaveTime).count();
     if (elapsed < 500 && m_lastSaveTime.time_since_epoch().count() != 0) {
         m_saveStatePending = true;
-        return;
+        return "";  // Empty string signals debounced/skipped
     }
     m_lastSaveTime = now;
     m_saveStatePending = false;
+    outItemCount = m_downloads.size();
 
-    // Simple JSON-like format for state
     std::stringstream ss;
     ss << "{\n\"downloads\":[\n";
 
@@ -1413,23 +1454,25 @@ void DownloadsManager::saveStateUnlocked() {
     }
 
     ss << "]\n}";
+    return ss.str();
+}
 
+void DownloadsManager::writeStateToDisk(const std::string& data, size_t itemCount) {
 #ifdef __vita__
     SceUID fd = sceIoOpen(STATE_FILE, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
     if (fd >= 0) {
-        std::string data = ss.str();
         sceIoWrite(fd, data.c_str(), data.size());
         sceIoClose(fd);
     }
 #else
     std::ofstream file(STATE_FILE);
     if (file.is_open()) {
-        file << ss.str();
+        file << data;
         file.close();
     }
 #endif
 
-    brls::Logger::debug("DownloadsManager: Saved state ({} items)", m_downloads.size());
+    brls::Logger::debug("DownloadsManager: Saved state ({} items)", itemCount);
 }
 
 void DownloadsManager::loadState() {

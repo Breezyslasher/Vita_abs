@@ -40,6 +40,16 @@ struct AudioFileInfo {
     int index = 0;             // Track index for ordering
 };
 
+// Server episode download info (from ABS server download queue)
+struct ServerEpisodeDownload {
+    std::string id;
+    std::string episodeTitle;
+    std::string podcastTitle;
+    std::string url;
+    bool isFinished = false;
+    bool failed = false;
+};
+
 // Chapter info
 struct Chapter {
     int id = 0;
@@ -297,6 +307,9 @@ public:
     bool downloadEpisodesToServer(const std::string& podcastId, const std::vector<std::string>& episodeIds);
     bool downloadNewEpisodesToServer(const std::string& podcastId, const std::vector<MediaItem>& episodes);
     bool downloadAllNewEpisodes(const std::string& podcastId);
+    bool fetchEpisodeDownloads(const std::string& libraryId,
+                               ServerEpisodeDownload& currentDownload, bool& hasCurrentDownload,
+                               std::vector<ServerEpisodeDownload>& queue);
 
     // Stub methods for unsupported features (Audiobookshelf doesn't have these)
     bool fetchPlaylists(std::vector<MediaItem>& playlists) { playlists.clear(); return false; }
