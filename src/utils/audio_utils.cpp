@@ -11,7 +11,6 @@
 #include <psp2/io/stat.h>
 #endif
 
-// FFmpeg
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
@@ -154,7 +153,6 @@ bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
 #endif
     }
 
-    // Create output format context for non-MP3 formats
     AVFormatContext* outputFmtCtx = nullptr;
 
     // Try multiple formats in order of preference

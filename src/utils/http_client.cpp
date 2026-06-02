@@ -14,7 +14,7 @@
 namespace vitaabs {
 
 // User agent string
-static const char* USER_AGENT = "VitaABS/1.0.0 (PlayStation Vita)";
+static const char* USER_AGENT = "VitaABS/" VITAABS_VERSION;
 
 // Curl write callback data
 struct WriteCallbackData {

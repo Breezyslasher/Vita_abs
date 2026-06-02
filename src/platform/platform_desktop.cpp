@@ -22,9 +22,9 @@ const std::string& dataDir() {
     if (s_dir.empty()) {
         const char* home = std::getenv("HOME");
         if (home && *home) {
-            s_dir = std::string(home) + "/.local/share/VitaSuwayomi";
+            s_dir = std::string(home) + "/.local/share/VitaABS";
         } else {
-            s_dir = "./VitaSuwayomi";
+            s_dir = "./VitaABS";
         }
     }
     return s_dir;

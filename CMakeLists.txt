@@ -160,9 +160,7 @@ set(APP_SOURCES
     src/utils/image_loader.cpp
     src/utils/jwt_auth.cpp
     src/utils/audio_utils.cpp
-    src/utils/vita_stubs.c
 )
-
 
 # vita_stubs.c only needed on Vita (no-op stdio locks, SDL_OpenURL stub)
 if(PLATFORM_PSV)
@@ -231,7 +229,7 @@ else()
 endif()
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
-    VITA_SUWAYOMI_VERSION=\"${APP_VERSION}\"
+    VITAABS_VERSION=\"${APP_VERSION}\"
 )
 
 # ---------------------------------------------------------------------------
@@ -246,12 +244,17 @@ elseif(WIN32)
     set(APP_FFMPEG_LIBS mpv)
     set(APP_FFMPEG_LINK_BLOCK ${APP_FFMPEG_LIBS})
 elseif(UNIX AND NOT APPLE AND NOT PLATFORM_PS4)
-    # Linux/SteamOS: mpv is unused and FFmpeg is only for AVIF/HEIF (rare).
-    # Skip both to avoid runtime errors on distros with different FFmpeg
-    # versions (e.g. SteamOS ships FFmpeg 7.x, CI builds against 6.x).
-    set(APP_FFMPEG_LIBS)
-    set(APP_FFMPEG_LINK_BLOCK)
-    add_definitions(-DVitaABS_NO_FFMPEG)
+    # Linux/SteamOS: full mpv + FFmpeg stack (CI installs dev packages).
+    set(APP_FFMPEG_LIBS
+        mpv
+        avfilter
+        avformat
+        avcodec
+        swresample
+        swscale
+        avutil
+    )
+    set(APP_FFMPEG_LINK_BLOCK ${APP_FFMPEG_LIBS})
 else()
     set(APP_FFMPEG_LIBS
         mpv

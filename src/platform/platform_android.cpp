@@ -24,9 +24,9 @@ const std::string& dataDir() {
     if (s_dataDir.empty()) {
         const char* internalPath = SDL_AndroidGetInternalStoragePath();
         if (internalPath && internalPath[0] != '\0') {
-            s_dataDir = std::string(internalPath) + "/VitaSuwayomi";
+            s_dataDir = std::string(internalPath) + "/VitaABS";
         } else {
-            s_dataDir = "/sdcard/VitaSuwayomi";
+            s_dataDir = "/sdcard/VitaABS";
         }
     }
     return s_dataDir;
