@@ -1,4 +1,4 @@
-package org.vitasuwayomi.app;
+package org.VitaABS.app;
 
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -15,7 +15,7 @@ import org.libsdl.app.BorealisHandler;
 import org.libsdl.app.PlatformUtils;
 import org.libsdl.app.SDLActivity;
 
-public class VitaSuwayomiActivity extends SDLActivity
+public class VitaABSActivity extends SDLActivity
 {
     protected static SurfaceView mpvSurface;
     private static String pendingDeeplink = null;
@@ -50,7 +50,7 @@ public class VitaSuwayomiActivity extends SDLActivity
     private String extractDeeplink(Intent intent) {
         if (intent == null) return null;
         Uri data = intent.getData();
-        if (data != null && "vitasuwayomi".equals(data.getScheme())) {
+        if (data != null && "VitaABS".equals(data.getScheme())) {
             return data.toString();
         }
         return null;
@@ -110,7 +110,7 @@ public class VitaSuwayomiActivity extends SDLActivity
         return new String[] {
                 "curl",
                 "SDL2",
-                "VitaSuwayomi"
+                "VitaABS"
         };
     }
 
