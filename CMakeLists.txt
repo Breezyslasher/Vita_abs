@@ -339,7 +339,7 @@ endif()
 
 if(PLATFORM_PSV)
     target_link_options(${PROJECT_NAME} PRIVATE "-Wl,--wrap=pthread_create")
-    )
+    
     target_link_libraries(${PROJECT_NAME}
         curl
         mbedtls
