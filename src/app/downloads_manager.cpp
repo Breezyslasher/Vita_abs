@@ -27,13 +27,14 @@
 #include <sys/stat.h>
 #endif
 
-// FFmpeg for audio concatenation
+#ifndef VitaABS_NO_FFMPEG
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/opt.h>
 #include <libavutil/timestamp.h>
 }
+#endif
 
 namespace vitaabs {
 
@@ -140,6 +141,10 @@ static bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
 #endif
     }
 
+#ifdef VitaABS_NO_FFMPEG
+    brls::Logger::error("concatenateAudioFiles: Non-MP3 concatenation requires FFmpeg (not available on this platform)");
+    return false;
+#else
     // For non-MP3, use FFmpeg concat demuxer
     // Create a concat file list for the concat demuxer
     std::string concatListPath = outputPath + ".concat.txt";
@@ -352,6 +357,7 @@ static bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
     brls::Logger::info("concatenateAudioFiles: Successfully combined {} files ({} packets)",
                        inputFiles.size(), packetsWritten);
     return true;
+#endif // VitaABS_NO_FFMPEG
 }
 
 // Downloads directory on Vita

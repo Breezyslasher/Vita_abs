@@ -241,8 +241,10 @@ if(PLATFORM_ANDROID)
     set(APP_FFMPEG_LIBS)
     set(APP_FFMPEG_LINK_BLOCK)
 elseif(WIN32)
+    # Windows CI only ships mpv; FFmpeg headers not available.
     set(APP_FFMPEG_LIBS mpv)
     set(APP_FFMPEG_LINK_BLOCK ${APP_FFMPEG_LIBS})
+    add_definitions(-DVitaABS_NO_FFMPEG)
 elseif(UNIX AND NOT APPLE AND NOT PLATFORM_PS4)
     # Linux/SteamOS: full mpv + FFmpeg stack (CI installs dev packages).
     set(APP_FFMPEG_LIBS
@@ -395,7 +397,7 @@ if(PLATFORM_PSV)
         c
     )
 elseif(PLATFORM_SWITCH)
-    target_link_libraries(${PROJECT_NAME} nx dav1d)
+    target_link_libraries(${PROJECT_NAME} nx dav1d placebo postproc jpeg)
 elseif(PLATFORM_PS4)
     target_link_libraries(${PROJECT_NAME}
         SceNet
