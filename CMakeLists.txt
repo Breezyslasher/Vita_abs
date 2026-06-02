@@ -404,14 +404,14 @@ if(PLATFORM_PSV)
 
         FILE resources/xml/activity/main.xml     resources/xml/activity/main.xml
         FILE resources/xml/activity/login.xml    resources/xml/activity/login.xml
-        FILE resources/xml/activity/reader.xml   resources/xml/activity/reader.xml
+        FILE resources/xml/activity/player.xml   resources/xml/activity/player.xml
         FILE resources/xml/tabs/library.xml      resources/xml/tabs/library.xml
         FILE resources/xml/tabs/search.xml       resources/xml/tabs/search.xml
         FILE resources/xml/tabs/settings.xml     resources/xml/tabs/settings.xml
-        FILE resources/xml/tabs/extensions.xml   resources/xml/tabs/extensions.xml
-        FILE resources/xml/view/manga_detail.xml resources/xml/view/manga_detail.xml
-        FILE resources/xml/view/manga_item.xml   resources/xml/view/manga_item.xml
-        FILE resources/xml/view/chapter_item.xml resources/xml/view/chapter_item.xml
+        FILE resources/xml/tabs/home.xml   resources/xml/tabs/home.xml
+        FILE resources/xml/view/media_detail.xml resources/xml/view/media_detail.xml
+        FILE resources/xml/view/media_item.xml   resources/xml/view/media_item.xml
+       
 
         FILE resources/icons/a.png                        resources/icons/a.png
         FILE resources/icons/az.png                       resources/icons/az.png
