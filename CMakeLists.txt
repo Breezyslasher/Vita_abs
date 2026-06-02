@@ -339,6 +339,7 @@ endif()
 
 if(PLATFORM_PSV)
     target_link_libraries(${PROJECT_NAME}
+         "-Wl,--wrap=pthread_create"
         curl
         mbedtls
         mbedx509
