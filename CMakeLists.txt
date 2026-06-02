@@ -244,12 +244,17 @@ elseif(WIN32)
     set(APP_FFMPEG_LIBS mpv)
     set(APP_FFMPEG_LINK_BLOCK ${APP_FFMPEG_LIBS})
 elseif(UNIX AND NOT APPLE AND NOT PLATFORM_PS4)
-    # Linux/SteamOS: link mpv (needed for audio playback).
-    # Skip FFmpeg to avoid version conflicts across distros; audio
-    # concatenation falls back to binary MP3 concat when unavailable.
-    set(APP_FFMPEG_LIBS mpv)
+    # Linux/SteamOS: full mpv + FFmpeg stack (CI installs dev packages).
+    set(APP_FFMPEG_LIBS
+        mpv
+        avfilter
+        avformat
+        avcodec
+        swresample
+        swscale
+        avutil
+    )
     set(APP_FFMPEG_LINK_BLOCK ${APP_FFMPEG_LIBS})
-    add_definitions(-DVitaABS_NO_FFMPEG)
 else()
     set(APP_FFMPEG_LIBS
         mpv
