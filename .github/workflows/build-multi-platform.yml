@@ -128,25 +128,25 @@ jobs:
         uses: actions/download-artifact@v4
       - name: Package Windows assets
         run: |
-          for p in VitaSuwayomi-windows-*; do
+          for p in VitaABS-windows-*; do
             [[ -d $p ]] && 7z a -mx=9 $p.7z ./$p/* && rm -rf $p
           done
       - name: Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
-          name: VitaSuwayomi ${{ github.ref_name }}
+          name: VitaABS ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
           draft: true
           files: |
-            VitaSuwayomi-windows-*.7z
-            VitaSuwayomi-macos-*/*
-            VitaSuwayomi-nx-*/*.nro
-            VitaSuwayomi-ps4-*/*
-            VitaSuwayomi-vita-*/*.vpk
-            VitaSuwayomi-Flatpak-*/*
-            VitaSuwayomi-aur-*/*.pkg.tar.*
-            VitaSuwayomi-android-*/*
+            VitaABS-windows-*.7z
+            VitaABS-macos-*/*
+            VitaABS-nx-*/*.nro
+            VitaABS-ps4-*/*
+            VitaABS-vita-*/*.vpk
+            VitaABS-Flatpak-*/*
+            VitaABS-aur-*/*.pkg.tar.*
+            VitaABS-android-*/*
 
   # ───────────────────────────────────────────────
   # Pre-release — manually triggered
@@ -168,59 +168,59 @@ jobs:
 
           # Vita VPK
           for f in $(find . -name "*.vpk"); do
-            cp "$f" "release/VitaSuwayomi.${FVER}.vpk"
+            cp "$f" "release/VitaABS.${FVER}.vpk"
           done
 
-          # Android APKs (Gradle names them VitaSuwayomi-{abi}.apk)
+          # Android APKs (Gradle names them VitaABS-{abi}.apk)
           for apk in $(find . -name "*.apk"); do
-            abi=$(basename "$apk" .apk | sed 's/VitaSuwayomi-//')
-            [ -n "$abi" ] && cp "$apk" "release/VitaSuwayomi.${FVER}-${abi}.apk"
+            abi=$(basename "$apk" .apk | sed 's/VitaABS-//')
+            [ -n "$abi" ] && cp "$apk" "release/VitaABS.${FVER}-${abi}.apk"
           done
 
           # Windows — zip each arch (exe + dlls + resources)
-          for dir in VitaSuwayomi-mingw-*; do
+          for dir in VitaABS-mingw-*; do
             [ -d "$dir" ] || continue
-            arch=$(echo "$dir" | sed -E 's/VitaSuwayomi-mingw-([^-]+)-.*/\1/')
-            (cd "$dir" && zip -r "../release/VitaSuwayomi.${FVER}-windows-${arch}.zip" .)
+            arch=$(echo "$dir" | sed -E 's/VitaABS-mingw-([^-]+)-.*/\1/')
+            (cd "$dir" && zip -r "../release/VitaABS.${FVER}-windows-${arch}.zip" .)
           done
 
           # Flatpak tarballs
-          for tgz in $(find . -name "VitaSuwayomi-Linux-*.tar.gz"); do
+          for tgz in $(find . -name "VitaABS-Linux-*.tar.gz"); do
             base=$(basename "$tgz")
-            info=$(echo "$base" | sed -E 's/VitaSuwayomi-Linux-(.+)-[0-9]+\.tar\.gz/\1/')
-            cp "$tgz" "release/VitaSuwayomi.${FVER}-Flatpak-${info}.tar.gz"
+            info=$(echo "$base" | sed -E 's/VitaABS-Linux-(.+)-[0-9]+\.tar\.gz/\1/')
+            cp "$tgz" "release/VitaABS.${FVER}-Flatpak-${info}.tar.gz"
           done
 
           # Switch NRO
-          for dir in VitaSuwayomi-nx-*; do
+          for dir in VitaABS-nx-*; do
             [ -d "$dir" ] || continue
-            driver=$(echo "$dir" | sed -E 's/VitaSuwayomi-nx-([^-]+)-.*/\1/')
+            driver=$(echo "$dir" | sed -E 's/VitaABS-nx-([^-]+)-.*/\1/')
             nro=$(find "$dir" -name "*.nro" | head -1)
-            [ -n "$nro" ] && cp "$nro" "release/VitaSuwayomi.${FVER}-nx-${driver}.nro"
+            [ -n "$nro" ] && cp "$nro" "release/VitaABS.${FVER}-nx-${driver}.nro"
           done
 
           # PS4 pkg
           for f in $(find . -path "*ps4*" -name "*.pkg"); do
-            cp "$f" "release/VitaSuwayomi.${FVER}-ps4.pkg"
+            cp "$f" "release/VitaABS.${FVER}-ps4.pkg"
           done
 
           # macOS DMG
-          for dir in VitaSuwayomi-macos-*; do
+          for dir in VitaABS-macos-*; do
             [ -d "$dir" ] || continue
-            tag=$(echo "$dir" | sed -E 's/VitaSuwayomi-macos-([^-]+)-.*/\1/')
+            tag=$(echo "$dir" | sed -E 's/VitaABS-macos-([^-]+)-.*/\1/')
             dmg=$(find "$dir" -name "*.dmg" | head -1)
-            [ -n "$dmg" ] && cp "$dmg" "release/VitaSuwayomi.${FVER}-macOS-${tag}.dmg"
+            [ -n "$dmg" ] && cp "$dmg" "release/VitaABS.${FVER}-macOS-${tag}.dmg"
           done
 
           # Deb
           for f in $(find . -name "*.deb"); do
             arch=$(dpkg-deb -f "$f" Architecture 2>/dev/null || echo "amd64")
-            cp "$f" "release/VitaSuwayomi.${FVER}-Linux_${arch}.deb"
+            cp "$f" "release/VitaABS.${FVER}-Linux_${arch}.deb"
           done
 
           # AUR
           for f in $(find . -name "*.pkg.tar.zst"); do
-            cp "$f" "release/VitaSuwayomi.${FVER}-Linux.pkg.tar.zst"
+            cp "$f" "release/VitaABS.${FVER}-Linux.pkg.tar.zst"
           done
 
           echo "Release files:"
@@ -228,7 +228,7 @@ jobs:
       - name: Create pre-release
         uses: softprops/action-gh-release@v2
         with:
-          name: VitaSuwayomi ${{ needs.resolve-version.outputs.version }}
+          name: VitaABS ${{ needs.resolve-version.outputs.version }}
           tag_name: ${{ needs.resolve-version.outputs.version_tag }}
           prerelease: true
           generate_release_notes: true
@@ -273,13 +273,13 @@ jobs:
       - name: Upload VPK
         uses: actions/upload-artifact@v4
         with:
-          name: VitaSuwayomi-vita-${{ github.run_number }}
-          path: build/VitaSuwayomi.vpk
+          name: VitaABS-vita-${{ github.run_number }}
+          path: build/VitaABS.vpk
       - name: Upload ELF
         uses: actions/upload-artifact@v4
         with:
-             name: VitaSuwayomi-elf-${{ github.run_number }}
-             path: build/VitaSuwayomi.velf
+             name: VitaABS-elf-${{ github.run_number }}
+             path: build/VitaABS.velf
 
 
   # ───────────────────────────────────────────────
@@ -358,7 +358,7 @@ jobs:
     - name: Upload dist
       uses: actions/upload-artifact@v4
       with:
-        name: VitaSuwayomi-android-${{ github.run_number }}
+        name: VitaABS-android-${{ github.run_number }}
         path: app/platform/android/app/build/outputs/apk/release/*.apk
 
   # ───────────────────────────────────────────────
@@ -420,12 +420,12 @@ jobs:
           cmake -B build -G Ninja -DPLATFORM_DESKTOP=ON -DUSE_GLES2=${{ matrix.gles2 }} \
             -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }}
           cmake --build build
-          tar -czf VitaSuwayomi-Linux-${{ matrix.arch }}-${{ matrix.driver }}-${{ github.run_number }}.tar.gz -C build VitaSuwayomi resources
+          tar -czf VitaABS-Linux-${{ matrix.arch }}-${{ matrix.driver }}-${{ github.run_number }}.tar.gz -C build VitaABS resources
       - name: Upload Flatpak artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VitaSuwayomi-Flatpak-${{ matrix.arch }}-${{ matrix.driver }}-${{ github.run_number }}
-          path: VitaSuwayomi-Linux-${{ matrix.arch }}-${{ matrix.driver }}-${{ github.run_number }}.tar.gz
+          name: VitaABS-Flatpak-${{ matrix.arch }}-${{ matrix.driver }}-${{ github.run_number }}
+          path: VitaABS-Linux-${{ matrix.arch }}-${{ matrix.driver }}-${{ github.run_number }}.tar.gz
 
   # ───────────────────────────────────────────────
   # Nintendo Switch — Matrix (opengl + deko3d)
@@ -467,8 +467,8 @@ jobs:
       - name: Upload NRO
         uses: actions/upload-artifact@v4
         with:
-          name: VitaSuwayomi-Switch-${{ matrix.driver }}-${{ github.run_number }}
-          path: build/VitaSuwayomi.nro
+          name: VitaABS-Switch-${{ matrix.driver }}-${{ github.run_number }}
+          path: build/VitaABS.nro
 
   # ───────────────────────────────────────────────
   # PS4
@@ -501,7 +501,7 @@ jobs:
       - name: Upload PS4 artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: VitaSuwayomi-ps4-${{ github.run_number }}
+          name: VitaABS-ps4-${{ github.run_number }}
           if-no-files-found: warn
           path: |
             build/**/*.pkg
@@ -536,7 +536,7 @@ jobs:
           cmake --build build
       - name: Bundle macOS dylibs
         run: |
-          BIN="build/VitaSuwayomi"
+          BIN="build/VitaABS"
           if [ ! -f "$BIN" ]; then
             echo "Expected binary not found: $BIN"
             exit 1
@@ -612,46 +612,46 @@ jobs:
       - name: Package macOS DMG
         run: |
           APP_ROOT="build/dmg-root"
-          APP_DIR="$APP_ROOT/VitaSuwayomi.app"
+          APP_DIR="$APP_ROOT/VitaABS.app"
           MACOS_DIR="$APP_DIR/Contents/MacOS"
 
           rm -rf "$APP_ROOT"
           mkdir -p "$MACOS_DIR"
 
-          cp -f build/VitaSuwayomi "$MACOS_DIR/VitaSuwayomi"
+          cp -f build/VitaABS "$MACOS_DIR/VitaABS"
           cp -R build/resources "$MACOS_DIR/resources"
           cp -f build/*.dylib "$MACOS_DIR/" 2>/dev/null || true
-          chmod +x "$MACOS_DIR/VitaSuwayomi"
+          chmod +x "$MACOS_DIR/VitaABS"
 
           cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-            <key>CFBundleName</key><string>VitaSuwayomi</string>
-            <key>CFBundleDisplayName</key><string>VitaSuwayomi</string>
-            <key>CFBundleIdentifier</key><string>com.vitasuwayomi.app</string>
+            <key>CFBundleName</key><string>VitaABS</string>
+            <key>CFBundleDisplayName</key><string>VitaABS</string>
+            <key>CFBundleIdentifier</key><string>com.VitaABS.app</string>
             <key>CFBundleVersion</key><string>${{ needs.resolve-version.outputs.version_number }}</string>
             <key>CFBundleShortVersionString</key><string>${{ needs.resolve-version.outputs.version }}</string>
             <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleExecutable</key><string>VitaSuwayomi</string>
+            <key>CFBundleExecutable</key><string>VitaABS</string>
           </dict>
           </plist>
           PLIST
 
           hdiutil create \
-            -volname "VitaSuwayomi" \
+            -volname "VitaABS" \
             -srcfolder "$APP_ROOT" \
             -ov \
             -format UDZO \
-            "build/VitaSuwayomi-${{ matrix.tag }}.dmg"
+            "build/VitaABS-${{ matrix.tag }}.dmg"
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VitaSuwayomi-macos-${{ matrix.tag }}-${{ github.run_number }}
+          name: VitaABS-macos-${{ matrix.tag }}-${{ github.run_number }}
           path: |
-            build/VitaSuwayomi
-            build/VitaSuwayomi-*.dmg
+            build/VitaABS
+            build/VitaABS-*.dmg
             build/*.dylib
             build/resources/
 
@@ -701,7 +701,7 @@ jobs:
           cmake --build build
       - name: Bundle runtime DLLs
         run: |
-          EXE="build/VitaSuwayomi.exe"
+          EXE="build/VitaABS.exe"
           DLL_DIR="${MINGW_PREFIX}/bin"
           if [ ! -f "$EXE" ]; then
             echo "Expected binary not found: $EXE"
@@ -742,9 +742,9 @@ jobs:
       - name: Upload mingw artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VitaSuwayomi-mingw-${{ matrix.arch }}-${{ github.run_number }}
+          name: VitaABS-mingw-${{ matrix.arch }}-${{ github.run_number }}
           path: |
-            build/VitaSuwayomi.exe
+            build/VitaABS.exe
             build/*.dll
             build/resources/
 
@@ -777,42 +777,42 @@ jobs:
           cmake --build build
           PKGROOT="pkgroot"
           rm -rf "$PKGROOT"
-          mkdir -p "$PKGROOT/DEBIAN" "$PKGROOT/usr/bin" "$PKGROOT/usr/lib/VitaSuwayomi" "$PKGROOT/usr/share/VitaSuwayomi" "$PKGROOT/usr/share/applications" "$PKGROOT/usr/share/pixmaps"
-          install -m 755 build/VitaSuwayomi "$PKGROOT/usr/lib/VitaSuwayomi/VitaSuwayomi"
+          mkdir -p "$PKGROOT/DEBIAN" "$PKGROOT/usr/bin" "$PKGROOT/usr/lib/VitaABS" "$PKGROOT/usr/share/VitaABS" "$PKGROOT/usr/share/applications" "$PKGROOT/usr/share/pixmaps"
+          install -m 755 build/VitaABS "$PKGROOT/usr/lib/VitaABS/VitaABS"
           {
             echo '#!/usr/bin/env sh'
-            echo 'cd /usr/share/VitaSuwayomi || exit 1'
-            echo 'exec /usr/lib/VitaSuwayomi/VitaSuwayomi "$@"'
-          } > "$PKGROOT/usr/bin/VitaSuwayomi"
-          chmod 755 "$PKGROOT/usr/bin/VitaSuwayomi"
-          cp -r build/resources "$PKGROOT/usr/share/VitaSuwayomi/resources"
-          install -m 644 app/platform/icon_desktop.png "$PKGROOT/usr/share/pixmaps/vitasuwayomi.png"
+            echo 'cd /usr/share/VitaABS || exit 1'
+            echo 'exec /usr/lib/VitaABS/VitaABS "$@"'
+          } > "$PKGROOT/usr/bin/VitaABS"
+          chmod 755 "$PKGROOT/usr/bin/VitaABS"
+          cp -r build/resources "$PKGROOT/usr/share/VitaABS/resources"
+          install -m 644 app/platform/icon_desktop.png "$PKGROOT/usr/share/pixmaps/VitaABS.png"
           {
             echo '[Desktop Entry]'
             echo 'Type=Application'
-            echo 'Name=VitaSuwayomi'
+            echo 'Name=VitaABS'
             echo 'Comment=Suwayomi desktop client'
-            echo 'Exec=VitaSuwayomi'
-            echo 'Icon=vitasuwayomi'
+            echo 'Exec=VitaABS'
+            echo 'Icon=VitaABS'
             echo 'Terminal=false'
             echo 'Categories=Network;Utility;'
-          } > "$PKGROOT/usr/share/applications/vitasuwayomi.desktop"
+          } > "$PKGROOT/usr/share/applications/VitaABS.desktop"
           ARCH="$(dpkg --print-architecture)"
           {
-            echo "Package: vitasuwayomi"
+            echo "Package: VitaABS"
             echo "Version: ${{ needs.resolve-version.outputs.version_number }}"
             echo "Section: utils"
             echo "Priority: optional"
             echo "Architecture: ${ARCH}"
-            echo "Maintainer: VitaSuwayomi CI <ci@vitasuwayomi.local>"
-            echo "Description: VitaSuwayomi desktop build artifact"
+            echo "Maintainer: VitaABS CI <ci@VitaABS.local>"
+            echo "Description: VitaABS desktop build artifact"
           } > "$PKGROOT/DEBIAN/control"
-          dpkg-deb --build "$PKGROOT" "VitaSuwayomi-${{ github.run_number }}_${ARCH}.deb"
+          dpkg-deb --build "$PKGROOT" "VitaABS-${{ github.run_number }}_${ARCH}.deb"
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VitaSuwayomi-deb-${{ github.run_number }}
-          path: VitaSuwayomi-${{ github.run_number }}_*.deb
+          name: VitaABS-deb-${{ github.run_number }}
+          path: VitaABS-${{ github.run_number }}_*.deb
 
   # ───────────────────────────────────────────────
   # AUR-like build
@@ -841,9 +841,9 @@ jobs:
           cmake -B build -G Ninja -DPLATFORM_DESKTOP=ON \
             -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }}
           cmake --build build
-          tar --zstd -cf VitaSuwayomi-${{ github.run_number }}.pkg.tar.zst -C build VitaSuwayomi resources
+          tar --zstd -cf VitaABS-${{ github.run_number }}.pkg.tar.zst -C build VitaABS resources
       - name: Upload aur artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VitaSuwayomi-aur-${{ github.run_number }}
-          path: VitaSuwayomi-${{ github.run_number }}.pkg.tar.zst
+          name: VitaABS-aur-${{ github.run_number }}
+          path: VitaABS-${{ github.run_number }}.pkg.tar.zst
