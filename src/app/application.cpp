@@ -58,8 +58,9 @@ void Application::run() {
     // Check if we have saved login credentials
     if (isLoggedIn() && (!m_serverUrl.empty() || !m_localServerUrl.empty() || !m_remoteServerUrl.empty())) {
         brls::Logger::info("Restoring saved session...");
-        // Set auth token first
+        // Set auth tokens
         AudiobookshelfClient::getInstance().setAuthToken(m_authToken);
+        AudiobookshelfClient::getInstance().setRefreshToken(m_refreshToken);
 
         // Try to connect, with automatic URL switching if needed
         if (tryConnectToServer()) {
@@ -298,6 +299,7 @@ bool Application::loadSettings() {
 
     // Load authentication
     m_authToken = extractString("authToken");
+    m_refreshToken = extractString("refreshToken");
     m_serverUrl = extractString("serverUrl");
     m_localServerUrl = extractString("localServerUrl");
     m_remoteServerUrl = extractString("remoteServerUrl");
@@ -386,6 +388,7 @@ bool Application::saveSettings() {
 
     // Authentication
     json += "  \"authToken\": \"" + m_authToken + "\",\n";
+    json += "  \"refreshToken\": \"" + m_refreshToken + "\",\n";
     json += "  \"serverUrl\": \"" + m_serverUrl + "\",\n";
     json += "  \"localServerUrl\": \"" + m_localServerUrl + "\",\n";
     json += "  \"remoteServerUrl\": \"" + m_remoteServerUrl + "\",\n";
