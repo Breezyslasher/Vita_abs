@@ -9,7 +9,7 @@
 #include <functional>
 #include <map>
 #include <mutex>
-
+#include <atomic>
 namespace vitaabs {
 
 class ImageLoader {
@@ -17,7 +17,8 @@ public:
     using LoadCallback = std::function<void(brls::Image*)>;
 
     // Load image asynchronously from URL
-    static void loadAsync(const std::string& url, LoadCallback callback, brls::Image* target);
+    static void loadAsync(const std::string& url, LoadCallback callback,
+                          brls::Image* target, std::shared_ptr<std::atomic<bool>> alive);
 
     // Clear image cache
     static void clearCache();
