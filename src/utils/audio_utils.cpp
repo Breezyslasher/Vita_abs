@@ -11,12 +11,14 @@
 #include <psp2/io/stat.h>
 #endif
 
+#ifndef VitaABS_NO_FFMPEG
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/opt.h>
 #include <libavutil/timestamp.h>
 }
+#endif
 
 namespace vitaabs {
 
@@ -153,6 +155,10 @@ bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
 #endif
     }
 
+#ifdef VitaABS_NO_FFMPEG
+    brls::Logger::error("concatenateAudioFiles: Non-MP3 concatenation requires FFmpeg (not available on this platform)");
+    return false;
+#else
     AVFormatContext* outputFmtCtx = nullptr;
 
     // Try multiple formats in order of preference
@@ -380,6 +386,7 @@ bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
     brls::Logger::info("concatenateAudioFiles: Successfully combined {} files ({} packets)",
                        filesProcessed, packetsWritten);
     return filesProcessed > 0;
+#endif // VitaABS_NO_FFMPEG
 }
 
 } // namespace vitaabs
