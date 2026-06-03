@@ -8,6 +8,7 @@
 #include "activity/login_activity.hpp"
 #include "activity/main_activity.hpp"
 #include "activity/player_activity.hpp"
+#include "platform/platform.hpp"
 
 #include <borealis.hpp>
 #include <fstream>
@@ -21,7 +22,7 @@
 
 namespace vitaabs {
 
-static const char* SETTINGS_PATH = "ux0:data/VitaABS/settings.json";
+static std::string getSettingsPath() { return platform::path("settings.json"); }
 
 Application& Application::getInstance() {
     static Application instance;
@@ -32,11 +33,7 @@ bool Application::init() {
     brls::Logger::setLogLevel(brls::LogLevel::LOG_DEBUG);
     brls::Logger::info("VitaABS {} initializing...", VITA_ABS_VERSION);
 
-#ifdef __vita__
-    // Create data directory
-    int ret = sceIoMkdir("ux0:data/VitaABS", 0777);
-    brls::Logger::debug("sceIoMkdir result: {:#x}", ret);
-#endif
+    platform::createDirRecursive(platform::dataDir());
 
     // Load saved settings
     brls::Logger::info("Loading saved settings...");
@@ -251,32 +248,16 @@ std::string Application::formatDuration(float seconds) {
 }
 
 bool Application::loadSettings() {
-#ifdef __vita__
-    brls::Logger::debug("loadSettings: Opening {}", SETTINGS_PATH);
+    std::string settingsPath = getSettingsPath();
+    brls::Logger::debug("loadSettings: Opening {}", settingsPath);
 
-    SceUID fd = sceIoOpen(SETTINGS_PATH, SCE_O_RDONLY, 0);
-    if (fd < 0) {
-        brls::Logger::debug("No settings file found (error: {:#x})", fd);
+    std::vector<uint8_t> data = platform::readFile(settingsPath);
+    if (data.empty()) {
+        brls::Logger::debug("No settings file found");
         return false;
     }
 
-    // Get file size
-    SceOff size = sceIoLseek(fd, 0, SCE_SEEK_END);
-    sceIoLseek(fd, 0, SCE_SEEK_SET);
-
-    brls::Logger::debug("loadSettings: File size = {}", size);
-
-    if (size <= 0 || size > 16384) {
-        brls::Logger::error("loadSettings: Invalid file size");
-        sceIoClose(fd);
-        return false;
-    }
-
-    std::string content;
-    content.resize(size);
-    sceIoRead(fd, &content[0], size);
-    sceIoClose(fd);
-
+    std::string content(data.begin(), data.end());
     brls::Logger::debug("loadSettings: Read {} bytes", content.length());
 
     // Simple JSON parsing for strings
@@ -390,14 +371,11 @@ bool Application::loadSettings() {
 
     brls::Logger::info("Settings loaded successfully");
     return !m_authToken.empty();
-#else
-    return false;
-#endif
 }
 
 bool Application::saveSettings() {
-#ifdef __vita__
-    brls::Logger::info("saveSettings: Saving to {}", SETTINGS_PATH);
+    std::string settingsPath = getSettingsPath();
+    brls::Logger::info("saveSettings: Saving to {}", settingsPath);
     brls::Logger::debug("saveSettings: authToken={}, serverUrl={}, username={}",
                         m_authToken.empty() ? "(empty)" : "(set)",
                         m_serverUrl.empty() ? "(empty)" : m_serverUrl,
@@ -466,25 +444,13 @@ bool Application::saveSettings() {
 
     json += "}\n";
 
-    SceUID fd = sceIoOpen(SETTINGS_PATH, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
-    if (fd < 0) {
-        brls::Logger::error("Failed to open settings file for writing: {:#x}", fd);
-        return false;
-    }
-
-    int written = sceIoWrite(fd, json.c_str(), json.length());
-    sceIoClose(fd);
-
-    if (written == (int)json.length()) {
-        brls::Logger::info("Settings saved successfully ({} bytes)", written);
+    if (platform::writeFile(settingsPath, json)) {
+        brls::Logger::info("Settings saved successfully ({} bytes)", json.length());
         return true;
     } else {
-        brls::Logger::error("Failed to write settings: only {} of {} bytes written", written, json.length());
+        brls::Logger::error("Failed to write settings file");
         return false;
     }
-#else
-    return false;
-#endif
 }
 
 void Application::setBackgroundDownloadProgress(const BackgroundDownloadProgress& progress) {

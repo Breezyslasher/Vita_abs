@@ -4,17 +4,14 @@
  */
 
 #include "utils/jwt_auth.hpp"
+#include "platform/platform.hpp"
 #include <borealis.hpp>
 #include <cstring>
 #include <ctime>
 #include <random>
 
 #ifdef __vita__
-#include <psp2/io/fcntl.h>
-#include <psp2/io/stat.h>
 #include <psp2/rtc.h>
-#else
-#include <fstream>
 #endif
 
 // ED25519 implementation (simplified from ref10/TweetNaCl)
@@ -326,65 +323,34 @@ bool JwtAuth::generateKeyPair() {
 }
 
 bool JwtAuth::loadKeyPair() {
-#ifdef __vita__
-    const char* keyPath = "ux0:data/VitaABS/keys/ed25519.key";
+    std::string keyPath = platform::path("keys/ed25519.key");
+    std::vector<uint8_t> data = platform::readFile(keyPath);
 
-    SceUID fd = sceIoOpen(keyPath, SCE_O_RDONLY, 0);
-    if (fd < 0) return false;
+    if (data.size() < ED25519_PRIVATE_KEY_SIZE) return false;
 
-    // Read key data
-    uint8_t buffer[ED25519_PRIVATE_KEY_SIZE + 64];  // key + key ID
-    int read = sceIoRead(fd, buffer, sizeof(buffer));
-    sceIoClose(fd);
-
-    if (read < ED25519_PRIVATE_KEY_SIZE) return false;
-
-    memcpy(m_keyPair.privateKey, buffer, ED25519_PRIVATE_KEY_SIZE);
+    memcpy(m_keyPair.privateKey, data.data(), ED25519_PRIVATE_KEY_SIZE);
     memcpy(m_keyPair.publicKey, m_keyPair.privateKey + ED25519_SEED_SIZE, ED25519_PUBLIC_KEY_SIZE);
 
-    if (read > ED25519_PRIVATE_KEY_SIZE) {
-        m_keyPair.keyId = std::string((char*)buffer + ED25519_PRIVATE_KEY_SIZE,
-                                       read - ED25519_PRIVATE_KEY_SIZE);
+    if (data.size() > ED25519_PRIVATE_KEY_SIZE) {
+        m_keyPair.keyId = std::string((char*)data.data() + ED25519_PRIVATE_KEY_SIZE,
+                                       data.size() - ED25519_PRIVATE_KEY_SIZE);
     } else {
         m_keyPair.keyId = generateKeyId();
     }
-#else
-    // Desktop fallback
-    std::ifstream file("vitaabs_ed25519.key", std::ios::binary);
-    if (!file) return false;
-
-    file.read((char*)m_keyPair.privateKey, ED25519_PRIVATE_KEY_SIZE);
-    memcpy(m_keyPair.publicKey, m_keyPair.privateKey + ED25519_SEED_SIZE, ED25519_PUBLIC_KEY_SIZE);
-
-    std::string keyId;
-    std::getline(file, keyId);
-    m_keyPair.keyId = keyId.empty() ? generateKeyId() : keyId;
-#endif
 
     return m_keyPair.isValid();
 }
 
 bool JwtAuth::saveKeyPair() {
-#ifdef __vita__
-    // Create directory
-    sceIoMkdir("ux0:data/VitaABS/keys", 0777);
+    platform::createDirRecursive(platform::path("keys"));
 
-    const char* keyPath = "ux0:data/VitaABS/keys/ed25519.key";
-    SceUID fd = sceIoOpen(keyPath, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0600);
-    if (fd < 0) return false;
+    std::string keyPath = platform::path("keys/ed25519.key");
 
-    sceIoWrite(fd, m_keyPair.privateKey, ED25519_PRIVATE_KEY_SIZE);
-    sceIoWrite(fd, m_keyPair.keyId.c_str(), m_keyPair.keyId.length());
-    sceIoClose(fd);
-#else
-    std::ofstream file("vitaabs_ed25519.key", std::ios::binary);
-    if (!file) return false;
+    std::vector<uint8_t> data(ED25519_PRIVATE_KEY_SIZE + m_keyPair.keyId.size());
+    memcpy(data.data(), m_keyPair.privateKey, ED25519_PRIVATE_KEY_SIZE);
+    memcpy(data.data() + ED25519_PRIVATE_KEY_SIZE, m_keyPair.keyId.c_str(), m_keyPair.keyId.size());
 
-    file.write((char*)m_keyPair.privateKey, ED25519_PRIVATE_KEY_SIZE);
-    file << m_keyPair.keyId;
-#endif
-
-    return true;
+    return platform::writeFile(keyPath, data.data(), data.size());
 }
 
 std::string JwtAuth::getJwk() const {
