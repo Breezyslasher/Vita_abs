@@ -753,9 +753,7 @@ void MediaDetailView::loadDetails() {
         } else if (loadedFromServer) {
             // Fetch from server
             std::string url = client.getCoverUrl(m_item.id, 400, 400);
-            ImageLoader::loadAsync(url, [this](brls::Image* image) {
-                // Image loaded
-            }, m_posterImage);
+            ImageLoader::loadAsync(url, [](brls::Image* image) {}, m_posterImage, m_alive);
         }
         // If offline and no local cover, leave poster empty
     }

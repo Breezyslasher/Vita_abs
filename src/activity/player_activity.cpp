@@ -200,8 +200,8 @@ void PlayerActivity::onContentAvailable() {
 void PlayerActivity::willDisappear(bool resetState) {
     brls::Activity::willDisappear(resetState);
 
-    // Mark as destroying to prevent timer callbacks
     m_destroying = true;
+    *m_alive = false;
 
     // Stop update timer first
     m_updateTimer.stop();
@@ -957,10 +957,12 @@ void PlayerActivity::loadCoverArt(const std::string& coverUrl) {
 #endif
     } else {
         // Use the image loader to load the cover asynchronously (HTTP)
-        ImageLoader::loadAsync(coverUrl, [this](brls::Image* img) {
-            // Image is loaded into the target automatically
+        std::weak_ptr<bool> aliveWeak = m_alive;
+        ImageLoader::loadAsync(coverUrl, [aliveWeak](brls::Image* img) {
+            auto alive = aliveWeak.lock();
+            if (!alive || !*alive) return;
             brls::Logger::debug("Cover art loaded");
-        }, coverImage);
+        }, coverImage, aliveWeak);
     }
 }
 
