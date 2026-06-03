@@ -4,6 +4,7 @@
 #include <map>
 #include <vector>
 #include <functional>
+#include <cstdint>
 
 // Define client info for HTTP User-Agent
 #ifndef ABS_CLIENT_NAME

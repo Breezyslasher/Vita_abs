@@ -2069,8 +2069,12 @@ int DownloadsManager::scanDownloadsFolder() {
         std::string filename = entry->d_name;
 
         // Skip directories and special files
-        if (entry->d_type == DT_DIR) continue;
         if (filename == "." || filename == "..") continue;
+        {
+            struct stat st;
+            std::string fullPath = m_downloadsPath + "/" + filename;
+            if (stat(fullPath.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) continue;
+        }
         if (filename == "state.json") continue;
 
         // Check if it's an audio file
