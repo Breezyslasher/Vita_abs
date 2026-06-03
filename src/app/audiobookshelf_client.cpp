@@ -353,8 +353,11 @@ MediaItem AudiobookshelfClient::parseMediaItem(const std::string& json) {
     }
     item.podcastId = extractJsonValue(json, "podcastId");
     if (item.podcastId.empty()) {
-        // For recent episodes, the libraryItemId is the podcast ID
         item.podcastId = extractJsonValue(json, "libraryItemId");
+    }
+    if (item.podcastId.empty() && !item.episodeId.empty()) {
+        // Personalized shelf: entity's id IS the podcast library item ID
+        item.podcastId = item.id;
     }
     // Episode number - try "episode" field (API uses this for episode number)
     if (item.episodeNumber == 0) {
