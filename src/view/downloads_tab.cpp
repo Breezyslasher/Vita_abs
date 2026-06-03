@@ -707,7 +707,7 @@ brls::Box* DownloadsTab::createServerRow(const std::string& itemId, const std::s
     xButtonIcon->setWidth(24);
     xButtonIcon->setHeight(24);
     xButtonIcon->setScalingType(brls::ImageScalingType::FIT);
-    xButtonIcon->setImageFromFile("app0:resources/images/square_button.png");
+    xButtonIcon->setImageFromFile(RESOURCE_PREFIX "images/square_button.png");
     xButtonIcon->setMarginLeft(8);
     xButtonIcon->setVisibility(brls::Visibility::INVISIBLE);
     outXButtonIcon = xButtonIcon;

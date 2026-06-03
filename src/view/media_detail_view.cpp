@@ -96,7 +96,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         auto* selectHint = new brls::Image();
         selectHint->setSize(brls::Size(64, 16));
         selectHint->setScalingType(brls::ImageScalingType::FIT);
-        selectHint->setImageFromFile("app0:resources/images/select_button.png");
+        selectHint->setImageFromFile(RESOURCE_PREFIX "images/select_button.png");
         selectHintContainer->addView(selectHint);
         leftPanel->addView(selectHintContainer);
 
@@ -154,7 +154,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         auto* selectHint = new brls::Image();
         selectHint->setSize(brls::Size(64, 16));
         selectHint->setScalingType(brls::ImageScalingType::FIT);
-        selectHint->setImageFromFile("app0:resources/images/select_button.png");
+        selectHint->setImageFromFile(RESOURCE_PREFIX "images/select_button.png");
         selectHintContainer->addView(selectHint);
         leftPanel->addView(selectHintContainer);
 
@@ -321,7 +321,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         sortHint->setWidth(24);
         sortHint->setHeight(16);
         sortHint->setScalingType(brls::ImageScalingType::FIT);
-        sortHint->setImageFromFile("app0:resources/images/r_button.png");
+        sortHint->setImageFromFile(RESOURCE_PREFIX "images/r_button.png");
         sortHint->setMarginBottom(2);
         sortContainer->addView(sortHint);
 
@@ -335,13 +335,13 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         m_sortIcon->setWidth(20);
         m_sortIcon->setHeight(20);
         m_sortIcon->setScalingType(brls::ImageScalingType::FIT);
-        m_sortIcon->setImageFromFile("app0:resources/icons/sort-9-1.png");
+        m_sortIcon->setImageFromFile(RESOURCE_PREFIX "icons/sort-9-1.png");
         sortBtn->addView(m_sortIcon);
         sortBtn->registerClickAction([this](brls::View*) {
             m_sortDescending = !m_sortDescending;
             m_sortIcon->setImageFromFile(m_sortDescending
-                ? "app0:resources/icons/sort-9-1.png"
-                : "app0:resources/icons/sort-1-9.png");
+                ? RESOURCE_PREFIX "icons/sort-9-1.png"
+                : RESOURCE_PREFIX "icons/sort-1-9.png");
             applyFilters();
             return true;
         });
@@ -358,7 +358,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         filterHint->setWidth(16);
         filterHint->setHeight(16);
         filterHint->setScalingType(brls::ImageScalingType::FIT);
-        filterHint->setImageFromFile("app0:resources/images/triangle_button.png");
+        filterHint->setImageFromFile(RESOURCE_PREFIX "images/triangle_button.png");
         filterHint->setMarginBottom(2);
         filterContainer->addView(filterHint);
 
@@ -372,7 +372,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         filterIcon->setWidth(20);
         filterIcon->setHeight(20);
         filterIcon->setScalingType(brls::ImageScalingType::FIT);
-        filterIcon->setImageFromFile("app0:resources/icons/filter-menu-outline.png");
+        filterIcon->setImageFromFile(RESOURCE_PREFIX "icons/filter-menu-outline.png");
         filterBtn->addView(filterIcon);
         filterBtn->registerClickAction([this](brls::View*) {
             showFilterMenu();
@@ -390,7 +390,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         dlMenuHint->setWidth(64);
         dlMenuHint->setHeight(16);
         dlMenuHint->setScalingType(brls::ImageScalingType::FIT);
-        dlMenuHint->setImageFromFile("app0:resources/images/start_button.png");
+        dlMenuHint->setImageFromFile(RESOURCE_PREFIX "images/start_button.png");
         dlMenuHint->setMarginBottom(2);
         dlMenuContainer->addView(dlMenuHint);
 
@@ -404,7 +404,7 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         dlMenuIcon->setWidth(20);
         dlMenuIcon->setHeight(20);
         dlMenuIcon->setScalingType(brls::ImageScalingType::FIT);
-        dlMenuIcon->setImageFromFile("app0:resources/icons/menu.png");
+        dlMenuIcon->setImageFromFile(RESOURCE_PREFIX "icons/menu.png");
         dlMenuBtn->addView(dlMenuIcon);
         dlMenuBtn->registerClickAction([this](brls::View*) {
             showDownloadOptions();
@@ -496,8 +496,8 @@ MediaDetailView::MediaDetailView(const MediaItem& item)
         this->registerAction("Sort", brls::ControllerButton::BUTTON_RB, [this](brls::View*) {
             m_sortDescending = !m_sortDescending;
             m_sortIcon->setImageFromFile(m_sortDescending
-                ? "app0:resources/icons/sort-9-1.png"
-                : "app0:resources/icons/sort-1-9.png");
+                ? RESOURCE_PREFIX "icons/sort-9-1.png"
+                : RESOURCE_PREFIX "icons/sort-1-9.png");
             applyFilters();
             return true;
         });
@@ -938,7 +938,7 @@ void MediaDetailView::populateChapters() {
         auto* squareHint = new brls::Image();
         squareHint->setSize(brls::Size(16, 16));
         squareHint->setScalingType(brls::ImageScalingType::FIT);
-        squareHint->setImageFromFile("app0:resources/images/square_button.png");
+        squareHint->setImageFromFile(RESOURCE_PREFIX "images/square_button.png");
         squareHint->setMarginRight(8);
         squareHint->setVisibility(brls::Visibility::GONE);
         chapterRow->addView(squareHint);
@@ -1125,7 +1125,7 @@ void MediaDetailView::applyFilters() {
         auto* squareHint = new brls::Image();
         squareHint->setSize(brls::Size(16, 16));
         squareHint->setScalingType(brls::ImageScalingType::FIT);
-        squareHint->setImageFromFile("app0:resources/images/square_button.png");
+        squareHint->setImageFromFile(RESOURCE_PREFIX "images/square_button.png");
         squareHint->setMarginRight(8);
         squareHint->setVisibility(brls::Visibility::GONE);
         episodeRow->addView(squareHint);
@@ -1184,13 +1184,13 @@ void MediaDetailView::applyFilters() {
         }
 
         if (isEpDownloaded) {
-            dlIcon->setImageFromFile("app0:resources/icons/checkbox_checked.png");
+            dlIcon->setImageFromFile(RESOURCE_PREFIX "icons/checkbox_checked.png");
             dlBtn->setBackgroundColor(nvgRGBA(46, 204, 113, 200));
         } else if (isEpQueued || isEpDownloading) {
-            dlIcon->setImageFromFile("app0:resources/icons/download.png");
+            dlIcon->setImageFromFile(RESOURCE_PREFIX "icons/download.png");
             dlBtn->setBackgroundColor(nvgRGBA(200, 180, 60, 200));  // Yellow for queued/downloading
         } else {
-            dlIcon->setImageFromFile("app0:resources/icons/download.png");
+            dlIcon->setImageFromFile(RESOURCE_PREFIX "icons/download.png");
             dlBtn->setBackgroundColor(nvgRGBA(60, 60, 60, 200));
         }
 

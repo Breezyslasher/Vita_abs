@@ -8,6 +8,7 @@
 #include "app/downloads_manager.hpp"
 #include "player/mpv_player.hpp"
 #include "activity/player_activity.hpp"
+#include "platform/platform.hpp"
 #include <set>
 
 // Version defined in CMakeLists.txt or here
@@ -524,7 +525,7 @@ void SettingsTab::createDebugSection() {
     // Test local playback button
     auto* testLocalCell = new brls::DetailCell();
     testLocalCell->setText("Test Local Playback");
-    testLocalCell->setDetailText("ux0:data/VitaABS/test.mp3");
+    testLocalCell->setDetailText(platform::path("test.mp3"));
     testLocalCell->registerClickAction([this](brls::View* view) {
         onTestLocalPlayback();
         return true;
@@ -533,7 +534,7 @@ void SettingsTab::createDebugSection() {
 
     // Info label
     auto* infoLabel = new brls::Label();
-    infoLabel->setText("Place test.mp3 or test.mp4 in ux0:data/VitaABS/");
+    infoLabel->setText("Place test.mp3 or test.mp4 in " + platform::dataDir());
     infoLabel->setFontSize(14);
     infoLabel->setMarginLeft(16);
     infoLabel->setMarginTop(8);
@@ -624,20 +625,17 @@ void SettingsTab::onTestLocalPlayback() {
     brls::Logger::info("SettingsTab: Testing local playback...");
 
     // Check for test files
-    const std::string basePath = "ux0:data/VitaABS/";
     std::string testFile;
 
     std::vector<std::string> testFiles = {
-        basePath + "test.mp4",
-        basePath + "test.mp3",
-        basePath + "test.ogg",
-        basePath + "test.wav"
+        platform::path("test.mp4"),
+        platform::path("test.mp3"),
+        platform::path("test.ogg"),
+        platform::path("test.wav")
     };
 
     for (const auto& file : testFiles) {
-        FILE* f = fopen(file.c_str(), "rb");
-        if (f) {
-            fclose(f);
+        if (platform::fileExists(file)) {
             testFile = file;
             brls::Logger::info("SettingsTab: Found test file: {}", testFile);
             break;
@@ -645,7 +643,7 @@ void SettingsTab::onTestLocalPlayback() {
     }
 
     if (testFile.empty()) {
-        brls::Application::notify("No test file found in ux0:data/VitaABS/");
+        brls::Application::notify("No test file found in " + platform::dataDir());
         brls::Logger::error("SettingsTab: No test file found");
         return;
     }
@@ -653,19 +651,6 @@ void SettingsTab::onTestLocalPlayback() {
     brls::Logger::info("SettingsTab: Pushing player activity for: {}", testFile);
     PlayerActivity* activity = PlayerActivity::createForDirectFile(testFile);
     brls::Application::pushActivity(activity);
-}
-
-// Stub methods for removed Plex-specific features
-void SettingsTab::createTranscodeSection() {
-    // Removed - Audiobookshelf doesn't use video transcoding
-}
-
-void SettingsTab::onQualityChanged(int index) {
-    // Removed - Audiobookshelf uses audio quality instead
-}
-
-void SettingsTab::onSubtitleSizeChanged(int index) {
-    // Removed - Audiobookshelf is audio-only
 }
 
 void SettingsTab::onManageSidebarOrder() {

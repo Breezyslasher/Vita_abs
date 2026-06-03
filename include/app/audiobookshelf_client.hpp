@@ -10,6 +10,7 @@
 #include <functional>
 #include <memory>
 #include <cstdint>
+#include "utils/http_client.hpp"
 
 namespace vitaabs {
 
@@ -174,7 +175,6 @@ struct ServerInfo {
 struct User {
     std::string id;
     std::string username;
-    std::string token;
     std::string type;              // "admin", "user", "guest"
     bool isActive = true;
     std::vector<std::string> librariesAccessible;  // Library IDs user can access
@@ -222,8 +222,9 @@ class AudiobookshelfClient {
 public:
     static AudiobookshelfClient& getInstance();
 
-    // Authentication
+    // Authentication (v2.26+ JWT with refresh tokens)
     bool login(const std::string& username, const std::string& password);
+    bool refreshAccessToken();     // Use refresh token to get new access token
     bool validateToken();          // Validate current token
     void logout();
 
@@ -321,6 +322,8 @@ public:
     // Configuration
     void setAuthToken(const std::string& token) { m_authToken = token; }
     const std::string& getAuthToken() const { return m_authToken; }
+    void setRefreshToken(const std::string& token) { m_refreshToken = token; }
+    const std::string& getRefreshToken() const { return m_refreshToken; }
     void setServerUrl(const std::string& url) { m_serverUrl = url; }
     const std::string& getServerUrl() const { return m_serverUrl; }
     const User& getCurrentUser() const { return m_currentUser; }
@@ -349,7 +352,10 @@ private:
     Chapter parseChapter(const std::string& json);
     AudioTrack parseAudioTrack(const std::string& json);
 
+    HttpResponse authenticatedRequest(HttpRequest& req);
+
     std::string m_authToken;
+    std::string m_refreshToken;
     std::string m_serverUrl;
     User m_currentUser;
     ServerInfo m_serverInfo;

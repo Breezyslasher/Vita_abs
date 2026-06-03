@@ -9,9 +9,6 @@
 #include <borealis/core/timer.hpp>
 #include <string>
 
-// Forward declaration
-namespace vitaabs { class VideoView; }
-
 namespace vitaabs {
 
 class PlayerActivity : public brls::Activity {
@@ -90,11 +87,6 @@ private:
     BRLS_BIND(brls::Label, speedLabel, "player/speedLabel");
     BRLS_BIND(brls::Label, chapterInfoLabel, "player/chapterInfo");
 
-    // Legacy bindings (hidden but needed for compatibility)
-    BRLS_BIND(brls::Label, timeLabel, "player/time");
-    BRLS_BIND(brls::Box, controlsBox, "player/controls");
-    BRLS_BIND(brls::Image, photoImage, "player/photo");
-    BRLS_BIND(VideoView, videoView, "player/video");
 };
 
 } // namespace vitaabs

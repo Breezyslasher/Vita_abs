@@ -8,7 +8,6 @@
 #include "app/downloads_manager.hpp"
 #include "player/mpv_player.hpp"
 #include "utils/image_loader.hpp"
-#include "view/video_view.hpp"
 #include "view/progress_dialog.hpp"
 
 #include <cstdio>
@@ -207,11 +206,6 @@ void PlayerActivity::willDisappear(bool resetState) {
     // Stop update timer first
     m_updateTimer.stop();
 
-    // Hide video view
-    if (videoView) {
-        videoView->setVideoVisible(false);
-    }
-
     // For photos, nothing to stop
     if (m_isPhoto) {
         return;
@@ -374,10 +368,7 @@ void PlayerActivity::loadMedia() {
             player.setSpeed(preDownloadSpeed);
         }
 
-        if (videoView) {
-            videoView->setVisibility(brls::Visibility::VISIBLE);
-            videoView->setVideoVisible(true);
-        }
+
 
         m_isPlaying = true;
         m_loadingMedia = false;
@@ -420,10 +411,7 @@ void PlayerActivity::loadMedia() {
         }
 
         // Show video view
-        if (videoView) {
-            videoView->setVisibility(brls::Visibility::VISIBLE);
-            videoView->setVideoVisible(true);
-        }
+
 
         m_isPlaying = true;
         m_loadingMedia = false;
@@ -509,10 +497,7 @@ void PlayerActivity::loadMedia() {
         }
 
         // Show video view
-        if (videoView) {
-            videoView->setVisibility(brls::Visibility::VISIBLE);
-            videoView->setVideoVisible(true);
-        }
+
 
         m_isPlaying = true;
         m_loadingMedia = false;
@@ -592,11 +577,7 @@ void PlayerActivity::loadMedia() {
                             player.setSpeed(dlSpeed);
                         }
 
-                        // Show video view
-                        if (videoView) {
-                            videoView->setVisibility(brls::Visibility::VISIBLE);
-                            videoView->setVideoVisible(true);
-                        }
+
 
                         // Mark as local file for progress saving
                         m_isLocalFile = true;
@@ -711,10 +692,7 @@ void PlayerActivity::loadMedia() {
         }
 
         // Show video view for audio playback (shows progress/controls)
-        if (videoView) {
-            videoView->setVisibility(brls::Visibility::VISIBLE);
-            videoView->setVideoVisible(true);
-        }
+
 
         m_isPlaying = true;
     } else {
@@ -786,13 +764,6 @@ void PlayerActivity::updateProgress() {
             timeRemainingLabel->setText(formatTimeRemaining(remaining));
         }
 
-        // Legacy time label (for compatibility)
-        if (timeLabel) {
-            char timeStr[32];
-            snprintf(timeStr, sizeof(timeStr), "%s / %s",
-                     formatTime(position).c_str(), formatTime(duration).c_str());
-            timeLabel->setText(timeStr);
-        }
     }
 
     // Periodic progress sync (every 30 seconds while playing)

@@ -152,6 +152,8 @@ public:
     bool isLoggedIn() const { return !m_authToken.empty(); }
     const std::string& getAuthToken() const { return m_authToken; }
     void setAuthToken(const std::string& token) { m_authToken = token; }
+    const std::string& getRefreshToken() const { return m_refreshToken; }
+    void setRefreshToken(const std::string& token) { m_refreshToken = token; }
 
     // Server URL management (supports local and remote URLs)
     const std::string& getServerUrl() const { return m_serverUrl; }
@@ -210,6 +212,7 @@ private:
 
     bool m_initialized = false;
     std::string m_authToken;
+    std::string m_refreshToken;
     std::string m_serverUrl;          // Currently active URL
     std::string m_localServerUrl;     // Local network URL (e.g., http://192.168.1.100:13378)
     std::string m_remoteServerUrl;    // Remote URL (e.g., https://abs.example.com)

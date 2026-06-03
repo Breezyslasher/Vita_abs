@@ -397,31 +397,95 @@ bool AudiobookshelfClient::login(const std::string& username, const std::string&
     req.method = "POST";
     req.headers["Accept"] = "application/json";
     req.headers["Content-Type"] = "application/json";
+    req.headers["x-return-tokens"] = "true";
 
-    // Build JSON body
     req.body = "{\"username\":\"" + username + "\",\"password\":\"" + password + "\"}";
 
     HttpResponse resp = client.request(req);
 
     if (resp.statusCode == 200) {
-        // Extract user object and token
         std::string userObj = extractJsonObject(resp.body, "user");
-        m_authToken = extractJsonValue(userObj, "token");
+
+        m_authToken = extractJsonValue(userObj, "accessToken");
+        m_refreshToken = extractJsonValue(userObj, "refreshToken");
 
         if (!m_authToken.empty()) {
             m_currentUser.id = extractJsonValue(userObj, "id");
             m_currentUser.username = extractJsonValue(userObj, "username");
-            m_currentUser.token = m_authToken;
+
             m_currentUser.type = extractJsonValue(userObj, "type");
 
-            brls::Logger::info("Login successful for user: {}", m_currentUser.username);
-            Application::getInstance().setAuthToken(m_authToken);
+            brls::Logger::info("Login successful for user: {} (refresh={})",
+                               m_currentUser.username, m_refreshToken.empty() ? "no" : "yes");
+
+            auto& app = Application::getInstance();
+            app.setAuthToken(m_authToken);
+            app.setRefreshToken(m_refreshToken);
+            app.saveSettings();
             return true;
         }
     }
 
     brls::Logger::error("Login failed: {}", resp.statusCode);
     return false;
+}
+
+bool AudiobookshelfClient::refreshAccessToken() {
+    if (m_refreshToken.empty()) return false;
+
+    brls::Logger::info("Refreshing access token...");
+
+    HttpClient client;
+    HttpRequest req;
+    req.url = buildApiUrl("/auth/refresh");
+    req.method = "POST";
+    req.headers["Accept"] = "application/json";
+    req.headers["x-refresh-token"] = m_refreshToken;
+    req.headers["x-return-tokens"] = "true";
+
+    HttpResponse resp = client.request(req);
+
+    if (resp.statusCode == 200) {
+        std::string userObj = extractJsonObject(resp.body, "user");
+
+        std::string newAccess = extractJsonValue(userObj, "accessToken");
+        std::string newRefresh = extractJsonValue(userObj, "refreshToken");
+
+        if (!newAccess.empty()) {
+            m_authToken = newAccess;
+            if (!newRefresh.empty())
+                m_refreshToken = newRefresh;
+
+
+
+            auto& app = Application::getInstance();
+            app.setAuthToken(m_authToken);
+            app.setRefreshToken(m_refreshToken);
+            app.saveSettings();
+
+            brls::Logger::info("Access token refreshed successfully");
+            return true;
+        }
+    }
+
+    brls::Logger::error("Token refresh failed: {}", resp.statusCode);
+    return false;
+}
+
+HttpResponse AudiobookshelfClient::authenticatedRequest(HttpRequest& req) {
+    req.headers["Authorization"] = "Bearer " + m_authToken;
+
+    HttpClient client;
+    HttpResponse resp = client.request(req);
+
+    if (resp.statusCode == 401 && !m_refreshToken.empty()) {
+        if (refreshAccessToken()) {
+            req.headers["Authorization"] = "Bearer " + m_authToken;
+            resp = client.request(req);
+        }
+    }
+
+    return resp;
 }
 
 bool AudiobookshelfClient::validateToken() {
@@ -435,15 +499,37 @@ bool AudiobookshelfClient::validateToken() {
     req.headers["Authorization"] = "Bearer " + m_authToken;
 
     HttpResponse resp = client.request(req);
+
+    if (resp.statusCode == 401 && !m_refreshToken.empty()) {
+        if (refreshAccessToken()) {
+            req.headers["Authorization"] = "Bearer " + m_authToken;
+            resp = client.request(req);
+        }
+    }
+
     return resp.statusCode == 200;
 }
 
 void AudiobookshelfClient::logout() {
-    // Audiobookshelf doesn't have a logout endpoint, just clear local state
+    if (!m_refreshToken.empty()) {
+        HttpClient client;
+        HttpRequest req;
+        req.url = buildApiUrl("/logout");
+        req.method = "POST";
+        req.headers["Authorization"] = "Bearer " + m_authToken;
+        req.headers["x-refresh-token"] = m_refreshToken;
+        client.request(req);
+    }
+
     m_authToken.clear();
+    m_refreshToken.clear();
     m_currentUser = User();
-    Application::getInstance().setAuthToken("");
-    Application::getInstance().setServerUrl("");
+
+    auto& app = Application::getInstance();
+    app.setAuthToken("");
+    app.setRefreshToken("");
+    app.setServerUrl("");
+    app.saveSettings();
 }
 
 bool AudiobookshelfClient::fetchServerInfo(ServerInfo& info) {
@@ -532,7 +618,6 @@ bool AudiobookshelfClient::fetchCurrentUser(User& user) {
     user.username = extractJsonValue(resp.body, "username");
     user.type = extractJsonValue(resp.body, "type");
     user.isActive = extractJsonBool(resp.body, "isActive");
-    user.token = m_authToken;
 
     m_currentUser = user;
     brls::Logger::info("Current user: {} ({})", user.username, user.type);

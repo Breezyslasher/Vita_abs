@@ -20,7 +20,6 @@ private:
     void createContentDisplaySection();
     void createPlaybackSection();
     void createAudioSection();
-    void createTranscodeSection();
     void createDownloadsSection();
     void createAboutSection();
     void createDebugSection();
@@ -28,8 +27,6 @@ private:
     void onLogout();
     void onTestLocalPlayback();
     void onThemeChanged(int index);
-    void onQualityChanged(int index);
-    void onSubtitleSizeChanged(int index);
     void onSeekIntervalChanged(int index);
     void onManageSidebarOrder();
 
@@ -49,20 +46,10 @@ private:
 
     // Content display section
     brls::BooleanCell* m_collectionsToggle = nullptr;
-    brls::BooleanCell* m_playlistsToggle = nullptr;
-    brls::BooleanCell* m_genresToggle = nullptr;
 
     // Playback section
     brls::BooleanCell* m_resumeToggle = nullptr;
-    brls::BooleanCell* m_subtitlesToggle = nullptr;
-    brls::SelectorCell* m_subtitleSizeSelector = nullptr;
     brls::SelectorCell* m_seekIntervalSelector = nullptr;
-
-    // Transcode section
-    brls::SelectorCell* m_qualitySelector = nullptr;
-    brls::BooleanCell* m_forceTranscodeToggle = nullptr;
-    brls::BooleanCell* m_burnSubtitlesToggle = nullptr;
-    brls::BooleanCell* m_directPlayToggle = nullptr;
 
     // Downloads section
     brls::BooleanCell* m_autoStartDownloadsToggle = nullptr;
