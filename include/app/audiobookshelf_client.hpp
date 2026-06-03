@@ -10,6 +10,7 @@
 #include <functional>
 #include <memory>
 #include <cstdint>
+#include "utils/http_client.hpp"
 
 namespace vitaabs {
 

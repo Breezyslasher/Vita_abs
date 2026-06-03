@@ -173,25 +173,5 @@
         horizontalAlign="center"
         marginTop="5"/>
 
-    <!-- Hidden elements for compatibility -->
-    <brls:Image
-        id="player/photo"
-        width="0"
-        height="0"
-        visibility="gone"/>
-    <vitaabs:VideoView
-        id="player/video"
-        width="0"
-        height="0"
-        visibility="gone"/>
-    <brls:Box
-        id="player/controls"
-        width="0"
-        height="0"
-        visibility="gone"/>
-    <brls:Label
-        id="player/time"
-        text=""
-        visibility="gone"/>
 
 </brls:Box>

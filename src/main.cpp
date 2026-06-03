@@ -12,7 +12,6 @@
 #include "view/media_item_cell.hpp"
 #include "view/recycling_grid.hpp"
 #include "view/media_detail_view.hpp"
-#include "view/video_view.hpp"
 #include "app/downloads_manager.hpp"
 #include "utils/http_client.hpp"
 #include <clocale>
@@ -170,7 +169,6 @@ static void cleanupVitaNetwork() {
 static void registerCustomViews() {
     brls::Application::registerXMLView("MediaItemCell", vitaabs::MediaItemCell::create);
     brls::Application::registerXMLView("RecyclingGrid", vitaabs::RecyclingGrid::create);
-    brls::Application::registerXMLView("vitaabs:VideoView", vitaabs::VideoView::create);
 }
 
 /**

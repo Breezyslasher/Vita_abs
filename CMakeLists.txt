@@ -147,7 +147,6 @@ set(APP_SOURCES
     src/view/media_detail_view.cpp
     src/view/media_item_cell.cpp
     src/view/recycling_grid.cpp
-    src/view/video_view.cpp
     src/view/downloads_tab.cpp
     src/view/progress_dialog.cpp
     src/view/podcast_search_tab.cpp

@@ -8,7 +8,6 @@
 #include "app/downloads_manager.hpp"
 #include "player/mpv_player.hpp"
 #include "utils/image_loader.hpp"
-#include "view/video_view.hpp"
 #include "view/progress_dialog.hpp"
 
 #include <cstdio>

@@ -653,19 +653,6 @@ void SettingsTab::onTestLocalPlayback() {
     brls::Application::pushActivity(activity);
 }
 
-// Stub methods for removed Plex-specific features
-void SettingsTab::createTranscodeSection() {
-    // Removed - Audiobookshelf doesn't use video transcoding
-}
-
-void SettingsTab::onQualityChanged(int index) {
-    // Removed - Audiobookshelf uses audio quality instead
-}
-
-void SettingsTab::onSubtitleSizeChanged(int index) {
-    // Removed - Audiobookshelf is audio-only
-}
-
 void SettingsTab::onManageSidebarOrder() {
     // Removed - Simplified for Audiobookshelf
 }
