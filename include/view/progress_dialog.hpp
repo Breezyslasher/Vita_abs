@@ -9,6 +9,7 @@
 #include <functional>
 #include <string>
 #include <chrono>
+#include <cstdint>
 
 namespace vitaabs {
 

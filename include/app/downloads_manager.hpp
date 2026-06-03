@@ -12,6 +12,7 @@
 #include <mutex>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 
 namespace vitaabs {
 

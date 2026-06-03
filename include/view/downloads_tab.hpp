@@ -11,6 +11,7 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <cstdint>
 
 namespace vitaabs {
 

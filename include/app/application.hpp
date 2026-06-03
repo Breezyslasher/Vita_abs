@@ -8,6 +8,7 @@
 #include <string>
 #include <functional>
 #include <mutex>
+#include <cstdint>
 
 // Application version
 #define VITA_ABS_VERSION "1.0.0"
