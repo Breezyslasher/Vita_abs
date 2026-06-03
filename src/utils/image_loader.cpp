@@ -11,8 +11,7 @@ std::map<std::string, std::vector<uint8_t>> ImageLoader::s_cache;
 std::mutex ImageLoader::s_cacheMutex;
 bool ImageLoader::s_paused = false;
 
-void ImageLoader::loadAsync(const std::string& url, LoadCallback callback,
-                            brls::Image* target, std::shared_ptr<std::atomic<bool>> alive) {
+void ImageLoader::loadAsync(const std::string& url, LoadCallback callback, brls::Image* target) {
     if (url.empty() || !target) return;
 
     // Don't start new loads while paused (mpv streaming needs network bandwidth)
