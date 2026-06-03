@@ -85,7 +85,7 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
         auto* searchHintIcon = new brls::Image();
         searchHintIcon->setHeight(16);
         searchHintIcon->setScalingType(brls::ImageScalingType::FIT);
-        searchHintIcon->setImageFromFile("app0:resources/images/start_button.png");
+        searchHintIcon->setImageFromFile(RESOURCE_PREFIX "images/start_button.png");
         searchHintIcon->setMarginBottom(2);
         m_findPodcastsContainer->addView(searchHintIcon);
 
@@ -100,7 +100,7 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
         searchIcon->setWidth(24);
         searchIcon->setHeight(24);
         searchIcon->setScalingType(brls::ImageScalingType::FIT);
-        searchIcon->setImageFromFile("app0:resources/icons/search.png");
+        searchIcon->setImageFromFile(RESOURCE_PREFIX "icons/search.png");
         m_findPodcastsBtn->addView(searchIcon);
 
         m_findPodcastsBtn->registerClickAction([this](brls::View* view) {
@@ -119,7 +119,7 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
         auto* refreshHintIcon = new brls::Image();
         refreshHintIcon->setHeight(16);
         refreshHintIcon->setScalingType(brls::ImageScalingType::FIT);
-        refreshHintIcon->setImageFromFile("app0:resources/images/select_button.png");
+        refreshHintIcon->setImageFromFile(RESOURCE_PREFIX "images/select_button.png");
         refreshHintIcon->setMarginBottom(2);
         m_checkEpisodesContainer->addView(refreshHintIcon);
 
@@ -134,7 +134,7 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
         refreshIcon->setWidth(24);
         refreshIcon->setHeight(24);
         refreshIcon->setScalingType(brls::ImageScalingType::FIT);
-        refreshIcon->setImageFromFile("app0:resources/icons/refresh.png");
+        refreshIcon->setImageFromFile(RESOURCE_PREFIX "icons/refresh.png");
         m_checkEpisodesBtn->addView(refreshIcon);
 
         m_checkEpisodesBtn->registerClickAction([this](brls::View* view) {

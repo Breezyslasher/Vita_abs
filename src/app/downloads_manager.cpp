@@ -7,6 +7,7 @@
 #include "app/audiobookshelf_client.hpp"
 #include "app/application.hpp"
 #include "utils/http_client.hpp"
+#include "platform/platform.hpp"
 #include <borealis.hpp>
 #include <fstream>
 #include <sstream>
@@ -360,14 +361,8 @@ static bool concatenateAudioFiles(const std::vector<std::string>& inputFiles,
 #endif // VitaABS_NO_FFMPEG
 }
 
-// Downloads directory on Vita
-#ifdef __vita__
-static const char* DOWNLOADS_DIR = "ux0:data/VitaABS/downloads";
-static const char* STATE_FILE = "ux0:data/VitaABS/downloads/state.json";
-#else
-static const char* DOWNLOADS_DIR = "./downloads";
-static const char* STATE_FILE = "./downloads/state.json";
-#endif
+static std::string getDownloadsDir() { return platform::path("downloads"); }
+static std::string getStateFile()    { return platform::path("downloads/state.json"); }
 
 DownloadsManager& DownloadsManager::getInstance() {
     static DownloadsManager instance;
@@ -377,16 +372,9 @@ DownloadsManager& DownloadsManager::getInstance() {
 bool DownloadsManager::init() {
     if (m_initialized) return true;
 
-    m_downloadsPath = DOWNLOADS_DIR;
+    m_downloadsPath = getDownloadsDir();
 
-#ifdef __vita__
-    // Create downloads directory if it doesn't exist
-    sceIoMkdir("ux0:data/VitaABS", 0777);
-    sceIoMkdir(DOWNLOADS_DIR, 0777);
-#else
-    // Create directory on other platforms
-    std::system("mkdir -p ./downloads");
-#endif
+    platform::createDirRecursive(m_downloadsPath);
 
     // Load saved state
     loadState();
@@ -1465,13 +1453,13 @@ std::string DownloadsManager::serializeStateUnlocked(size_t& outItemCount) {
 
 void DownloadsManager::writeStateToDisk(const std::string& data, size_t itemCount) {
 #ifdef __vita__
-    SceUID fd = sceIoOpen(STATE_FILE, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+    SceUID fd = sceIoOpen(getStateFile().c_str(), SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
     if (fd >= 0) {
         sceIoWrite(fd, data.c_str(), data.size());
         sceIoClose(fd);
     }
 #else
-    std::ofstream file(STATE_FILE);
+    std::ofstream file(getStateFile().c_str());
     if (file.is_open()) {
         file << data;
         file.close();
@@ -1485,7 +1473,7 @@ void DownloadsManager::loadState() {
     std::string content;
 
 #ifdef __vita__
-    SceUID fd = sceIoOpen(STATE_FILE, SCE_O_RDONLY, 0);
+    SceUID fd = sceIoOpen(getStateFile().c_str(), SCE_O_RDONLY, 0);
     if (fd >= 0) {
         char buffer[4096];
         int read;
@@ -1495,7 +1483,7 @@ void DownloadsManager::loadState() {
         sceIoClose(fd);
     }
 #else
-    std::ifstream file(STATE_FILE);
+    std::ifstream file(getStateFile().c_str());
     if (file.is_open()) {
         std::stringstream ss;
         ss << file.rdbuf();
