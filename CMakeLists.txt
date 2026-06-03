@@ -158,7 +158,6 @@ set(APP_SOURCES
     # Utils
     src/utils/http_client.cpp
     src/utils/image_loader.cpp
-    src/utils/jwt_auth.cpp
     src/utils/audio_utils.cpp
 )
 

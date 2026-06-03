@@ -174,7 +174,6 @@ struct ServerInfo {
 struct User {
     std::string id;
     std::string username;
-    std::string token;
     std::string type;              // "admin", "user", "guest"
     bool isActive = true;
     std::vector<std::string> librariesAccessible;  // Library IDs user can access

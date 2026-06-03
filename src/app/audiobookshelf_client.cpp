@@ -406,17 +406,13 @@ bool AudiobookshelfClient::login(const std::string& username, const std::string&
     if (resp.statusCode == 200) {
         std::string userObj = extractJsonObject(resp.body, "user");
 
-        // v2.26+: prefer accessToken; fall back to legacy token
         m_authToken = extractJsonValue(userObj, "accessToken");
-        if (m_authToken.empty())
-            m_authToken = extractJsonValue(userObj, "token");
-
         m_refreshToken = extractJsonValue(userObj, "refreshToken");
 
         if (!m_authToken.empty()) {
             m_currentUser.id = extractJsonValue(userObj, "id");
             m_currentUser.username = extractJsonValue(userObj, "username");
-            m_currentUser.token = m_authToken;
+
             m_currentUser.type = extractJsonValue(userObj, "type");
 
             brls::Logger::info("Login successful for user: {} (refresh={})",
@@ -460,7 +456,7 @@ bool AudiobookshelfClient::refreshAccessToken() {
             if (!newRefresh.empty())
                 m_refreshToken = newRefresh;
 
-            m_currentUser.token = m_authToken;
+
 
             auto& app = Application::getInstance();
             app.setAuthToken(m_authToken);
@@ -622,7 +618,6 @@ bool AudiobookshelfClient::fetchCurrentUser(User& user) {
     user.username = extractJsonValue(resp.body, "username");
     user.type = extractJsonValue(resp.body, "type");
     user.isActive = extractJsonBool(resp.body, "isActive");
-    user.token = m_authToken;
 
     m_currentUser = user;
     brls::Logger::info("Current user: {} ({})", user.username, user.type);
