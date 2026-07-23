@@ -16,8 +16,9 @@ class ImageLoader {
 public:
     using LoadCallback = std::function<void(brls::Image*)>;
 
-    // Load image asynchronously from URL
-    static void loadAsync(const std::string& url, LoadCallback callback, brls::Image* target);
+    // Load image asynchronously from URL (with alive flag to prevent writing to destroyed views)
+    static void loadAsync(const std::string& url, LoadCallback callback, brls::Image* target,
+                          std::weak_ptr<bool> alive = {});
 
     // Clear image cache
     static void clearCache();

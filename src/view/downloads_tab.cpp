@@ -650,7 +650,7 @@ brls::Box* DownloadsTab::createServerRow(const std::string& itemId, const std::s
     if (!localCoverPath.empty()) {
         loadLocalCoverImage(coverImage, localCoverPath);
     } else if (!coverUrl.empty()) {
-        ImageLoader::loadAsync(coverUrl, [](brls::Image*) {}, coverImage);
+        ImageLoader::loadAsync(coverUrl, [](brls::Image*) {}, coverImage, m_alive);
     }
 
     // Info column (left side, grows)

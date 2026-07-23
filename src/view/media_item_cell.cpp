@@ -48,6 +48,10 @@ static void loadLocalCoverToImage(brls::Image* image, const std::string& localPa
 #endif
 }
 
+MediaItemCell::~MediaItemCell() {
+    *m_alive = false;
+}
+
 MediaItemCell::MediaItemCell() {
     this->setAxis(brls::Axis::COLUMN);
     this->setJustifyContent(brls::JustifyContent::FLEX_START);
@@ -165,9 +169,12 @@ void MediaItemCell::loadThumbnail() {
     std::string url = client.getCoverUrl(m_item.id, size, size);
     brls::Logger::debug("MediaItemCell: Loading cover from URL: {}", url);
 
-    ImageLoader::loadAsync(url, [this](brls::Image* image) {
+    std::weak_ptr<bool> aliveWeak = m_alive;
+    ImageLoader::loadAsync(url, [this, aliveWeak](brls::Image* image) {
+        auto alive = aliveWeak.lock();
+        if (!alive || !*alive) return;
         brls::Logger::debug("MediaItemCell: Cover loaded for '{}'", m_item.title);
-    }, m_thumbnailImage);
+    }, m_thumbnailImage, aliveWeak);
 }
 
 brls::View* MediaItemCell::create() {

@@ -38,6 +38,55 @@ MediaType AudiobookshelfClient::parseMediaType(const std::string& typeStr) {
     return MediaType::UNKNOWN;
 }
 
+// Extract a JSON value only from the top level of an object (depth 1), ignoring nested matches
+static std::string extractTopLevelValue(const std::string& json, const std::string& key) {
+    std::string searchKey = "\"" + key + "\"";
+    int depth = 0;
+    for (size_t i = 0; i < json.size(); i++) {
+        char c = json[i];
+        if (c == '{' || c == '[') {
+            depth++;
+        } else if (c == '}' || c == ']') {
+            depth--;
+        } else if (c == '"' && depth == 1) {
+            // At top level of object, check if this key matches
+            if (json.compare(i, searchKey.size(), searchKey) == 0) {
+                size_t colonPos = json.find(':', i + searchKey.size());
+                if (colonPos == std::string::npos) return "";
+                size_t valStart = json.find_first_not_of(" \t\n\r", colonPos + 1);
+                if (valStart == std::string::npos) return "";
+                if (json[valStart] == '"') {
+                    size_t valEnd = valStart + 1;
+                    while (valEnd < json.size()) {
+                        if (json[valEnd] == '"' && json[valEnd - 1] != '\\') break;
+                        valEnd++;
+                    }
+                    return json.substr(valStart + 1, valEnd - valStart - 1);
+                } else if (json[valStart] == 'n' && json.substr(valStart, 4) == "null") {
+                    return "";
+                } else {
+                    size_t valEnd = json.find_first_of(",}]", valStart);
+                    if (valEnd == std::string::npos) return "";
+                    std::string val = json.substr(valStart, valEnd - valStart);
+                    while (!val.empty() && (val.back() == ' ' || val.back() == '\n' || val.back() == '\r'))
+                        val.pop_back();
+                    return val;
+                }
+            }
+            // Skip past this string value to avoid false depth tracking
+            size_t strEnd = json.find('"', i + 1);
+            if (strEnd != std::string::npos) {
+                // Handle escaped quotes
+                while (strEnd < json.size() && json[strEnd - 1] == '\\') {
+                    strEnd = json.find('"', strEnd + 1);
+                }
+                if (strEnd != std::string::npos) i = strEnd;
+            }
+        }
+    }
+    return "";
+}
+
 // JSON parsing helpers
 std::string AudiobookshelfClient::extractJsonValue(const std::string& json, const std::string& key) {
     std::string searchKey = "\"" + key + "\"";
@@ -188,7 +237,15 @@ std::string AudiobookshelfClient::extractJsonObject(const std::string& json, con
 MediaItem AudiobookshelfClient::parseMediaItem(const std::string& json) {
     MediaItem item;
 
-    item.id = extractJsonValue(json, "id");
+    // Use top-level extraction for id to avoid picking up nested object ids
+    item.id = extractTopLevelValue(json, "id");
+    std::string naiveId = extractJsonValue(json, "id");
+    if (item.id.empty()) {
+        item.id = naiveId;
+    }
+    if (!item.id.empty() && item.id != naiveId) {
+        brls::Logger::debug("parseMediaItem: top-level id='{}' differs from naive id='{}'", item.id, naiveId);
+    }
     item.libraryId = extractJsonValue(json, "libraryId");
 
     // Get media metadata (nested object)
@@ -327,22 +384,21 @@ MediaItem AudiobookshelfClient::parseMediaItem(const std::string& json) {
     }
 
     // Podcast episode info
-    item.episodeId = extractJsonValue(json, "episodeId");
+    item.episodeId = extractTopLevelValue(json, "episodeId");
     if (item.episodeId.empty()) {
-        // For recent episodes, the id field might be the episode ID
-        // Check if this looks like an episode by checking for recentEpisode wrapper
+        item.episodeId = extractJsonValue(json, "episodeId");
+    }
+    if (item.episodeId.empty()) {
         std::string recentEp = extractJsonObject(json, "recentEpisode");
         if (!recentEp.empty()) {
             item.episodeId = extractJsonValue(recentEp, "id");
-            // Get episode title from recentEpisode
             std::string epTitle = extractJsonValue(recentEp, "title");
             if (!epTitle.empty()) {
-                item.title = epTitle;  // Use episode title, not podcast title
+                item.title = epTitle;
             }
             item.episodeNumber = extractJsonInt(recentEp, "episode");
             item.seasonNumber = extractJsonInt(recentEp, "season");
             item.pubDate = extractJsonValue(recentEp, "pubDate");
-            // Episode duration
             float epDuration = extractJsonFloat(recentEp, "duration");
             if (epDuration > 0) {
                 item.duration = epDuration;
@@ -350,11 +406,47 @@ MediaItem AudiobookshelfClient::parseMediaItem(const std::string& json) {
             item.mediaType = MediaType::PODCAST_EPISODE;
             item.type = "podcastEpisode";
         }
+        // Also check "episode" nested object (continue-listening format)
+        if (item.episodeId.empty()) {
+            std::string epObj = extractJsonObject(json, "episode");
+            if (!epObj.empty()) {
+                item.episodeId = extractJsonValue(epObj, "id");
+                std::string epTitle = extractJsonValue(epObj, "title");
+                if (!epTitle.empty()) {
+                    item.title = epTitle;
+                }
+                item.episodeNumber = extractJsonInt(epObj, "episode");
+                item.seasonNumber = extractJsonInt(epObj, "season");
+                item.pubDate = extractJsonValue(epObj, "pubDate");
+                float epDuration = extractJsonFloat(epObj, "duration");
+                if (epDuration > 0) {
+                    item.duration = epDuration;
+                }
+                item.mediaType = MediaType::PODCAST_EPISODE;
+                item.type = "podcastEpisode";
+            }
+        }
     }
-    item.podcastId = extractJsonValue(json, "podcastId");
+    item.podcastId = extractTopLevelValue(json, "podcastId");
     if (item.podcastId.empty()) {
-        // For recent episodes, the libraryItemId is the podcast ID
+        item.podcastId = extractTopLevelValue(json, "libraryItemId");
+    }
+    if (item.podcastId.empty()) {
         item.podcastId = extractJsonValue(json, "libraryItemId");
+    }
+    if (item.podcastId.empty() && !item.episodeId.empty()) {
+        // Try nested libraryItem object (some API formats wrap the item)
+        std::string libItemObj = extractJsonObject(json, "libraryItem");
+        if (!libItemObj.empty()) {
+            item.podcastId = extractJsonValue(libItemObj, "id");
+        }
+    }
+    if (item.podcastId.empty() && !item.episodeId.empty()) {
+        item.podcastId = item.id;
+    }
+    if (!item.episodeId.empty()) {
+        brls::Logger::debug("parseMediaItem episode: id='{}' podcastId='{}' episodeId='{}' title='{}'",
+                           item.id, item.podcastId, item.episodeId, item.title);
     }
     // Episode number - try "episode" field (API uses this for episode number)
     if (item.episodeNumber == 0) {
@@ -641,6 +733,9 @@ bool AudiobookshelfClient::fetchItemsInProgress(std::vector<MediaItem>& items) {
         return false;
     }
 
+    brls::Logger::debug("fetchItemsInProgress response (first 500 chars): {}",
+                       resp.body.substr(0, std::min<size_t>(500, resp.body.size())));
+
     items.clear();
 
     // Parse libraryItems array
@@ -667,6 +762,8 @@ bool AudiobookshelfClient::fetchItemsInProgress(std::vector<MediaItem>& items) {
         }
 
         std::string obj = itemsArray.substr(objStart, objEnd - objStart);
+        brls::Logger::debug("fetchItemsInProgress entity (first 300 chars): {}",
+                           obj.substr(0, std::min<size_t>(300, obj.size())));
         MediaItem item = parseMediaItem(obj);
 
         if (!item.id.empty() && !item.title.empty()) {

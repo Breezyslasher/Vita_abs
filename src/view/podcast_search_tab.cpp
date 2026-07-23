@@ -8,13 +8,14 @@
 #include "app/application.hpp"
 #include "utils/async.hpp"
 #include "utils/image_loader.hpp"
+#include <memory>
 
 namespace vitaabs {
 
 class PodcastResultCell : public brls::Box {
 public:
     PodcastResultCell(const PodcastSearchResult& podcast, std::function<void()> onSelect)
-        : m_podcast(podcast), m_onSelect(onSelect) {
+        : m_podcast(podcast), m_onSelect(onSelect), m_alive(std::make_shared<bool>(true)) {
 
         this->setFocusable(true);
         this->setHeight(100);
@@ -34,7 +35,7 @@ public:
 
         // Load cover
         if (!podcast.artworkUrl.empty()) {
-            ImageLoader::loadAsync(podcast.artworkUrl, [](brls::Image*) {}, m_coverImage);
+            ImageLoader::loadAsync(podcast.artworkUrl, [](brls::Image*) {}, m_coverImage, m_alive);
         }
 
         // Info container
@@ -80,10 +81,13 @@ public:
         });
     }
 
+    ~PodcastResultCell() { *m_alive = false; }
+
 private:
     PodcastSearchResult m_podcast;
     std::function<void()> m_onSelect;
     brls::Image* m_coverImage = nullptr;
+    std::shared_ptr<bool> m_alive;
 };
 
 PodcastSearchTab::PodcastSearchTab(const std::string& libraryId)
