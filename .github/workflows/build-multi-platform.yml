@@ -258,7 +258,7 @@ jobs:
         env:
           BASE_URL: https://github.com/dragonflylee/switchfin/releases/download/vita-packages
         run: |
-          for pkg in mbedtls-3.6.5-1 curl-8.16.0-2 ffmpeg-n6.0-3 mpv-0.36.0-3; do
+          for pkg in mbedtls-3.6.7-1 curl-8.16.0-3 ffmpeg-n6.0-3 mpv-0.36.0-3; do
             wget "$BASE_URL/${pkg}-arm.tar.xz"
           done
           vdpm libass harfbuzz fribidi freetype libpng libwebp $PWD/*-arm.tar.xz
@@ -439,8 +439,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - { driver: opengl, mpv_pkg: switch-libmpv-0.41.0-5-any.pkg.tar.zst, cmake_extra: "" }
-        - { driver: deko3d, mpv_pkg: switch-libmpv-deko3d-0.41.0-5-any.pkg.tar.zst, cmake_extra: "-DUSE_DEKO3D=ON" }
+        - { driver: opengl, mpv_pkg: switch-libmpv-0.36.0-5-any.pkg.tar.zst, cmake_extra: "" }
+        - { driver: deko3d, mpv_pkg: switch-libmpv-deko3d-0.36.0-5-any.pkg.tar.zst, cmake_extra: "-DUSE_DEKO3D=ON" }
     container:
       image: devkitpro/devkita64:20260219
     steps:
@@ -667,7 +667,6 @@ jobs:
       matrix:
         include:
         - { arch: x64, sys: mingw64, env: x86_64, runner: windows-latest }
-        - { arch: x86, sys: mingw32, env: i686, runner: windows-latest }
         - { arch: arm64, sys: clangarm64, env: clang-aarch64, runner: windows-11-arm }
     runs-on: ${{ matrix.runner }}
     defaults:
