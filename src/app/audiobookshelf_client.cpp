@@ -928,81 +928,130 @@ bool AudiobookshelfClient::fetchLibrary(const std::string& libraryId, Library& l
 
 bool AudiobookshelfClient::fetchLibraryItems(const std::string& libraryId, std::vector<MediaItem>& items,
                                               int page, int limit, const std::string& sort) {
-    brls::Logger::debug("Fetching library items: library={}, page={}, limit={}", libraryId, page, limit);
-
-    HttpClient client;
-    HttpRequest req;
-    std::string url = buildApiUrl("/api/libraries/" + libraryId + "/items");
-    url += "?page=" + std::to_string(page) + "&limit=" + std::to_string(limit);
-    if (!sort.empty()) {
-        url += "&sort=" + sort;
-    }
-
-    req.url = url;
-    req.method = "GET";
-    req.headers["Accept"] = "application/json";
-    req.headers["Authorization"] = "Bearer " + m_authToken;
-
-    HttpResponse resp = client.request(req);
-
-    if (resp.statusCode != 200) {
-        brls::Logger::error("Failed to fetch library items: {}", resp.statusCode);
-        return false;
-    }
+    brls::Logger::debug("Fetching library items: library={}, startPage={}, limit={}", libraryId, page, limit);
 
     items.clear();
 
-    // Get library mediaType from response to set on items that don't have it
-    std::string libraryMediaType = extractJsonValue(resp.body, "mediaType");
-    if (libraryMediaType.empty()) {
-        // Try to get it from the library info
+    // Resolve library mediaType once (used as fallback for items missing a type)
+    std::string libraryMediaType;
+    {
         Library lib;
         if (fetchLibrary(libraryId, lib)) {
             libraryMediaType = lib.mediaType;
         }
     }
-    MediaType defaultMediaType = parseMediaType(libraryMediaType);
-    brls::Logger::debug("Library media type: {} (enum: {})", libraryMediaType, static_cast<int>(defaultMediaType));
 
-    // Parse results array
-    std::string resultsArray = extractJsonArray(resp.body, "results");
-    if (resultsArray.empty()) {
-        resultsArray = resp.body;
+    // Page size per request. limit<=0 means "fetch everything" (default behavior);
+    // a positive limit fetches at most that many items total.
+    const int pageSize = 100;
+    bool fetchAll = (limit <= 0);
+    int remaining = limit;
+
+    int currentPage = page;
+    int total = -1;                 // total items reported by server (from first page)
+    const int kSafetyMaxPages = 1000;  // guard against runaway loops
+
+    for (int guard = 0; guard < kSafetyMaxPages; ++guard) {
+        int reqLimit = pageSize;
+        if (!fetchAll && remaining < reqLimit) {
+            reqLimit = remaining;
+        }
+        if (reqLimit <= 0) {
+            break;
+        }
+
+        HttpClient client;
+        HttpRequest req;
+        std::string url = buildApiUrl("/api/libraries/" + libraryId + "/items");
+        url += "?page=" + std::to_string(currentPage) + "&limit=" + std::to_string(reqLimit);
+        if (!sort.empty()) {
+            url += "&sort=" + sort;
+        }
+        req.url = url;
+        req.method = "GET";
+        req.headers["Accept"] = "application/json";
+        req.headers["Authorization"] = "Bearer " + m_authToken;
+
+        HttpResponse resp = client.request(req);
+        if (resp.statusCode != 200) {
+            // If we already got some items, treat as end-of-data; otherwise fail.
+            if (!items.empty()) {
+                break;
+            }
+            brls::Logger::error("Failed to fetch library items: {}", resp.statusCode);
+            return false;
+        }
+
+        if (libraryMediaType.empty()) {
+            libraryMediaType = extractJsonValue(resp.body, "mediaType");
+        }
+        MediaType defaultMediaType = parseMediaType(libraryMediaType);
+
+        if (total < 0) {
+            // Read the top-level "total" (avoid any nested "total" inside items)
+            std::string totalStr = extractTopLevelValue(resp.body, "total");
+            total = totalStr.empty() ? -1 : atoi(totalStr.c_str());
+        }
+
+        std::string resultsArray = extractJsonArray(resp.body, "results");
+        if (resultsArray.empty()) {
+            resultsArray = resp.body;
+        }
+
+        int pageCount = 0;
+        size_t pos = 0;
+        while ((pos = resultsArray.find("\"id\"", pos)) != std::string::npos) {
+            size_t objStart = resultsArray.rfind('{', pos);
+            if (objStart == std::string::npos) {
+                pos++;
+                continue;
+            }
+
+            int braceCount = 1;
+            size_t objEnd = objStart + 1;
+            while (braceCount > 0 && objEnd < resultsArray.length()) {
+                if (resultsArray[objEnd] == '{') braceCount++;
+                else if (resultsArray[objEnd] == '}') braceCount--;
+                objEnd++;
+            }
+
+            std::string obj = resultsArray.substr(objStart, objEnd - objStart);
+            MediaItem item = parseMediaItem(obj);
+
+            if (item.mediaType == MediaType::UNKNOWN && defaultMediaType != MediaType::UNKNOWN) {
+                item.mediaType = defaultMediaType;
+                item.type = libraryMediaType;
+            }
+
+            if (!item.id.empty() && !item.title.empty()) {
+                items.push_back(item);
+                pageCount++;
+            }
+
+            pos = objEnd;
+        }
+
+        if (!fetchAll) {
+            remaining = limit - static_cast<int>(items.size());
+            if (remaining <= 0) {
+                break;
+            }
+        }
+
+        // Stop when the server returned a short page (no more data) or we've
+        // collected everything it reported.
+        if (pageCount == 0) {
+            break;
+        }
+        if (total >= 0 && static_cast<int>(items.size()) >= total) {
+            break;
+        }
+
+        currentPage++;
     }
 
-    size_t pos = 0;
-    while ((pos = resultsArray.find("\"id\"", pos)) != std::string::npos) {
-        size_t objStart = resultsArray.rfind('{', pos);
-        if (objStart == std::string::npos) {
-            pos++;
-            continue;
-        }
-
-        int braceCount = 1;
-        size_t objEnd = objStart + 1;
-        while (braceCount > 0 && objEnd < resultsArray.length()) {
-            if (resultsArray[objEnd] == '{') braceCount++;
-            else if (resultsArray[objEnd] == '}') braceCount--;
-            objEnd++;
-        }
-
-        std::string obj = resultsArray.substr(objStart, objEnd - objStart);
-        MediaItem item = parseMediaItem(obj);
-
-        // If mediaType wasn't set from item JSON, use library's mediaType
-        if (item.mediaType == MediaType::UNKNOWN && defaultMediaType != MediaType::UNKNOWN) {
-            item.mediaType = defaultMediaType;
-            item.type = libraryMediaType;
-        }
-
-        if (!item.id.empty() && !item.title.empty()) {
-            items.push_back(item);
-        }
-
-        pos = objEnd;
-    }
-
-    brls::Logger::info("Found {} items in library {}", items.size(), libraryId);
+    brls::Logger::info("Found {} items in library {} (server total={})",
+                       items.size(), libraryId, total);
     return true;
 }
 

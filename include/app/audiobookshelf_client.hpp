@@ -240,8 +240,10 @@ public:
     // Libraries
     bool fetchLibraries(std::vector<Library>& libraries);
     bool fetchLibrary(const std::string& libraryId, Library& library);
+    // limit <= 0 fetches the entire library (paginated internally); a positive
+    // limit caps the total number of items returned.
     bool fetchLibraryItems(const std::string& libraryId, std::vector<MediaItem>& items,
-                           int page = 0, int limit = 50, const std::string& sort = "");
+                           int page = 0, int limit = 0, const std::string& sort = "");
     bool fetchLibraryPersonalized(const std::string& libraryId, std::vector<PersonalizedShelf>& shelves);
     bool fetchLibrarySeries(const std::string& libraryId, std::vector<Series>& series);
     bool fetchLibraryCollections(const std::string& libraryId, std::vector<Collection>& collections);
