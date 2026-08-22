@@ -934,10 +934,16 @@ void startInstall(const ReleaseInfo rel) {
         brls::sync([ui]() {
             if (!ui->dismissed->load()) stepDone(ui->install, "Installed");
         });
-        finishInstall(ui, []() {
-            auto* d = new brls::Dialog("Update installed. VitaABS will now close - relaunch to use the new version.");
-            d->addButton("OK", []() { brls::Application::quit(); });
-            d->open();
+        // Auto-close, and chain-load the new NRO where hbloader supports it:
+        // hbmenu can't reopen an NRO by itself, so "quit" alone would drop the
+        // user back to hbmenu. envSetNextLoad makes hbloader launch the freshly
+        // written NRO on exit — a real auto-relaunch. Without next-load support
+        // it's a clean quit and the overlay's "Relaunch to apply" step already
+        // told the user to reopen. No dialog either way.
+        finishInstall(ui, [target]() {
+            if (envHasNextLoad())
+                envSetNextLoad(target.c_str(), target.c_str());
+            brls::Application::quit();
         });
 #elif defined(_WIN32)
         // The running .exe and its loaded DLLs are locked, so hand the swap to
@@ -979,25 +985,22 @@ void startInstall(const ReleaseInfo rel) {
             brls::sync([ui]() {
                 if (!ui->dismissed->load()) stepDone(ui->install, "Installer staged");
             });
+            // Hand off and close automatically — no confirmation dialog. The
+            // detached helper waits for this process to exit, then swaps the
+            // files and relaunches; staying open would just delay the swap.
             finishInstall(ui, [bat]() {
-                auto* d = new brls::Dialog(
-                    "Update ready. VitaABS will close and reopen with the new "
-                    "version in a few seconds.");
-                d->addButton("OK", [bat]() {
-                    STARTUPINFOA si{};
-                    si.cb = sizeof si;
-                    PROCESS_INFORMATION pi{};
-                    std::string cmd = "cmd.exe /c \"" + bat + "\"";
-                    std::vector<char> mut(cmd.begin(), cmd.end());
-                    mut.push_back(0);
-                    if (CreateProcessA(nullptr, mut.data(), nullptr, nullptr, FALSE,
-                                       CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
-                        CloseHandle(pi.hThread);
-                        CloseHandle(pi.hProcess);
-                    }
-                    brls::Application::quit();
-                });
-                d->open();
+                STARTUPINFOA si{};
+                si.cb = sizeof si;
+                PROCESS_INFORMATION pi{};
+                std::string cmd = "cmd.exe /c \"" + bat + "\"";
+                std::vector<char> mut(cmd.begin(), cmd.end());
+                mut.push_back(0);
+                if (CreateProcessA(nullptr, mut.data(), nullptr, nullptr, FALSE,
+                                   CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+                    CloseHandle(pi.hThread);
+                    CloseHandle(pi.hProcess);
+                }
+                brls::Application::quit();
             });
         }
 #elif VITAABS_MACOS_DESKTOP
@@ -1046,20 +1049,17 @@ void startInstall(const ReleaseInfo rel) {
             brls::sync([ui]() {
                 if (!ui->dismissed->load()) stepDone(ui->install, "Installer staged");
             });
+            // Hand off and close automatically — no confirmation dialog. The
+            // detached helper waits for this pid to exit, swaps the bundle,
+            // and reopens it.
             finishInstall(ui, [helper]() {
-                auto* d = new brls::Dialog(
-                    "Update ready. VitaABS will close and reopen with the new "
-                    "version in a few seconds.");
-                d->addButton("OK", [helper]() {
-                    pid_t child = fork();
-                    if (child == 0) {
-                        setsid();
-                        execl("/bin/sh", "sh", helper.c_str(), (char*)nullptr);
-                        _exit(127);
-                    }
-                    brls::Application::quit();
-                });
-                d->open();
+                pid_t child = fork();
+                if (child == 0) {
+                    setsid();
+                    execl("/bin/sh", "sh", helper.c_str(), (char*)nullptr);
+                    _exit(127);
+                }
+                brls::Application::quit();
             });
         }
 #elif defined(__linux__) && !defined(ANDROID)
@@ -1088,27 +1088,30 @@ void startInstall(const ReleaseInfo rel) {
                 brls::sync([ui]() {
                     if (!ui->dismissed->load()) stepDone(ui->install, "Installed");
                 });
+                // Hand off and close automatically — no confirmation dialog.
                 finishInstall(ui, [target]() {
-                    auto* d = new brls::Dialog(
-                        "Update installed. VitaABS will now restart with the new version.");
-                    d->addButton("OK", [target]() {
-                        pid_t child = fork();
-                        if (child == 0) {
-                            setsid();
-                            sleep(1);   // let the parent's window/socket close
-                            execl(target.c_str(), target.c_str(), (char*)nullptr);
-                            _exit(127);
-                        }
-                        brls::Application::quit();
-                    });
-                    d->open();
+                    pid_t child = fork();
+                    if (child == 0) {
+                        setsid();
+                        sleep(1);   // let the parent's window/socket close
+                        execl(target.c_str(), target.c_str(), (char*)nullptr);
+                        _exit(127);
+                    }
+                    brls::Application::quit();
                 });
             } else {
                 // deb / AUR package: hand the downloaded package to the system
                 // installer (xdg-open) — no privileged command is run here.
                 brls::sync([ui]() {
-                    if (!ui->dismissed->load()) stepDone(ui->install, "Downloaded");
+                    if (!ui->dismissed->load()) stepDone(ui->install, "Handed to installer");
                 });
+                // Hand the package to the system installer and QUIT — no
+                // dialog. Quitting is mandatory, not cosmetic: dpkg/pacman
+                // cannot swap the binary under a live process, so staying open
+                // leaves the OLD build running after the install. The detached
+                // fork+setsid child survives the quit; the overlay's
+                // "Handed to installer" step carries the context before the
+                // window closes, and the user reopens after the install.
                 finishInstall(ui, [path]() {
                     pid_t child = fork();
                     if (child == 0) {
@@ -1116,12 +1119,7 @@ void startInstall(const ReleaseInfo rel) {
                         execlp("xdg-open", "xdg-open", path.c_str(), (char*)nullptr);
                         _exit(127);
                     }
-                    auto* d = new brls::Dialog(
-                        "Update downloaded to\n" + path + "\n\nYour package "
-                        "installer should open with it. Finish the install "
-                        "there, then relaunch VitaABS.");
-                    d->addButton("OK", []() {});
-                    d->open();
+                    brls::Application::quit();
                 });
             }
         }
@@ -1162,18 +1160,18 @@ void startInstall(const ReleaseInfo rel) {
             return;
         }
         // Stub installed. Launch it and quit — it takes over from here.
+        // No dialog of ours: hand off and close automatically. The Vita shell
+        // still shows its own "The following application will close" prompt
+        // twice (once for launching the stub, once when the stub relaunches
+        // VitaABS) — that's the OS confirmation for any cross-title launch
+        // from a foreground app and can't be suppressed from userland; it's
+        // the platform floor for this technique short of a kernel plugin.
         brls::sync([ui]() {
             if (!ui->dismissed->load()) stepActive(ui->relaunch, "Installing update\xE2\x80\xA6", -1.0f);
         });
         finishInstall(ui, []() {
-            auto* d = new brls::Dialog(
-                "Installing the update.\n\nVitaABS will close and reopen on its own "
-                "in a few seconds. If it doesn't, relaunch it from the LiveArea.");
-            d->addButton("OK", []() {
-                vita::launchTitle("VSWYUPD01");
-                brls::Application::quit();
-            });
-            d->open();
+            vita::launchTitle("VSWYUPD01");
+            brls::Application::quit();
         });
 #endif
         s_busy = false;
@@ -1795,6 +1793,13 @@ void checkForUpdates(bool manual) {
         // (CE-36329-3). From VitaABS it's just another title, so it goes
         // quietly.
         ps4::removeUpdaterApp();
+#endif
+#ifdef __PSV__
+        // Same self-cleanup on Vita: the updater stub (VSWYUPD01) is left
+        // installed after an update — remove it from the MAIN app on next
+        // boot, never from the stub itself. Gated on the bubble existing, so
+        // a normal boot never pays the promoter module-load cost.
+        vita::removeUpdaterStub();
 #endif
 
         HttpClient client;

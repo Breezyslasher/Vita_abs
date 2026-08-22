@@ -516,6 +516,70 @@ void launchTitle(const std::string& titleId) {
     sceKernelDelayThread(200 * 1000);
 }
 
+void removeUpdaterStub() {
+    const char* kStubId = "VSWYUPD01";
+
+    // No-op on a normal boot: don't pay the ScePaf/promoter module-load cost
+    // unless the stub bubble is actually installed.
+    if (!fileExists(std::string("ux0:app/") + kStubId) &&
+        !fileExists(std::string("ur0:app/") + kStubId)) {
+        return;
+    }
+
+    vlog("vita: removing leftover updater stub %s", kStubId);
+
+    // DeletePkg twin of promoteApp(): load ScePaf + the promoter, Init,
+    // DeletePkg, then the same async GetState poll → GetResult, Exit, unload.
+    // Removing the stub from HERE (the main app) is deliberate — a title that
+    // uninstalls its own running self is killed mid-call. The stub is
+    // reinstalled from the bundled updater.vpk on the next update, so this
+    // costs nothing.
+    int res = loadScePaf();
+    if (res < 0) {
+        vlog("vita: removeUpdaterStub: cannot load ScePaf (0x%08x)", (unsigned)res);
+        return;
+    }
+    res = sceSysmoduleLoadModuleInternal(SCE_SYSMODULE_INTERNAL_PROMOTER_UTIL);
+    if (res < 0) {
+        vlog("vita: removeUpdaterStub: cannot load the promoter (0x%08x)", (unsigned)res);
+        unloadScePaf();
+        return;
+    }
+
+    res = scePromoterUtilityInit();
+    if (res >= 0) {
+        int dres = scePromoterUtilityDeletePkg(kStubId);
+        if (dres < 0) {
+            vlog("vita: removeUpdaterStub: DeletePkg failed (0x%08x)", (unsigned)dres);
+        } else {
+            // Poll until idle (~30 s worst case — deleting a tiny stub is
+            // quick; don't hang the boot path forever).
+            int state = 1;
+            int guard = 0;
+            const int kMaxPolls = 300;
+            while (guard++ < kMaxPolls) {
+                if (scePromoterUtilityGetState(&state) < 0) { state = 0; break; }
+                if (state == 0) break;   // idle => finished
+                sceKernelDelayThread(100 * 1000);
+            }
+            int result = 0;
+            if (guard >= kMaxPolls) {
+                vlog("vita: removeUpdaterStub: delete timed out");
+            } else if (scePromoterUtilityGetResult(&result) < 0 || result < 0) {
+                vlog("vita: removeUpdaterStub: delete rejected (0x%08x)", (unsigned)result);
+            } else {
+                vlog("vita: removeUpdaterStub: stub removed");
+            }
+        }
+        scePromoterUtilityExit();
+    } else {
+        vlog("vita: removeUpdaterStub: cannot start the promoter (0x%08x)", (unsigned)res);
+    }
+
+    sceSysmoduleUnloadModuleInternal(SCE_SYSMODULE_INTERNAL_PROMOTER_UTIL);
+    unloadScePaf();
+}
+
 }  // namespace vita
 
 #endif  // __PSV__

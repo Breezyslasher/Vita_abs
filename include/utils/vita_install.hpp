@@ -45,5 +45,11 @@ int installVpk(const std::string& vpkPath, const std::string& workDir, std::stri
 /// off to the updater stub, and by the stub to relaunch VitaABS afterwards.
 void launchTitle(const std::string& titleId);
 
+/// Remove the self-update stub (VSWYUPD01) left installed after an update.
+/// Called on the MAIN app's next boot — never from the stub itself (a title
+/// that uninstalls its own running self is killed mid-call). Gated on the
+/// stub bubble actually existing, so a normal boot is a cheap no-op.
+void removeUpdaterStub();
+
 }  // namespace vita
 #endif
