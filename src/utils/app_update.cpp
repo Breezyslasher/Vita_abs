@@ -1655,7 +1655,7 @@ void offerUpdate(const ReleaseInfo rel) {
     cards->setAxis(brls::Axis::ROW);
     cards->setAlignItems(brls::AlignItems::CENTER);
     cards->setPadding(0.0f, 18.0f, 0.0f, 18.0f);
-    cards->addView(makeCard("CURRENT", tok::muted2(), VITAABS_VERSION,
+    cards->addView(makeCard("CURRENT", tok::muted2(), VITAABS_DISPLAY_VERSION,
                             tok::muted(), tok::inputBg(), tok::hairline()));
     auto* arrow = makeLabel("\xE2\x86\x92", 14.0f, tok::muted2());
     arrow->setMarginLeft(10.0f);
@@ -1863,7 +1863,7 @@ void checkForUpdates(bool manual) {
             return;
         }
 
-        const std::string current = VITAABS_VERSION;
+        const std::string current = VITAABS_DISPLAY_VERSION;
         if (!isNewer(rel.tag, current)) {
             brls::Logger::info("app_update: up to date ({} vs {})", current, rel.tag);
             if (manual) {

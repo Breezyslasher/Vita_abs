@@ -73,11 +73,31 @@ endif()
 # Project (after toolchain so cross-compilers are in effect)
 # Pass -DAPP_VERSION=X.Y.Z from CI to override the default.
 # ---------------------------------------------------------------------------
-if(NOT DEFINED APP_VERSION)
-    set(APP_VERSION "1.0.0")
+if(NOT DEFINED APP_VERSION OR APP_VERSION STREQUAL "")
+    # Local-dev fallback ONLY: CI always passes -DAPP_VERSION. Indirect
+    # builders (Gradle, flatpak-builder) forward it too — Gradle via project
+    # properties, Flatpak by stamping this file before the build.
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
+        file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" APP_VERSION)
+        string(STRIP "${APP_VERSION}" APP_VERSION)
+    else()
+        set(APP_VERSION "0.0.0")
+    endif()
+endif()
+# The human-readable version shown in Settings and the updater UI. CI passes
+# the labeled form (e.g. "Beta 2.0.0"); it defaults to APP_VERSION so local
+# builds still show something sensible.
+if(NOT DEFINED APP_DISPLAY_VERSION OR APP_DISPLAY_VERSION STREQUAL "")
+    set(APP_DISPLAY_VERSION "${APP_VERSION}")
 endif()
 string(REGEX REPLACE "^v" "" APP_VERSION "${APP_VERSION}")
-project(VitaABS VERSION ${APP_VERSION} LANGUAGES C CXX)
+# project(VERSION) only accepts numeric X[.Y[.Z[.W]]] — extract it from
+# whatever APP_VERSION carries (labels, build suffixes).
+string(REGEX MATCH "[0-9]+(\\.[0-9]+)*" APP_NUMERIC_VERSION "${APP_VERSION}")
+if(NOT APP_NUMERIC_VERSION)
+    set(APP_NUMERIC_VERSION "0.0.0")
+endif()
+project(VitaABS VERSION ${APP_NUMERIC_VERSION} LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -265,6 +285,7 @@ endif()
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     VITAABS_VERSION=\"${APP_VERSION}\"
+    VITAABS_DISPLAY_VERSION=\"${APP_DISPLAY_VERSION}\"
 )
 
 # Switch deko3d builds download the matching NRO variant in the in-app updater

@@ -268,7 +268,8 @@ jobs:
       - name: Build
         run: |
           cmake -B build -G Ninja -DPLATFORM_PSV=ON \
-            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }}
+            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }} \
+            -DAPP_DISPLAY_VERSION="${{ needs.resolve-version.outputs.version }}"
           cmake --build build
 
       - name: Upload VPK
@@ -362,7 +363,13 @@ jobs:
       # Resources are loaded via APK assets (see build.gradle syncBorealisResources).
       run: |
         ${{ github.workspace }}/lib/borealis/build_libromfs_generator.sh
-        cd app/platform/android && ./gradlew assembleRelease
+        # Forward the CI-resolved version into the native build (see
+        # build.gradle externalNativeBuild) so the in-app version matches the
+        # APK's versionName — without this the indirect Gradle->cmake build
+        # never saw -DAPP_VERSION and fell back to the on-disk default.
+        cd app/platform/android && ./gradlew assembleRelease \
+          -PappVersion="${{ needs.resolve-version.outputs.version_number }}" \
+          -PappDisplayVersion="${{ needs.resolve-version.outputs.version }}"
     - name: Upload dist
       uses: actions/upload-artifact@v4
       with:
@@ -408,7 +415,8 @@ jobs:
       - name: Build and bundle
         run: |
           cmake -B build -G Ninja -DPLATFORM_DESKTOP=ON \
-            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }}
+            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }} \
+            -DAPP_DISPLAY_VERSION="${{ needs.resolve-version.outputs.version }}"
           cmake --build build
 
           # Bundle libmpv and every other non-system shared dep next to the
@@ -506,6 +514,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      # The manifest is static YAML and can't see CI variables, and
+      # flatpak-builder builds the app module from the checkout (source type:
+      # dir) — so stamp the resolved version into VERSION and let the module's
+      # cmake pick it up through the file fallback. Changing VERSION changes
+      # the dir-source hash, so only the app module rebuilds; the cached
+      # mpv/deps modules are untouched.
+      - name: Stamp the CI-resolved version into VERSION
+        run: echo "${{ needs.resolve-version.outputs.version }}" > VERSION
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
@@ -578,6 +594,7 @@ jobs:
           cmake -B build -G Ninja \
             -DPLATFORM_SWITCH=ON \
             -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }} \
+            -DAPP_DISPLAY_VERSION="${{ needs.resolve-version.outputs.version }}" \
             ${{ matrix.cmake_extra }}
           cmake --build build
       - name: Upload NRO
@@ -631,7 +648,8 @@ jobs:
           OPENORBIS: /opt/pacbrew/ps4/openorbis
         run: |
           cmake -B build -DPLATFORM_PS4=ON \
-            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }}
+            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }} \
+            -DAPP_DISPLAY_VERSION="${{ needs.resolve-version.outputs.version }}"
           cmake --build build
       - name: Upload PS4 artifacts
         uses: actions/upload-artifact@v4
@@ -667,7 +685,8 @@ jobs:
           cmake -B build -G Ninja -DPLATFORM_DESKTOP=ON \
             -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ matrix.target }} \
-            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }}
+            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }} \
+            -DAPP_DISPLAY_VERSION="${{ needs.resolve-version.outputs.version }}"
           cmake --build build
       - name: Bundle macOS dylibs
         run: |
@@ -831,7 +850,8 @@ jobs:
       - name: Build
         run: |
           cmake -B build -G Ninja -DPLATFORM_DESKTOP=ON -DUSE_SYSTEM_GLFW=ON -DUSE_D3D11=ON \
-            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }}
+            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }} \
+            -DAPP_DISPLAY_VERSION="${{ needs.resolve-version.outputs.version }}"
           cmake --build build
       - name: Bundle runtime DLLs
         run: |
@@ -907,7 +927,8 @@ jobs:
       - name: Build
         run: |
           cmake -B build -G Ninja -DPLATFORM_DESKTOP=ON \
-            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }}
+            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }} \
+            -DAPP_DISPLAY_VERSION="${{ needs.resolve-version.outputs.version }}"
           cmake --build build
           PKGROOT="pkgroot"
           rm -rf "$PKGROOT"
@@ -973,7 +994,8 @@ jobs:
       - name: Build
         run: |
           cmake -B build -G Ninja -DPLATFORM_DESKTOP=ON \
-            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }}
+            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }} \
+            -DAPP_DISPLAY_VERSION="${{ needs.resolve-version.outputs.version }}"
           cmake --build build
           tar --zstd -cf VitaABS-${{ github.run_number }}.pkg.tar.zst -C build VitaABS resources
       - name: Upload aur artifact

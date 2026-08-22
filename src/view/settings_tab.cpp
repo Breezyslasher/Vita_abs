@@ -12,9 +12,10 @@
 #include "utils/app_update.hpp"
 #include <set>
 
-// Version defined in CMakeLists.txt or here
-#ifndef VITA_ABS_VERSION
-#define VITA_ABS_VERSION "2.0.0"
+// Version macros come from CMakeLists.txt (VITAABS_VERSION numeric,
+// VITAABS_DISPLAY_VERSION human-readable); guard for odd build setups.
+#ifndef VITAABS_DISPLAY_VERSION
+#define VITAABS_DISPLAY_VERSION "0.0.0"
 #endif
 
 namespace vitaabs {
@@ -549,16 +550,17 @@ void SettingsTab::createAboutSection() {
     header->setTitle("About");
     m_contentBox->addView(header);
 
-    // Version info
+    // Version info — the CI-resolved display version, same source as the
+    // package version (APK versionName / release tag), so they can't diverge.
     auto* versionCell = new brls::DetailCell();
     versionCell->setText("Version");
-    versionCell->setDetailText(VITA_ABS_VERSION);
+    versionCell->setDetailText(VITAABS_DISPLAY_VERSION);
     m_contentBox->addView(versionCell);
 
     // In-app updates: manual check now, plus the startup check toggle.
     auto* checkUpdatesCell = new brls::DetailCell();
     checkUpdatesCell->setText("Check for Updates");
-    checkUpdatesCell->setDetailText(VITAABS_VERSION);
+    checkUpdatesCell->setDetailText(VITAABS_DISPLAY_VERSION);
     checkUpdatesCell->registerClickAction([](brls::View*) {
         app_update::checkForUpdates(true);
         return true;
