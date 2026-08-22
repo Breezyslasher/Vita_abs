@@ -9,6 +9,7 @@
 #include "player/mpv_player.hpp"
 #include "activity/player_activity.hpp"
 #include "platform/platform.hpp"
+#include "utils/app_update.hpp"
 #include <set>
 
 // Version defined in CMakeLists.txt or here
@@ -553,6 +554,26 @@ void SettingsTab::createAboutSection() {
     versionCell->setText("Version");
     versionCell->setDetailText(VITA_ABS_VERSION);
     m_contentBox->addView(versionCell);
+
+    // In-app updates: manual check now, plus the startup check toggle.
+    auto* checkUpdatesCell = new brls::DetailCell();
+    checkUpdatesCell->setText("Check for Updates");
+    checkUpdatesCell->setDetailText(VITAABS_VERSION);
+    checkUpdatesCell->registerClickAction([](brls::View*) {
+        app_update::checkForUpdates(true);
+        return true;
+    });
+    m_contentBox->addView(checkUpdatesCell);
+
+    auto* autoUpdateToggle = new brls::BooleanCell();
+    autoUpdateToggle->init("Check for Updates on Startup",
+        Application::getInstance().getSettings().autoCheckUpdates,
+        [](bool value) {
+            AppSettings& s = Application::getInstance().getSettings();
+            s.autoCheckUpdates = value;
+            Application::getInstance().saveSettings();
+        });
+    m_contentBox->addView(autoUpdateToggle);
 
     // App description
     auto* descLabel = new brls::Label();

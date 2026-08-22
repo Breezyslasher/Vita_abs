@@ -467,7 +467,8 @@ jobs:
       - name: Upload NRO
         uses: actions/upload-artifact@v4
         with:
-          name: VitaABS-Switch-${{ matrix.driver }}-${{ github.run_number }}
+          # Named VitaABS-nx-… because the release jobs collect VitaABS-nx-*
+          name: VitaABS-nx-${{ matrix.driver }}-${{ github.run_number }}
           path: build/VitaABS.nro
 
   # ───────────────────────────────────────────────

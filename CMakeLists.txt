@@ -182,11 +182,24 @@ set(APP_SOURCES
     src/utils/http_client.cpp
     src/utils/image_loader.cpp
     src/utils/audio_utils.cpp
+    src/utils/app_update.cpp
 )
 
 # vita_stubs.c only needed on Vita (no-op stdio locks, SDL_OpenURL stub)
 if(PLATFORM_PSV)
     list(APPEND APP_SOURCES src/utils/vita_stubs.c)
+    # In-app self-update: unzip the downloaded VPK (miniz, sceIo-backed) and
+    # promote it in place via ScePromoterUtility (utils/vita_install).
+    list(APPEND APP_SOURCES src/utils/vita_install.cpp lib/miniz/miniz.c)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib/miniz)
+    # miniz without stdio/time: newlib's fopen64/stat64/utime are absent on
+    # Vita, so vita_install.cpp drives it through sceIo callbacks instead.
+    add_definitions(-DMINIZ_NO_STDIO -DMINIZ_NO_TIME)
+endif()
+
+# PS4 in-app self-update: BGFT pkg install + updater-helper management
+if(PLATFORM_PS4)
+    list(APPEND APP_SOURCES src/utils/ps4_install.cpp)
 endif()
 
 # Switch: userAppInit/userAppExit (romfs, sockets, system services init)
@@ -253,6 +266,11 @@ endif()
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     VITAABS_VERSION=\"${APP_VERSION}\"
 )
+
+# Switch deko3d builds download the matching NRO variant in the in-app updater
+if(PLATFORM_SWITCH AND USE_DEKO3D)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VITAABS_NRO_DEKO3D)
+endif()
 
 # ---------------------------------------------------------------------------
 # Link libraries
@@ -413,7 +431,10 @@ if(PLATFORM_PSV)
         SceAudio_stub
         SceVshBridge_stub
         SceAppMgr_stub
-    
+        # In-app self-update promoter (utils/vita_install)
+        ScePromoterUtil_stub
+        SceSysmodule_stub
+
         # Standard libraries last
         z
         c
@@ -423,6 +444,13 @@ elseif(PLATFORM_SWITCH)
 elseif(PLATFORM_PS4)
     target_link_libraries(${PROJECT_NAME}
         SceNet
+        # In-app self-update (utils/ps4_install): BGFT registers the PKG
+        # with the system installer, AppInstUtil uninstalls the old title
+        # (+ SceUserService for AppInstUtil's user context).
+        SceBgft
+        SceAppInstUtil
+        SceUserService
+        SceSystemService
     )
 elseif(PLATFORM_DESKTOP)
     find_package(Threads REQUIRED)
@@ -436,11 +464,58 @@ endif()
 # Platform packaging / post-build
 # ---------------------------------------------------------------------------
 if(PLATFORM_PSV)
+    # ── Updater stub (self-update helper) ───────────────────────────────
+    # A second, tiny Vita app with its own title id (VSWYUPD01). VitaABS
+    # cannot promote over itself — the installer returns 0x80101114 "in
+    # use" for the running title — so at update time VitaABS installs and
+    # launches this stub; with VitaABS now closed, the stub promotes the
+    # downloaded VPK and relaunches VitaABS. This is the AutoPlugin2
+    # technique. It shares the extract/promote code (utils/vita_install),
+    # which is deliberately free of borealis/fmt so the stub links without
+    # the UI stack. The stub's own .vpk is bundled inside VitaABS.vpk
+    # (as updater.vpk) so VitaABS can install it on demand.
+    add_executable(vitaabs_updater
+        src/updater_stub/main.cpp
+        src/utils/vita_install.cpp
+        lib/miniz/miniz.c)
+    target_include_directories(vitaabs_updater PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/lib/miniz)
+    target_compile_definitions(vitaabs_updater PRIVATE __PSV__ MINIZ_NO_STDIO MINIZ_NO_TIME)
+    target_link_libraries(vitaabs_updater
+        mbedcrypto            # mbedtls_sha1 for the fpkg hmac
+        # vita2d + its stack, for the tiny progress screen (system PGF font).
+        vita2d
+        freetype
+        png
+        z
+        SceGxm_stub
+        SceDisplay_stub
+        SceCommonDialog_stub
+        ScePgf_stub
+        SceCtrl_stub
+        # self-update + relaunch
+        ScePromoterUtil_stub
+        SceSysmodule_stub
+        SceAppMgr_stub
+        SceIofilemgr_stub
+        SceLibKernel_stub)
+    vita_create_self(vitaabs_updater.self vitaabs_updater UNSAFE NOASLR)
+    # No FILE args: vita_create_vpk accumulates them in a variable it does
+    # not clear between calls, so any file listed here would leak into the
+    # main VitaABS.vpk below and get packed twice. The stub is headless.
+    vita_create_vpk(vitaabs_updater.vpk VSWYUPD01 vitaabs_updater.self
+        VERSION 01.00
+        NAME "VitaABS Updater")
+
     vita_create_self(${PROJECT_NAME}.self ${PROJECT_NAME} UNSAFE NOASLR)
 
     vita_create_vpk(${PROJECT_NAME}.vpk ${VITA_TITLEID} ${PROJECT_NAME}.self
         VERSION ${VITA_VERSION}
         NAME    ${VITA_APP_NAME}
+
+        # The bundled updater stub, installed + launched at self-update
+        FILE ${CMAKE_BINARY_DIR}/vitaabs_updater.vpk updater.vpk
 
         FILE app/platform/psv/sce_sys/icon0.png                      sce_sys/icon0.png
         FILE app/platform/psv/sce_sys/pic0.png                       sce_sys/pic0.png

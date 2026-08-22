@@ -90,6 +90,47 @@ public class PlatformUtils {
         return wifiInfo.getRssi();
     }
 
+    /**
+     * Hand a downloaded update APK to the system package installer.
+     * Works on Android TV as well as mobile: TVs usually ship no browser,
+     * so opening the release page there does nothing, but the installer
+     * (and its unknown-sources consent flow) exists everywhere. The
+     * content:// URI is served by ApkProvider, which only ever exposes
+     * this one file.
+     */
+    public static void installApk(String path) {
+        Context context = SDLActivity.getContext();
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            Uri uri;
+            if (android.os.Build.VERSION.SDK_INT >= 24) {
+                uri = Uri.parse("content://" + context.getPackageName() + ".apkprovider/update.apk");
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } else {
+                uri = Uri.fromFile(new java.io.File(path));
+            }
+            intent.setDataAndType(uri, "application/vnd.android.package-archive");
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+
+            // Stop our own (old) process shortly after the installer takes
+            // the foreground. Android updates the package while the old app
+            // is still running, so without this the user has to force-close
+            // VitaABS for the new version to take effect; killing the stale
+            // process means reopening after the install lands the update.
+            // 1.5s lets the installer come to the front first, so the kill
+            // is invisible behind it.
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                new Runnable() {
+                    @Override public void run() {
+                        android.os.Process.killProcess(android.os.Process.myPid());
+                    }
+                }, 1500);
+        } catch (Exception e) {
+            android.util.Log.e("VitaABS", "installApk failed", e);
+        }
+    }
+
     public static void openBrowser(String url) {
         Context context = SDLActivity.getContext();
 

@@ -11,6 +11,7 @@
 #include "app/downloads_manager.hpp"
 #include "app/application.hpp"
 #include "app/audiobookshelf_client.hpp"
+#include "utils/app_update.hpp"
 #include "utils/async.hpp"
 
 #include <algorithm>
@@ -37,6 +38,11 @@ brls::View* MainActivity::createContentView() {
 
 void MainActivity::onContentAvailable() {
     brls::Logger::debug("MainActivity content available");
+
+    // Startup update check — runs on a worker thread, so login and the first
+    // content fetches still get the pipe first.
+    if (Application::getInstance().getSettings().autoCheckUpdates)
+        app_update::checkForUpdates(false);
 
     if (tabFrame) {
         AppSettings& settings = Application::getInstance().getSettings();
