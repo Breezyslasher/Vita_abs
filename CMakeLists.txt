@@ -781,4 +781,3 @@ elseif(PLATFORM_DESKTOP)
         COMMENT "Copying resources (app + borealis) for desktop build"
     )
 endif()
-
