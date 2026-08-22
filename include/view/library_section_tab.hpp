@@ -8,6 +8,7 @@
 
 #include <borealis.hpp>
 #include <memory>
+#include <atomic>
 #include "app/audiobookshelf_client.hpp"
 #include "view/recycling_grid.hpp"
 
@@ -30,6 +31,7 @@ public:
 
 private:
     void loadContent();
+    void loadNextPage();
     void loadCollections();
     void loadGenres();
     void showAllItems();
@@ -81,9 +83,17 @@ private:
     bool m_collectionsLoaded = false;
     bool m_genresLoaded = false;
 
+    // Infinite-scroll pagination state (like Vita-Music-Assistant)
+    static constexpr int PAGE_SIZE = 100;
+    int m_page = 0;            // next page index to fetch
+    int m_serverTotal = -1;    // total items the server reported
+    bool m_hasMore = false;
+    bool m_loadingPage = false;  // in-flight page fetch guard (VMA m_loadingPage)
+    int m_loadGen = 0;           // bumped by loadContent(); stale completions bail
+
     // Shared pointer to track if this object is still alive
     // Used by async callbacks to check validity before updating UI
-    std::shared_ptr<bool> m_alive;
+    std::shared_ptr<std::atomic<bool>> m_alive;
 };
 
 } // namespace vitaabs

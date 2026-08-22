@@ -97,7 +97,11 @@ private:
     void updateNavigationRoutes();
 
     // Async lifetime guard
-    std::shared_ptr<bool> m_alive;
+    std::shared_ptr<std::atomic<bool>> m_alive;
+    // Row-scoped alive flag for async cover loads: invalidated (and re-created)
+    // every time the server-queue rows are torn down, so a pending texture
+    // upload can never touch a deleted row's brls::Image.
+    std::shared_ptr<std::atomic<bool>> m_rowsAlive;
 };
 
 } // namespace vitaabs

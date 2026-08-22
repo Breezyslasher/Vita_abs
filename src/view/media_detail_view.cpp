@@ -49,7 +49,7 @@ private:
 namespace vitaabs {
 
 MediaDetailView::MediaDetailView(const MediaItem& item)
-    : m_item(item), m_alive(std::make_shared<bool>(true)) {
+    : m_item(item), m_alive(std::make_shared<std::atomic<bool>>(true)) {
     brls::Logger::info("MediaDetailView: Creating for '{}' id='{}' type='{}'",
                        item.title, item.id, item.type);
 
@@ -528,12 +528,12 @@ void MediaDetailView::willAppear(bool resetState) {
     brls::Box::willAppear(resetState);
 
     // Re-arm alive flag
-    m_alive = std::make_shared<bool>(true);
+    m_alive = std::make_shared<std::atomic<bool>>(true);
     m_lastProgressUpdate = std::chrono::steady_clock::now();
 
     // Register download progress callback for live UI updates
     DownloadsManager& mgr = DownloadsManager::getInstance();
-    std::weak_ptr<bool> aliveWeak = m_alive;
+    std::weak_ptr<std::atomic<bool>> aliveWeak = m_alive;
 
     mgr.setProgressCallback([this, aliveWeak](float downloadedBytes, float totalBytes) {
         auto now = std::chrono::steady_clock::now();
@@ -1265,7 +1265,7 @@ void MediaDetailView::applyFilters() {
                 }
             }
             // Defer UI refresh to next frame
-            std::weak_ptr<bool> aliveWeak = m_alive;
+            std::weak_ptr<std::atomic<bool>> aliveWeak = m_alive;
             brls::sync([this, aliveWeak]() {
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) return;
@@ -2215,7 +2215,7 @@ void MediaDetailView::downloadAll() {
     if (m_children.empty()) {
         // If children not loaded yet, fetch them first
         std::string podcastId = m_item.id;
-        std::weak_ptr<bool> aliveWeak = m_alive;
+        std::weak_ptr<std::atomic<bool>> aliveWeak = m_alive;
 
         asyncRun([this, podcastId, aliveWeak]() {
             AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
@@ -2245,7 +2245,7 @@ void MediaDetailView::downloadUnwatched(int maxCount) {
     if (m_children.empty()) {
         // Fetch episodes first
         std::string podcastId = m_item.id;
-        std::weak_ptr<bool> aliveWeak = m_alive;
+        std::weak_ptr<std::atomic<bool>> aliveWeak = m_alive;
 
         asyncRun([this, podcastId, maxCount, aliveWeak]() {
             AudiobookshelfClient& client = AudiobookshelfClient::getInstance();

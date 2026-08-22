@@ -78,7 +78,7 @@ static void loadLocalCoverImage(brls::Image* image, const std::string& localPath
 }
 
 DownloadsTab::DownloadsTab() {
-    m_alive = std::make_shared<bool>(true);
+    m_alive = std::make_shared<std::atomic<bool>>(true);
 
     this->setAxis(brls::Axis::COLUMN);
     this->setPadding(20);
@@ -221,7 +221,7 @@ DownloadsTab::DownloadsTab() {
         if (m_startStopLabel) m_startStopLabel->setText("Start");
         if (m_downloadStatusLabel) m_downloadStatusLabel->setText("- Clearing...");
 
-        std::weak_ptr<bool> aliveWeak = m_alive;
+        std::weak_ptr<std::atomic<bool>> aliveWeak = m_alive;
         asyncRun([this, aliveWeak]() {
             DownloadsManager& mgr = DownloadsManager::getInstance();
             mgr.waitForDownloadThread();
@@ -354,7 +354,7 @@ void DownloadsTab::willAppear(bool resetState) {
     brls::Box::willAppear(resetState);
 
     // Re-arm alive flag
-    m_alive = std::make_shared<bool>(true);
+    m_alive = std::make_shared<std::atomic<bool>>(true);
 
     // Initialize downloads manager once (not on every refresh)
     DownloadsManager::getInstance().init();
@@ -364,7 +364,10 @@ void DownloadsTab::willAppear(bool resetState) {
     m_lastServerItems.clear();
     m_currentFocusedIcon = nullptr;
 
-    // Remove stale row views
+    // Remove stale row views (invalidate the row-scoped alive flag first so
+    // pending cover uploads can't touch the deleted rows' images)
+    if (m_rowsAlive) *m_rowsAlive = false;
+    m_rowsAlive = std::make_shared<std::atomic<bool>>(true);
     if (m_serverContainer) {
         while (m_serverContainer->getChildren().size() > 0)
             m_serverContainer->removeView(m_serverContainer->getChildren()[0]);
@@ -374,7 +377,7 @@ void DownloadsTab::willAppear(bool resetState) {
 
     // Register progress callback for live UI updates
     DownloadsManager& mgr = DownloadsManager::getInstance();
-    std::weak_ptr<bool> aliveWeak = m_alive;
+    std::weak_ptr<std::atomic<bool>> aliveWeak = m_alive;
     mgr.setProgressCallback([this, aliveWeak](float downloadedBytes, float totalBytes) {
         auto now = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastProgressRefresh).count();
@@ -415,12 +418,14 @@ void DownloadsTab::willAppear(bool resetState) {
 
 DownloadsTab::~DownloadsTab() {
     if (m_alive) *m_alive = false;
+    if (m_rowsAlive) *m_rowsAlive = false;
 }
 
 void DownloadsTab::willDisappear(bool resetState) {
     brls::Box::willDisappear(resetState);
 
     if (m_alive) *m_alive = false;
+    if (m_rowsAlive) *m_rowsAlive = false;
 
     stopAutoRefresh();
 
@@ -502,6 +507,8 @@ void DownloadsTab::refreshServerQueue() {
         m_serverSection->setVisibility(brls::Visibility::GONE);
         m_lastServerItems.clear();
         m_serverRowElements.clear();
+        if (m_rowsAlive) *m_rowsAlive = false;
+        m_rowsAlive = std::make_shared<std::atomic<bool>>(true);
         while (m_serverContainer->getChildren().size() > 0) {
             m_serverContainer->removeView(m_serverContainer->getChildren()[0]);
         }
@@ -589,6 +596,8 @@ void DownloadsTab::refreshServerQueue() {
     // Full rebuild needed
     m_lastServerItems = newCache;
     m_serverRowElements.clear();
+    if (m_rowsAlive) *m_rowsAlive = false;
+    m_rowsAlive = std::make_shared<std::atomic<bool>>(true);
     while (m_serverContainer->getChildren().size() > 0) {
         m_serverContainer->removeView(m_serverContainer->getChildren()[0]);
     }
@@ -650,7 +659,8 @@ brls::Box* DownloadsTab::createServerRow(const std::string& itemId, const std::s
     if (!localCoverPath.empty()) {
         loadLocalCoverImage(coverImage, localCoverPath);
     } else if (!coverUrl.empty()) {
-        ImageLoader::loadAsync(coverUrl, [](brls::Image*) {}, coverImage, m_alive);
+        ImageLoader::loadAsync(coverUrl, [](brls::Image*) {}, coverImage,
+                               m_rowsAlive ? m_rowsAlive : m_alive);
     }
 
     // Info column (left side, grows)
@@ -746,7 +756,7 @@ brls::Box* DownloadsTab::createServerRow(const std::string& itemId, const std::s
 }
 
 void DownloadsTab::refreshServerDownloads() {
-    std::weak_ptr<bool> aliveWeak = m_alive;
+    std::weak_ptr<std::atomic<bool>> aliveWeak = m_alive;
 
     asyncRun([this, aliveWeak]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
@@ -850,7 +860,7 @@ void DownloadsTab::startAutoRefresh() {
     m_autoRefreshEnabled.store(true);
     m_autoRefreshTimerActive.store(true);
 
-    std::weak_ptr<bool> aliveWeak = m_alive;
+    std::weak_ptr<std::atomic<bool>> aliveWeak = m_alive;
 
     asyncRun([this, aliveWeak]() {
         while (m_autoRefreshEnabled.load()) {

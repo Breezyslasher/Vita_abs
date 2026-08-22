@@ -10,6 +10,7 @@
 #include <cstring>
 #include <ctime>
 #include <algorithm>
+#include <functional>
 
 namespace vitaabs {
 
@@ -85,6 +86,89 @@ static std::string extractTopLevelValue(const std::string& json, const std::stri
         }
     }
     return "";
+}
+
+// ---------------------------------------------------------------------------
+// Fast array iteration (ported from Vita-Music-Assistant's DOM-free parser).
+// Locates item byte-ranges directly in the response body — no multi-MB array
+// copies — with string-aware depth scanning so braces/brackets inside string
+// values (titles, descriptions) can't corrupt object-boundary detection.
+// ---------------------------------------------------------------------------
+
+// Locate the [outStart, outEnd) byte range of the array value for `key`
+// (e.g. "results": [...]) without copying it. outStart points at '[' and
+// outEnd one past the matching ']'. Returns false if not found.
+static bool findJsonArrayRange(const std::string& json, const std::string& key,
+                               size_t& outStart, size_t& outEnd) {
+    std::string searchKey = "\"" + key + "\"";
+    size_t keyPos = json.find(searchKey);
+    if (keyPos == std::string::npos) return false;
+    size_t colonPos = json.find(':', keyPos + searchKey.size());
+    if (colonPos == std::string::npos) return false;
+    size_t arrStart = json.find('[', colonPos);
+    if (arrStart == std::string::npos) return false;
+
+    const char* d = json.data();
+    const size_t n = json.size();
+    int depth = 1;
+    bool inStr = false;
+    size_t i = arrStart + 1;
+    while (i < n && depth > 0) {
+        char ch = d[i];
+        if (inStr) {
+            if (ch == '\\') i++;            // skip the escaped character
+            else if (ch == '"') inStr = false;
+        } else if (ch == '"') {
+            inStr = true;
+        } else if (ch == '[' || ch == '{') {
+            depth++;
+        } else if (ch == ']' || ch == '}') {
+            depth--;
+        }
+        i++;
+    }
+    if (depth != 0) return false;
+    outStart = arrStart;
+    outEnd = i;  // one past the closing ']'
+    return true;
+}
+
+// Invoke fn(objStart, objEnd) for each top-level object in the array bytes
+// [start, end) of `json`. objEnd is one past the object's closing '}'.
+// Single pass, string-aware, no copies.
+static void forEachObjectInRange(const std::string& json, size_t start, size_t end,
+                                 const std::function<void(size_t, size_t)>& fn) {
+    const char* d = json.data();
+    size_t i = start;
+    if (i < end && d[i] == '[') i++;
+
+    while (i < end) {
+        while (i < end && d[i] != '{') {
+            if (d[i] == ']') return;
+            i++;
+        }
+        if (i >= end) return;
+        size_t objStart = i;
+        int depth = 1;
+        bool inStr = false;
+        i++;
+        while (i < end && depth > 0) {
+            char ch = d[i];
+            if (inStr) {
+                if (ch == '\\') i++;
+                else if (ch == '"') inStr = false;
+            } else if (ch == '"') {
+                inStr = true;
+            } else if (ch == '{') {
+                depth++;
+            } else if (ch == '}') {
+                depth--;
+            }
+            i++;
+        }
+        if (depth != 0) return;  // truncated/malformed — stop cleanly
+        fn(objStart, i);
+    }
 }
 
 // JSON parsing helpers
@@ -738,40 +822,21 @@ bool AudiobookshelfClient::fetchItemsInProgress(std::vector<MediaItem>& items) {
 
     items.clear();
 
-    // Parse libraryItems array
-    std::string itemsArray = extractJsonArray(resp.body, "libraryItems");
-    if (itemsArray.empty()) {
+    // Fast, copy-free array iteration (see findJsonArrayRange)
+    size_t arrStart = 0, arrEnd = 0;
+    if (!findJsonArrayRange(resp.body, "libraryItems", arrStart, arrEnd)) {
         // Try direct array response
-        itemsArray = resp.body;
+        arrStart = 0;
+        arrEnd = resp.body.size();
     }
 
-    size_t pos = 0;
-    while ((pos = itemsArray.find("\"id\"", pos)) != std::string::npos) {
-        size_t objStart = itemsArray.rfind('{', pos);
-        if (objStart == std::string::npos) {
-            pos++;
-            continue;
-        }
-
-        int braceCount = 1;
-        size_t objEnd = objStart + 1;
-        while (braceCount > 0 && objEnd < itemsArray.length()) {
-            if (itemsArray[objEnd] == '{') braceCount++;
-            else if (itemsArray[objEnd] == '}') braceCount--;
-            objEnd++;
-        }
-
-        std::string obj = itemsArray.substr(objStart, objEnd - objStart);
-        brls::Logger::debug("fetchItemsInProgress entity (first 300 chars): {}",
-                           obj.substr(0, std::min<size_t>(300, obj.size())));
-        MediaItem item = parseMediaItem(obj);
+    forEachObjectInRange(resp.body, arrStart, arrEnd, [&](size_t objStart, size_t objEnd) {
+        MediaItem item = parseMediaItem(resp.body.substr(objStart, objEnd - objStart));
 
         if (!item.id.empty() && !item.title.empty()) {
-            items.push_back(item);
+            items.push_back(std::move(item));
         }
-
-        pos = objEnd;
-    }
+    });
 
     brls::Logger::info("Found {} items in progress", items.size());
     return true;
@@ -926,26 +991,90 @@ bool AudiobookshelfClient::fetchLibrary(const std::string& libraryId, Library& l
     return true;
 }
 
+bool AudiobookshelfClient::fetchLibraryItemsPage(const std::string& libraryId,
+                                                  std::vector<MediaItem>& items,
+                                                  int page, int limit, int& totalOut,
+                                                  const std::string& sort, int* rawCountOut) {
+    brls::Logger::debug("Fetching library items page: library={}, page={}, limit={}",
+                        libraryId, page, limit);
+
+    items.clear();
+    totalOut = -1;
+    if (limit <= 0) limit = 100;
+
+    HttpClient client;
+    HttpRequest req;
+    std::string url = buildApiUrl("/api/libraries/" + libraryId + "/items");
+    url += "?page=" + std::to_string(page) + "&limit=" + std::to_string(limit);
+    if (!sort.empty()) {
+        url += "&sort=" + sort;
+    }
+    req.url = url;
+    req.method = "GET";
+    req.headers["Accept"] = "application/json";
+    req.headers["Authorization"] = "Bearer " + m_authToken;
+
+    HttpResponse resp = client.request(req);
+    if (resp.statusCode != 200) {
+        brls::Logger::error("Failed to fetch library items: {}", resp.statusCode);
+        return false;
+    }
+
+    // Library mediaType fallback for items missing a type
+    std::string libraryMediaType = extractJsonValue(resp.body, "mediaType");
+    if (libraryMediaType.empty()) {
+        Library lib;
+        if (fetchLibrary(libraryId, lib)) {
+            libraryMediaType = lib.mediaType;
+        }
+    }
+    MediaType defaultMediaType = parseMediaType(libraryMediaType);
+
+    // Read the top-level "total" (avoid any nested "total" inside items)
+    std::string totalStr = extractTopLevelValue(resp.body, "total");
+    totalOut = totalStr.empty() ? -1 : atoi(totalStr.c_str());
+
+    // Fast, copy-free array iteration: locate each item's byte range directly
+    // in the response body (string-aware; braces inside titles/descriptions
+    // can't corrupt the scan) and only substring the individual objects.
+    size_t arrStart = 0, arrEnd = 0;
+    if (!findJsonArrayRange(resp.body, "results", arrStart, arrEnd)) {
+        arrStart = 0;
+        arrEnd = resp.body.size();
+    }
+
+    items.reserve(static_cast<size_t>(limit));
+    int rawCount = 0;
+    forEachObjectInRange(resp.body, arrStart, arrEnd, [&](size_t objStart, size_t objEnd) {
+        rawCount++;
+        MediaItem item = parseMediaItem(resp.body.substr(objStart, objEnd - objStart));
+
+        if (item.mediaType == MediaType::UNKNOWN && defaultMediaType != MediaType::UNKNOWN) {
+            item.mediaType = defaultMediaType;
+            item.type = libraryMediaType;
+        }
+
+        if (!item.id.empty() && !item.title.empty()) {
+            items.push_back(std::move(item));
+        }
+    });
+    if (rawCountOut) *rawCountOut = rawCount;
+
+    brls::Logger::info("Library {} page {}: {} items (server total={})",
+                       libraryId, page, items.size(), totalOut);
+    return true;
+}
+
 bool AudiobookshelfClient::fetchLibraryItems(const std::string& libraryId, std::vector<MediaItem>& items,
                                               int page, int limit, const std::string& sort) {
     brls::Logger::debug("Fetching library items: library={}, startPage={}, limit={}", libraryId, page, limit);
 
     items.clear();
 
-    // Resolve library mediaType once (used as fallback for items missing a type)
-    std::string libraryMediaType;
-    {
-        Library lib;
-        if (fetchLibrary(libraryId, lib)) {
-            libraryMediaType = lib.mediaType;
-        }
-    }
-
     // Page size per request. limit<=0 means "fetch everything" (default behavior);
     // a positive limit fetches at most that many items total.
     const int pageSize = 100;
     bool fetchAll = (limit <= 0);
-    int remaining = limit;
 
     int currentPage = page;
     int total = -1;                 // total items reported by server (from first page)
@@ -953,99 +1082,29 @@ bool AudiobookshelfClient::fetchLibraryItems(const std::string& libraryId, std::
 
     for (int guard = 0; guard < kSafetyMaxPages; ++guard) {
         int reqLimit = pageSize;
-        if (!fetchAll && remaining < reqLimit) {
-            reqLimit = remaining;
-        }
-        if (reqLimit <= 0) {
-            break;
+        if (!fetchAll) {
+            int remaining = limit - static_cast<int>(items.size());
+            if (remaining <= 0) break;
+            if (remaining < reqLimit) reqLimit = remaining;
         }
 
-        HttpClient client;
-        HttpRequest req;
-        std::string url = buildApiUrl("/api/libraries/" + libraryId + "/items");
-        url += "?page=" + std::to_string(currentPage) + "&limit=" + std::to_string(reqLimit);
-        if (!sort.empty()) {
-            url += "&sort=" + sort;
-        }
-        req.url = url;
-        req.method = "GET";
-        req.headers["Accept"] = "application/json";
-        req.headers["Authorization"] = "Bearer " + m_authToken;
-
-        HttpResponse resp = client.request(req);
-        if (resp.statusCode != 200) {
+        std::vector<MediaItem> pageItems;
+        int pageTotal = -1;
+        int rawCount = 0;
+        if (!fetchLibraryItemsPage(libraryId, pageItems, currentPage, reqLimit, pageTotal, sort, &rawCount)) {
             // If we already got some items, treat as end-of-data; otherwise fail.
-            if (!items.empty()) {
-                break;
-            }
-            brls::Logger::error("Failed to fetch library items: {}", resp.statusCode);
+            if (!items.empty()) break;
             return false;
         }
+        if (total < 0) total = pageTotal;
 
-        if (libraryMediaType.empty()) {
-            libraryMediaType = extractJsonValue(resp.body, "mediaType");
-        }
-        MediaType defaultMediaType = parseMediaType(libraryMediaType);
+        items.insert(items.end(), pageItems.begin(), pageItems.end());
 
-        if (total < 0) {
-            // Read the top-level "total" (avoid any nested "total" inside items)
-            std::string totalStr = extractTopLevelValue(resp.body, "total");
-            total = totalStr.empty() ? -1 : atoi(totalStr.c_str());
-        }
-
-        std::string resultsArray = extractJsonArray(resp.body, "results");
-        if (resultsArray.empty()) {
-            resultsArray = resp.body;
-        }
-
-        int pageCount = 0;
-        size_t pos = 0;
-        while ((pos = resultsArray.find("\"id\"", pos)) != std::string::npos) {
-            size_t objStart = resultsArray.rfind('{', pos);
-            if (objStart == std::string::npos) {
-                pos++;
-                continue;
-            }
-
-            int braceCount = 1;
-            size_t objEnd = objStart + 1;
-            while (braceCount > 0 && objEnd < resultsArray.length()) {
-                if (resultsArray[objEnd] == '{') braceCount++;
-                else if (resultsArray[objEnd] == '}') braceCount--;
-                objEnd++;
-            }
-
-            std::string obj = resultsArray.substr(objStart, objEnd - objStart);
-            MediaItem item = parseMediaItem(obj);
-
-            if (item.mediaType == MediaType::UNKNOWN && defaultMediaType != MediaType::UNKNOWN) {
-                item.mediaType = defaultMediaType;
-                item.type = libraryMediaType;
-            }
-
-            if (!item.id.empty() && !item.title.empty()) {
-                items.push_back(item);
-                pageCount++;
-            }
-
-            pos = objEnd;
-        }
-
-        if (!fetchAll) {
-            remaining = limit - static_cast<int>(items.size());
-            if (remaining <= 0) {
-                break;
-            }
-        }
-
-        // Stop when the server returned a short page (no more data) or we've
-        // collected everything it reported.
-        if (pageCount == 0) {
-            break;
-        }
-        if (total >= 0 && static_cast<int>(items.size()) >= total) {
-            break;
-        }
+        // Stop when the server returned a short page (no more data). Use the
+        // raw object count — accepted items can be fewer when some are dropped
+        // for missing id/title, which must not stall or wedge the loop.
+        if (rawCount < reqLimit) break;
+        if (total >= 0 && static_cast<int>(items.size()) >= total) break;
 
         currentPage++;
     }
@@ -1079,61 +1138,22 @@ bool AudiobookshelfClient::fetchLibraryPersonalized(const std::string& libraryId
 
     shelves.clear();
 
-    // Parse shelves - the response is an array of shelf objects
-    size_t pos = 0;
-    while ((pos = resp.body.find("\"id\"", pos)) != std::string::npos) {
-        size_t objStart = resp.body.rfind('{', pos);
-        if (objStart == std::string::npos) {
-            pos++;
-            continue;
-        }
-
-        // Check if this is a shelf object (has "label" field nearby)
-        size_t checkEnd = std::min(objStart + 500, resp.body.length());
-        std::string checkStr = resp.body.substr(objStart, checkEnd - objStart);
-        if (checkStr.find("\"label\"") == std::string::npos &&
-            checkStr.find("\"labelStringKey\"") == std::string::npos) {
-            pos++;
-            continue;
-        }
-
-        int braceCount = 1;
-        size_t objEnd = objStart + 1;
-        while (braceCount > 0 && objEnd < resp.body.length()) {
-            if (resp.body[objEnd] == '{') braceCount++;
-            else if (resp.body[objEnd] == '}') braceCount--;
-            objEnd++;
-        }
-
+    // The response is a top-level array of shelf objects; iterate them with the
+    // fast string-aware scanner (see findJsonArrayRange/forEachObjectInRange).
+    forEachObjectInRange(resp.body, 0, resp.body.size(), [&](size_t objStart, size_t objEnd) {
         std::string obj = resp.body.substr(objStart, objEnd - objStart);
 
         PersonalizedShelf shelf;
-        shelf.id = extractJsonValue(obj, "id");
-        shelf.label = extractJsonValue(obj, "label");
-        shelf.labelStringKey = extractJsonValue(obj, "labelStringKey");
-        shelf.type = extractJsonValue(obj, "type");
+        shelf.id = extractTopLevelValue(obj, "id");
+        shelf.label = extractTopLevelValue(obj, "label");
+        shelf.labelStringKey = extractTopLevelValue(obj, "labelStringKey");
+        shelf.type = extractTopLevelValue(obj, "type");
 
-        // Parse entities array
-        std::string entitiesArray = extractJsonArray(obj, "entities");
-        if (!entitiesArray.empty()) {
-            size_t entPos = 0;
-            while ((entPos = entitiesArray.find("\"id\"", entPos)) != std::string::npos) {
-                size_t entStart = entitiesArray.rfind('{', entPos);
-                if (entStart == std::string::npos) {
-                    entPos++;
-                    continue;
-                }
-
-                int entBraceCount = 1;
-                size_t entEnd = entStart + 1;
-                while (entBraceCount > 0 && entEnd < entitiesArray.length()) {
-                    if (entitiesArray[entEnd] == '{') entBraceCount++;
-                    else if (entitiesArray[entEnd] == '}') entBraceCount--;
-                    entEnd++;
-                }
-
-                std::string entObj = entitiesArray.substr(entStart, entEnd - entStart);
-                MediaItem item = parseMediaItem(entObj);
+        // Parse entities array (byte range within the shelf object, no copy)
+        size_t entStart = 0, entEnd = 0;
+        if (findJsonArrayRange(obj, "entities", entStart, entEnd)) {
+            forEachObjectInRange(obj, entStart, entEnd, [&](size_t s, size_t e) {
+                MediaItem item = parseMediaItem(obj.substr(s, e - s));
 
                 // Set mediaType from library if not set
                 if (item.mediaType == MediaType::UNKNOWN && defaultMediaType != MediaType::UNKNOWN) {
@@ -1142,21 +1162,17 @@ bool AudiobookshelfClient::fetchLibraryPersonalized(const std::string& libraryId
                 }
 
                 if (!item.id.empty() && !item.title.empty()) {
-                    shelf.entities.push_back(item);
+                    shelf.entities.push_back(std::move(item));
                 }
-
-                entPos = entEnd;
-            }
+            });
         }
 
         if (!shelf.label.empty() || !shelf.labelStringKey.empty()) {
             brls::Logger::debug("fetchLibraryPersonalized: Found shelf id='{}' label='{}' labelStringKey='{}' type='{}' entities={}",
                                shelf.id, shelf.label, shelf.labelStringKey, shelf.type, shelf.entities.size());
-            shelves.push_back(shelf);
+            shelves.push_back(std::move(shelf));
         }
-
-        pos = objEnd;
-    }
+    });
 
     brls::Logger::info("Found {} personalized shelves", shelves.size());
     return true;

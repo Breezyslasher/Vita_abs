@@ -7,6 +7,7 @@
 
 #include <borealis.hpp>
 #include <memory>
+#include <atomic>
 #include "app/audiobookshelf_client.hpp"
 
 namespace vitaabs {
@@ -48,7 +49,7 @@ private:
     bool m_loaded = false;
 
     // Shared pointer to track if this object is still alive
-    std::shared_ptr<bool> m_alive;
+    std::shared_ptr<std::atomic<bool>> m_alive;
 };
 
 } // namespace vitaabs

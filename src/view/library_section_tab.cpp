@@ -16,7 +16,7 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
     : m_sectionKey(sectionKey), m_title(title), m_sectionType(sectionType) {
 
     // Create alive flag for async callback safety
-    m_alive = std::make_shared<bool>(true);
+    m_alive = std::make_shared<std::atomic<bool>>(true);
 
     this->setAxis(brls::Axis::COLUMN);
     this->setJustifyContent(brls::JustifyContent::FLEX_START);
@@ -165,6 +165,9 @@ LibrarySectionTab::LibrarySectionTab(const std::string& sectionKey, const std::s
     m_contentGrid->setOnItemSelected([this](const MediaItem& item) {
         onItemSelected(item);
     });
+    m_contentGrid->setOnLoadMore([this]() {
+        loadNextPage();
+    });
     this->addView(m_contentGrid);
 
     // Load content immediately
@@ -193,27 +196,44 @@ void LibrarySectionTab::loadContent() {
 
     const auto& settings = Application::getInstance().getSettings();
     std::string key = m_sectionKey;
-    std::weak_ptr<bool> aliveWeak = m_alive;  // Capture weak_ptr for async safety
+    std::weak_ptr<std::atomic<bool>> aliveWeak = m_alive;  // Capture weak_ptr for async safety
 
-    asyncRun([this, key, aliveWeak]() {
+    // First page only; the grid's onLoadMore fetches the rest as the user
+    // scrolls (infinite scroll, like Vita-Music-Assistant). Bump the load
+    // generation so completions from a previous load/page fetch are dropped.
+    int gen = ++m_loadGen;
+    m_loadingPage = false;
+
+    asyncRun([this, key, gen, aliveWeak]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
         std::vector<MediaItem> items;
+        int total = -1;
+        int rawCount = 0;
 
-        if (client.fetchLibraryItems(key, items)) {
-            brls::Logger::info("LibraryTab: Got {} items for section {}", items.size(), key);
+        if (client.fetchLibraryItemsPage(key, items, 0, PAGE_SIZE, total, "", &rawCount)) {
+            brls::Logger::info("LibraryTab: Got {} items for section {} (total={}, raw={})",
+                               items.size(), key, total, rawCount);
 
-            brls::sync([this, items, aliveWeak]() {
+            brls::sync([this, items, total, rawCount, gen, aliveWeak]() {
                 // Check if object is still alive before updating UI
                 auto alive = aliveWeak.lock();
                 if (!alive || !*alive) {
                     brls::Logger::debug("LibraryTab: Tab destroyed, skipping UI update");
                     return;
                 }
+                if (gen != m_loadGen) return;  // superseded by a newer load
 
                 m_items = items;
+                m_page = 1;
+                m_serverTotal = total;
+                // A full raw page means the server likely has more; a short one
+                // means we've reached the end (raw count, not accepted count —
+                // items dropped for missing id/title must not wedge pagination).
+                m_hasMore = (rawCount >= PAGE_SIZE);
                 // Only update grid if we're in ALL_ITEMS mode
                 if (m_viewMode == LibraryViewMode::ALL_ITEMS) {
                     m_contentGrid->setDataSource(m_items);
+                    m_contentGrid->setHasMore(m_hasMore);
                 }
                 m_loaded = true;
             });
@@ -240,9 +260,61 @@ void LibrarySectionTab::loadContent() {
     // Note: Genre preloading removed - Audiobookshelf doesn't have a genre browsing API
 }
 
+void LibrarySectionTab::loadNextPage() {
+    // In-flight guard (VMA's m_loadingPage): the grid's own m_loading flag is
+    // reset by setDataSource/setHasMore, so it alone cannot prevent the same
+    // page being fetched twice.
+    if (m_loadingPage || !m_hasMore) return;
+    m_loadingPage = true;
+
+    brls::Logger::debug("LibraryTab: Loading next page {} for section {}", m_page, m_sectionKey);
+
+    std::string key = m_sectionKey;
+    int page = m_page;
+    int gen = m_loadGen;
+    std::weak_ptr<std::atomic<bool>> aliveWeak = m_alive;
+
+    asyncRun([this, key, page, gen, aliveWeak]() {
+        AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
+        std::vector<MediaItem> items;
+        int total = -1;
+        int rawCount = 0;
+
+        bool ok = client.fetchLibraryItemsPage(key, items, page, PAGE_SIZE, total, "", &rawCount);
+
+        brls::sync([this, items, total, rawCount, ok, gen, aliveWeak]() {
+            auto alive = aliveWeak.lock();
+            if (!alive || !*alive) return;
+            if (gen != m_loadGen) return;  // a fresh loadContent superseded us
+
+            m_loadingPage = false;
+
+            if (!ok) {
+                // Fetch failed: stop asking for more.
+                m_hasMore = false;
+                if (m_contentGrid) m_contentGrid->setHasMore(false);
+                return;
+            }
+
+            m_items.insert(m_items.end(), items.begin(), items.end());
+            m_page++;
+            if (total >= 0) m_serverTotal = total;
+            m_hasMore = (rawCount >= PAGE_SIZE);
+
+            brls::Logger::info("LibraryTab: Page {} added {} items ({} / {})",
+                               m_page - 1, items.size(), m_items.size(), m_serverTotal);
+
+            if (m_viewMode == LibraryViewMode::ALL_ITEMS && m_contentGrid) {
+                m_contentGrid->appendItems(items);
+                m_contentGrid->setHasMore(m_hasMore);
+            }
+        });
+    });
+}
+
 void LibrarySectionTab::loadCollections() {
     std::string key = m_sectionKey;
-    std::weak_ptr<bool> aliveWeak = m_alive;
+    std::weak_ptr<std::atomic<bool>> aliveWeak = m_alive;
 
     asyncRun([this, key, aliveWeak]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
@@ -309,6 +381,7 @@ void LibrarySectionTab::showAllItems() {
     m_viewMode = LibraryViewMode::ALL_ITEMS;
     m_titleLabel->setText(m_title);
     m_contentGrid->setDataSource(m_items);
+    m_contentGrid->setHasMore(m_hasMore);
     updateViewModeButtons();
 }
 
@@ -326,8 +399,9 @@ void LibrarySectionTab::showCollections() {
     m_viewMode = LibraryViewMode::COLLECTIONS;
     m_titleLabel->setText(m_title + " - Collections");
 
-    // Show collections in the grid
+    // Show collections in the grid (no pagination for collections)
     m_contentGrid->setDataSource(m_collections);
+    m_contentGrid->setHasMore(false);
     updateViewModeButtons();
 }
 
@@ -357,6 +431,7 @@ void LibrarySectionTab::showCategories() {
     }
 
     m_contentGrid->setDataSource(genreItems);
+    m_contentGrid->setHasMore(false);
     updateViewModeButtons();
 }
 
@@ -444,7 +519,7 @@ void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
     m_filterTitle = collection.title;
     std::string collectionId = collection.id;
     std::string filterTitle = m_filterTitle;
-    std::weak_ptr<bool> aliveWeak = m_alive;
+    std::weak_ptr<std::atomic<bool>> aliveWeak = m_alive;
 
     asyncRun([this, collectionId, filterTitle, aliveWeak]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
@@ -466,6 +541,7 @@ void LibrarySectionTab::onCollectionSelected(const MediaItem& collection) {
                 m_titleLabel->setText(m_title + " - " + filterTitle);
                 brls::Logger::debug("LibrarySectionTab: Setting grid data source");
                 m_contentGrid->setDataSource(items);
+                m_contentGrid->setHasMore(false);
                 brls::Logger::debug("LibrarySectionTab: Grid updated, updating buttons");
                 updateViewModeButtons();
                 brls::Logger::debug("LibrarySectionTab: Buttons updated");
@@ -496,7 +572,7 @@ void LibrarySectionTab::onGenreSelected(const GenreItem& genre) {
     std::string genreKey = genre.id;
     std::string genreTitle = genre.title;
     std::string filterTitle = m_filterTitle;
-    std::weak_ptr<bool> aliveWeak = m_alive;
+    std::weak_ptr<std::atomic<bool>> aliveWeak = m_alive;
 
     asyncRun([this, key, genreKey, genreTitle, filterTitle, aliveWeak]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
@@ -513,6 +589,7 @@ void LibrarySectionTab::onGenreSelected(const GenreItem& genre) {
                 m_viewMode = LibraryViewMode::FILTERED;
                 m_titleLabel->setText(m_title + " - " + filterTitle);
                 m_contentGrid->setDataSource(items);
+                m_contentGrid->setHasMore(false);
                 updateViewModeButtons();
             });
         } else {
@@ -538,22 +615,30 @@ void LibrarySectionTab::checkAllNewEpisodes() {
 
     brls::Application::notify("Checking for new episodes...");
 
-    std::weak_ptr<bool> aliveWeak = m_alive;
+    std::weak_ptr<std::atomic<bool>> aliveWeak = m_alive;
     std::string libraryKey = m_sectionKey;
 
-    asyncRun([this, libraryKey, aliveWeak]() {
+    // Snapshot the podcast ids on the UI thread: the worker must NOT iterate
+    // m_items directly — infinite-scroll pagination appends to it on the UI
+    // thread while the (long) check runs, invalidating the worker's iterators.
+    std::vector<std::string> podcastIds;
+    for (const auto& item : m_items) {
+        if (item.type == "podcast" || item.mediaType == MediaType::PODCAST) {
+            podcastIds.push_back(item.id);
+        }
+    }
+
+    asyncRun([podcastIds, aliveWeak]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
 
         int totalNew = 0;
-        for (const auto& item : m_items) {
-            if (item.type == "podcast" || item.mediaType == MediaType::PODCAST) {
-                std::vector<MediaItem> newEps;
-                if (client.checkNewEpisodes(item.id, newEps)) {
-                    if (!newEps.empty()) {
-                        totalNew += newEps.size();
-                        // Auto-download new episodes
-                        client.downloadAllNewEpisodes(item.id);
-                    }
+        for (const auto& podcastId : podcastIds) {
+            std::vector<MediaItem> newEps;
+            if (client.checkNewEpisodes(podcastId, newEps)) {
+                if (!newEps.empty()) {
+                    totalNew += newEps.size();
+                    // Auto-download new episodes
+                    client.downloadAllNewEpisodes(podcastId);
                 }
             }
         }

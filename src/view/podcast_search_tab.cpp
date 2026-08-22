@@ -9,13 +9,14 @@
 #include "utils/async.hpp"
 #include "utils/image_loader.hpp"
 #include <memory>
+#include <atomic>
 
 namespace vitaabs {
 
 class PodcastResultCell : public brls::Box {
 public:
     PodcastResultCell(const PodcastSearchResult& podcast, std::function<void()> onSelect)
-        : m_podcast(podcast), m_onSelect(onSelect), m_alive(std::make_shared<bool>(true)) {
+        : m_podcast(podcast), m_onSelect(onSelect), m_alive(std::make_shared<std::atomic<bool>>(true)) {
 
         this->setFocusable(true);
         this->setHeight(100);
@@ -87,7 +88,7 @@ private:
     PodcastSearchResult m_podcast;
     std::function<void()> m_onSelect;
     brls::Image* m_coverImage = nullptr;
-    std::shared_ptr<bool> m_alive;
+    std::shared_ptr<std::atomic<bool>> m_alive;
 };
 
 PodcastSearchTab::PodcastSearchTab(const std::string& libraryId)
