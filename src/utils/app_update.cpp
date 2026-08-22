@@ -44,6 +44,32 @@
 #include "utils/ps4_install.hpp"
 #endif
 
+// macOS vs iOS/tvOS: TargetConditionals must be included BEFORE any
+// TARGET_OS_* test, or the macro silently reads as 0.
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+#if defined(__APPLE__) && !TARGET_OS_IPHONE
+#define VITAABS_MACOS_DESKTOP 1
+#else
+#define VITAABS_MACOS_DESKTOP 0
+#endif
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#endif
+#if (defined(__linux__) && !defined(ANDROID)) || VITAABS_MACOS_DESKTOP
+#include <unistd.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <filesystem>
+#endif
+#if VITAABS_MACOS_DESKTOP
+#include <mach-o/dyld.h>
+#endif
+
 namespace vitaabs {
 namespace app_update {
 
@@ -174,6 +200,51 @@ bool isNewer(const std::string& tag, const std::string& current) {
     return false;
 }
 
+#if defined(__linux__) && !defined(ANDROID)
+// One PLATFORM_DESKTOP binary ships as AppImage, Flatpak, deb and AUR —
+// nothing at build time says which, so detect the install kind at runtime
+// and let that decide the update behaviour.
+enum class LinuxPkg { None, AppImage, Flatpak, Deb, Aur };
+LinuxPkg linuxPkg() {
+    if (std::getenv("APPIMAGE")) return LinuxPkg::AppImage;   // runtime sets it
+    if (std::getenv("FLATPAK_ID") || access("/.flatpak-info", F_OK) == 0)
+        return LinuxPkg::Flatpak;                             // sandboxed → Flathub
+    char buf[4096];
+    ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    std::string exe = (n > 0) ? std::string(buf, (size_t)n) : std::string();
+    if (exe.rfind("/usr/lib/VitaABS/", 0) == 0 && access("/var/lib/dpkg/status", F_OK) == 0)
+        return LinuxPkg::Deb;
+    if (exe.rfind("/usr/", 0) == 0 && access("/var/lib/pacman", F_OK) == 0)
+        return LinuxPkg::Aur;                                 // pacman/AUR install
+    return LinuxPkg::None;
+}
+
+bool linuxIsArm64() {
+#if defined(__aarch64__)
+    return true;
+#else
+    return false;
+#endif
+}
+#endif
+
+#if VITAABS_MACOS_DESKTOP
+// The .app bundle path ("/Applications/VitaABS.app"), or empty when running
+// as a loose binary (dev build) — loose binaries fall back to the browser.
+std::string macAppBundlePath() {
+    char buf[4096];
+    uint32_t size = sizeof(buf);
+    if (_NSGetExecutablePath(buf, &size) != 0) return {};
+    std::string exe = buf;
+    // …/VitaABS.app/Contents/MacOS/VitaABS → strip the last three components
+    size_t macos = exe.rfind("/Contents/MacOS/");
+    if (macos == std::string::npos) return {};
+    std::string bundle = exe.substr(0, macos);
+    if (bundle.size() < 4 || bundle.compare(bundle.size() - 4, 4, ".app") != 0) return {};
+    return bundle;
+}
+#endif
+
 // ── Platform asset choice ────────────────────────────────────────────────
 // Release assets follow "VitaABS.<tag>-<platform>…"; the suffix decides.
 // Empty = this platform has no single downloadable asset (browser-only).
@@ -206,6 +277,32 @@ std::string assetSuffix() {
 #endif
 #elif defined(__PS4__)
     return "-ps4.pkg";
+#elif defined(_WIN32)
+    // Portable-folder zip, swapped in place by a detached helper script.
+#if defined(_M_ARM64) || defined(__aarch64__)
+    return "-windows-arm64.zip";
+#else
+    return "-windows-x64.zip";
+#endif
+#elif VITAABS_MACOS_DESKTOP
+    // Only a real .app bundle can be swapped; a loose dev binary → browser.
+    if (macAppBundlePath().empty()) return {};
+#if defined(__aarch64__) || defined(__arm64__)
+    return "-macOS-Silicon.dmg";
+#else
+    return "-macOS-Intel.dmg";
+#endif
+#elif defined(__linux__) && !defined(ANDROID)
+    switch (linuxPkg()) {
+        case LinuxPkg::AppImage:
+            return linuxIsArm64() ? "-aarch64.AppImage" : "-x86_64.AppImage";
+        case LinuxPkg::Deb:
+            return linuxIsArm64() ? "-Linux_arm64.deb" : "-Linux_amd64.deb";
+        case LinuxPkg::Aur:
+            return "-Linux.pkg.tar.zst";
+        default:
+            return {};   // Flatpak (Flathub updates it) / unknown → browser
+    }
 #else
     return {};
 #endif
@@ -314,7 +411,8 @@ std::string mbLabel(int64_t bytes) {
 }
 
 // ── The in-place installers (Switch / Vita / Android / PS4) ─────────────
-#if defined(__SWITCH__) || defined(__PSV__) || defined(ANDROID) || defined(__PS4__)
+#if defined(__SWITCH__) || defined(__PSV__) || defined(ANDROID) || defined(__PS4__) || \
+    defined(_WIN32) || VITAABS_MACOS_DESKTOP || (defined(__linux__) && !defined(ANDROID))
 
 // One row of the progress checklist (design_handoff_update, dialog C):
 // a 26px state circle — hairline when pending, spinner while active, green
@@ -509,6 +607,11 @@ void startInstall(const ReleaseInfo rel) {
     const char* relaunchLabel = "Relaunch to apply";
 #elif defined(__PS4__)
     const char* relaunchLabel = "Exit while the system installs";
+#elif defined(_WIN32) || VITAABS_MACOS_DESKTOP
+    const char* relaunchLabel = "Relaunches automatically";
+#elif defined(__linux__) && !defined(ANDROID)
+    const char* relaunchLabel = (linuxPkg() == LinuxPkg::AppImage)
+        ? "Relaunches automatically" : "System installer opens";
 #else
     const char* relaunchLabel = "System installer opens";
 #endif
@@ -554,6 +657,35 @@ void startInstall(const ReleaseInfo rel) {
         const std::string path = platformPath("update.apk");
 #elif defined(__PS4__)
         const std::string path = platformPath("update.pkg");
+#elif defined(_WIN32)
+        // Into the install dir: same volume as the files the helper script
+        // will overwrite, and `tar -xf` runs with a short relative path.
+        std::string installDir;
+        {
+            char exe[MAX_PATH] = {0};
+            GetModuleFileNameA(nullptr, exe, MAX_PATH);
+            installDir = exe;
+            size_t slash = installDir.find_last_of("\\/");
+            installDir = (slash == std::string::npos) ? "." : installDir.substr(0, slash);
+        }
+        const std::string path = installDir + "\\update.zip";
+#elif VITAABS_MACOS_DESKTOP
+        const std::string path = platformPath("update.dmg");
+#elif defined(__linux__) && !defined(ANDROID)
+        // AppImage: download NEXT TO the image ("$APPIMAGE.new") so the final
+        // rename is atomic (same filesystem) and sidesteps ETXTBSY on the
+        // running executable. Package installs download to the data dir.
+        std::string path;
+        {
+            LinuxPkg kind = linuxPkg();
+            const char* appimage = std::getenv("APPIMAGE");
+            if (kind == LinuxPkg::AppImage && appimage && appimage[0])
+                path = std::string(appimage) + ".new";
+            else if (kind == LinuxPkg::Aur)
+                path = platformPath("update.pkg.tar.zst");
+            else
+                path = platformPath("update.deb");
+        }
 #else
         const std::string path = platformPath("update.vpk");
 #endif
@@ -577,7 +709,7 @@ void startInstall(const ReleaseInfo rel) {
             }
 
             // (Re)open truncating — a failed attempt leaves partial bytes.
-#if defined(__SWITCH__) || defined(ANDROID) || defined(__PS4__)
+#if !defined(__PSV__)
             FILE* f = fopen(path.c_str(), "wb");
             if (!f) { installFailed("cannot open " + path, ui); s_busy = false; return; }
 #else
@@ -592,7 +724,7 @@ void startInstall(const ReleaseInfo rel) {
                 rel.assetUrl,
                 [&](const char* data, size_t size) -> bool {
                     if (s_cancel.load()) return false;
-#if defined(__SWITCH__) || defined(ANDROID) || defined(__PS4__)
+#if !defined(__PSV__)
                     if (fwrite(data, 1, size, f) != size) return false;
 #else
                     if (sceIoWrite(f, data, size) != (int)size) return false;
@@ -616,7 +748,7 @@ void startInstall(const ReleaseInfo rel) {
             // the incomplete-download byte counts below carry the failure info.
             if (!ok) dlErr = "download failed";
 
-#if defined(__SWITCH__) || defined(ANDROID) || defined(__PS4__)
+#if !defined(__PSV__)
             fclose(f);
 #else
             sceIoClose(f);
@@ -627,7 +759,7 @@ void startInstall(const ReleaseInfo rel) {
         }
 
         if (s_cancel.load()) {
-#if defined(__SWITCH__) || defined(ANDROID) || defined(__PS4__)
+#if !defined(__PSV__)
             remove(path.c_str());
 #else
             sceIoRemove(path.c_str());
@@ -636,7 +768,7 @@ void startInstall(const ReleaseInfo rel) {
             return;   // user cancellation, not a failure
         }
         if (!ok) {
-#if defined(__SWITCH__) || defined(ANDROID) || defined(__PS4__)
+#if !defined(__PSV__)
             remove(path.c_str());
 #else
             sceIoRemove(path.c_str());
@@ -807,7 +939,193 @@ void startInstall(const ReleaseInfo rel) {
             d->addButton("OK", []() { brls::Application::quit(); });
             d->open();
         });
-#else
+#elif defined(_WIN32)
+        // The running .exe and its loaded DLLs are locked, so hand the swap to
+        // a detached, windowless cmd script that waits for VitaABS to exit,
+        // unpacks the zip over the install folder, relaunches, and deletes
+        // itself. `tar` ships with Windows 10 1803+; PowerShell Expand-Archive
+        // is the fallback. The .bat MUST use CRLF line endings.
+        {
+            char exe[MAX_PATH] = {0};
+            GetModuleFileNameA(nullptr, exe, MAX_PATH);
+            std::string exePath = exe;
+            size_t slash = exePath.find_last_of("\\/");
+            std::string dir = (slash == std::string::npos) ? "." : exePath.substr(0, slash);
+            std::string exeName = (slash == std::string::npos) ? exePath : exePath.substr(slash + 1);
+            std::string bat = dir + "\\vitaabs_update.bat";
+
+            std::string script;
+            script += "@echo off\r\n";
+            script += ":waitloop\r\n";
+            script += "tasklist /FI \"IMAGENAME eq " + exeName + "\" 2>nul | find /I \"" + exeName + "\" >nul\r\n";
+            script += "if not errorlevel 1 ( ping -n 2 127.0.0.1 >nul & goto waitloop )\r\n";
+            script += "where tar >nul 2>&1\r\n";
+            script += "if not errorlevel 1 ( tar -xf \"" + path + "\" -C \"" + dir + "\" ) ";
+            script += "else ( powershell -NoProfile -NonInteractive -Command "
+                      "\"Expand-Archive -LiteralPath '" + path + "' -DestinationPath '" + dir + "' -Force\" )\r\n";
+            script += "start \"\" /D \"" + dir + "\" \"" + dir + "\\" + exeName + "\"\r\n";
+            script += "del \"" + path + "\" >nul 2>&1\r\n";
+            script += "del \"%~f0\" >nul 2>&1\r\n";
+
+            FILE* bf = fopen(bat.c_str(), "wb");   // "wb": keep our CRLFs exact
+            bool wrote = bf && fwrite(script.data(), 1, script.size(), bf) == script.size();
+            if (bf) fclose(bf);
+            if (!wrote) {
+                installFailed("could not write " + bat, ui);
+                s_busy = false;
+                return;
+            }
+
+            brls::sync([ui]() {
+                if (!ui->dismissed->load()) stepDone(ui->install, "Installer staged");
+            });
+            finishInstall(ui, [bat]() {
+                auto* d = new brls::Dialog(
+                    "Update ready. VitaABS will close and reopen with the new "
+                    "version in a few seconds.");
+                d->addButton("OK", [bat]() {
+                    STARTUPINFOA si{};
+                    si.cb = sizeof si;
+                    PROCESS_INFORMATION pi{};
+                    std::string cmd = "cmd.exe /c \"" + bat + "\"";
+                    std::vector<char> mut(cmd.begin(), cmd.end());
+                    mut.push_back(0);
+                    if (CreateProcessA(nullptr, mut.data(), nullptr, nullptr, FALSE,
+                                       CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+                        CloseHandle(pi.hThread);
+                        CloseHandle(pi.hProcess);
+                    }
+                    brls::Application::quit();
+                });
+                d->open();
+            });
+        }
+#elif VITAABS_MACOS_DESKTOP
+        // Replace the running .app bundle after exit via a detached /bin/sh
+        // helper: wait for this pid, mount the dmg, ditto the new bundle over
+        // the old (restoring the old on failure), reopen. The dmg was fetched
+        // by our own HTTP client, so it carries no quarantine xattr and the
+        // swap dodges the Gatekeeper prompt a browser download would trigger.
+        {
+            std::string bundle = macAppBundlePath();
+            if (bundle.empty()) {
+                installFailed("not running from a .app bundle", ui);
+                s_busy = false;
+                return;
+            }
+            std::string helper = platformPath("vitaabs_update.sh");
+            std::string script;
+            script += "#!/bin/sh\n";
+            script += "PID=" + std::to_string(getpid()) + "\n";
+            script += "DMG='" + path + "'\n";
+            script += "APP='" + bundle + "'\n";
+            script += "while kill -0 \"$PID\" 2>/dev/null; do sleep 1; done\n";
+            script += "MNT=\"$(mktemp -d /tmp/vitaabs_dmg.XXXXXX)\"\n";
+            script += "if hdiutil attach \"$DMG\" -nobrowse -readonly -mountpoint \"$MNT\" >/dev/null 2>&1; then\n";
+            script += "  if [ -d \"$MNT/VitaABS.app\" ]; then\n";
+            script += "    rm -rf \"$APP.old\"\n";
+            script += "    if mv \"$APP\" \"$APP.old\" 2>/dev/null; then\n";
+            script += "      if ditto \"$MNT/VitaABS.app\" \"$APP\"; then rm -rf \"$APP.old\"\n";
+            script += "      else rm -rf \"$APP\"; mv \"$APP.old\" \"$APP\" 2>/dev/null; fi\n";
+            script += "    fi\n";
+            script += "  fi\n";
+            script += "  hdiutil detach \"$MNT\" >/dev/null 2>&1 || hdiutil detach \"$MNT\" -force >/dev/null 2>&1\n";
+            script += "fi\n";
+            script += "rmdir \"$MNT\" 2>/dev/null; rm -f \"$DMG\"; open \"$APP\"; rm -f \"$0\"\n";
+
+            FILE* hf = fopen(helper.c_str(), "wb");
+            bool wrote = hf && fwrite(script.data(), 1, script.size(), hf) == script.size();
+            if (hf) fclose(hf);
+            if (!wrote) {
+                installFailed("could not write " + helper, ui);
+                s_busy = false;
+                return;
+            }
+            chmod(helper.c_str(), 0755);
+
+            brls::sync([ui]() {
+                if (!ui->dismissed->load()) stepDone(ui->install, "Installer staged");
+            });
+            finishInstall(ui, [helper]() {
+                auto* d = new brls::Dialog(
+                    "Update ready. VitaABS will close and reopen with the new "
+                    "version in a few seconds.");
+                d->addButton("OK", [helper]() {
+                    pid_t child = fork();
+                    if (child == 0) {
+                        setsid();
+                        execl("/bin/sh", "sh", helper.c_str(), (char*)nullptr);
+                        _exit(127);
+                    }
+                    brls::Application::quit();
+                });
+                d->open();
+            });
+        }
+#elif defined(__linux__) && !defined(ANDROID)
+        {
+            LinuxPkg kind = linuxPkg();
+            const char* appimageEnv = std::getenv("APPIMAGE");
+            if (kind == LinuxPkg::AppImage && appimageEnv && appimageEnv[0]) {
+                // AppImage self-replaces: rename the downloaded image over
+                // $APPIMAGE (atomic, same filesystem, sidesteps ETXTBSY on the
+                // running executable — the process keeps the old inode), then
+                // relaunch the new image from a detached child.
+                std::string target = appimageEnv;
+                std::error_code ec;
+                std::filesystem::rename(path, target, ec);
+                if (ec) {
+                    std::filesystem::copy_file(
+                        path, target, std::filesystem::copy_options::overwrite_existing, ec);
+                    std::filesystem::remove(path);
+                }
+                if (ec) {
+                    installFailed("could not replace " + target + ": " + ec.message(), ui);
+                    s_busy = false;
+                    return;
+                }
+                chmod(target.c_str(), 0755);
+                brls::sync([ui]() {
+                    if (!ui->dismissed->load()) stepDone(ui->install, "Installed");
+                });
+                finishInstall(ui, [target]() {
+                    auto* d = new brls::Dialog(
+                        "Update installed. VitaABS will now restart with the new version.");
+                    d->addButton("OK", [target]() {
+                        pid_t child = fork();
+                        if (child == 0) {
+                            setsid();
+                            sleep(1);   // let the parent's window/socket close
+                            execl(target.c_str(), target.c_str(), (char*)nullptr);
+                            _exit(127);
+                        }
+                        brls::Application::quit();
+                    });
+                    d->open();
+                });
+            } else {
+                // deb / AUR package: hand the downloaded package to the system
+                // installer (xdg-open) — no privileged command is run here.
+                brls::sync([ui]() {
+                    if (!ui->dismissed->load()) stepDone(ui->install, "Downloaded");
+                });
+                finishInstall(ui, [path]() {
+                    pid_t child = fork();
+                    if (child == 0) {
+                        setsid();
+                        execlp("xdg-open", "xdg-open", path.c_str(), (char*)nullptr);
+                        _exit(127);
+                    }
+                    auto* d = new brls::Dialog(
+                        "Update downloaded to\n" + path + "\n\nYour package "
+                        "installer should open with it. Finish the install "
+                        "there, then relaunch VitaABS.");
+                    d->addButton("OK", []() {});
+                    d->open();
+                });
+            }
+        }
+#elif defined(__PSV__)
         // VitaABS can't promote over itself while it is the running title
         // (the installer returns 0x80101114 "in use"), so hand the install
         // to a tiny bundled stub app — the AutoPlugin2 technique. VitaABS
@@ -1179,7 +1497,8 @@ void showNotesSheet(const ReleaseInfo rel) {
     // The primary mirrors the offer's action so the user can act from
     // here without going back.
     brls::Box* primary = nullptr;
-#if defined(__SWITCH__) || defined(__PSV__) || defined(ANDROID) || defined(__PS4__)
+#if defined(__SWITCH__) || defined(__PSV__) || defined(ANDROID) || defined(__PS4__) || \
+    defined(_WIN32) || VITAABS_MACOS_DESKTOP || (defined(__linux__) && !defined(ANDROID))
     if (!rel.assetUrl.empty()) {
         primary = makeButton("\xE2\x86\x93  Update Now", BtnStyle::Gold, [rel]() {
             // Pop the sheet, then the offer beneath it, then install.
@@ -1394,7 +1713,8 @@ void offerUpdate(const ReleaseInfo rel) {
     buttons->setPadding(14.0f, 18.0f, 16.0f, 18.0f);
 
     brls::Box* primary = nullptr;
-#if defined(__SWITCH__) || defined(__PSV__) || defined(ANDROID) || defined(__PS4__)
+#if defined(__SWITCH__) || defined(__PSV__) || defined(ANDROID) || defined(__PS4__) || \
+    defined(_WIN32) || VITAABS_MACOS_DESKTOP || (defined(__linux__) && !defined(ANDROID))
     // These install in place; the notes sheet is the secondary action.
     if (!rel.assetUrl.empty()) {
         primary = makeButton("\xE2\x86\x93  Update", BtnStyle::Gold, [rel]() {
@@ -1560,6 +1880,27 @@ void checkForUpdates(bool manual) {
             s_busy = false;
             return;
         }
+
+#if defined(__linux__) && !defined(ANDROID)
+        // Flatpak is sandboxed and updates through Flathub — never sideload
+        // over it. Startup check: stay silent (Flathub delivers the update on
+        // its own). Manual check: say where the update comes from.
+        if (linuxPkg() == LinuxPkg::Flatpak) {
+            brls::Logger::info("app_update: {} available; Flatpak install, deferring to Flathub", rel.tag);
+            if (manual) {
+                brls::sync([rel]() {
+                    auto* d = new brls::Dialog(
+                        "Version " + rel.tag + " is available.\n\nThis install is "
+                        "managed by Flatpak - the update arrives through your "
+                        "software centre (or run: flatpak update).");
+                    d->addButton("OK", []() {});
+                    d->open();
+                });
+            }
+            s_busy = false;
+            return;
+        }
+#endif
 
         brls::Logger::info("app_update: update available {} (current {})", rel.tag, current);
         brls::sync([rel]() { offerUpdate(rel); });

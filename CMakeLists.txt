@@ -635,6 +635,72 @@ elseif(PLATFORM_PS4)
     )
     add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}.data)
 
+    # ── PS4 updater helper (self-update) ────────────────────────────────
+    # A second, tiny PS4 app with its own title id (VSWY00003). VitaABS
+    # cannot replace itself in place: BGFT installs into the running
+    # /user/app/VSWY00002 (locked), the installer returns 0x80990088
+    # "already installed", and uninstalling the running title just kills the
+    # process. So at update time VitaABS launches this helper and quits;
+    # with VitaABS closed the helper uninstalls VSWY00002 and hands the
+    # downloaded pkg to the system installer (BGFT), which finishes in the
+    # background. Shipped as its own pkg, installed once (like the Vita
+    # updater stub VSWYUPD01). It has no UI, so it needs only the borealis
+    # PS4 base (sce_module + sce_sys) — no app resources.
+    if(PS4)
+        add_executable(vitaabs_updater_ps4 src/updater_ps4/main.cpp)
+        target_compile_definitions(vitaabs_updater_ps4 PRIVATE __PS4__)
+        # stb_image (vendored with borealis's nanovg) decodes the app icon for
+        # the helper's progress screen — it links no other image/font code.
+        target_include_directories(vitaabs_updater_ps4 PRIVATE
+            ${BOREALIS_LIBRARY}/include/borealis/extern/nanovg)
+        # SDL2 is required at RUNTIME, not just to link: the helper calls
+        # SDL_Init(SDL_INIT_VIDEO) before touching any system service, exactly
+        # as borealis's Ps4Platform does. Without that call every privileged
+        # call faults. Plus the libs whose functions the helper calls: BGFT +
+        # AppInstUtil (+ SceUserService for AppInstUtil's user context).
+        if(NOT TARGET SDL2::SDL2-static)
+            find_package(SDL2 REQUIRED)
+        endif()
+        target_link_libraries(vitaabs_updater_ps4
+            SceBgft SceAppInstUtil SceUserService SceSystemService SDL2::SDL2-static)
+        add_custom_target(vitaabs_updater_ps4.data
+            COMMAND "${CMAKE_COMMAND}" -E copy_directory
+                ${BOREALIS_DIR}/ps4 ${CMAKE_BINARY_DIR}/ps4_updater
+            COMMAND "${CMAKE_COMMAND}" -E copy_directory
+                ${CMAKE_SOURCE_DIR}/app/platform/ps4 ${CMAKE_BINARY_DIR}/ps4_updater
+            # The progress screen's artwork must be a PLAIN file: sce_sys is the
+            # package metadata dir, so sce_sys/icon0.png is consumed by the pkg
+            # tool and cannot be opened at runtime.
+            COMMAND "${CMAKE_COMMAND}" -E copy
+                ${CMAKE_SOURCE_DIR}/app/platform/ps4/sce_sys/icon0.png
+                ${CMAKE_BINARY_DIR}/ps4_updater/updater_icon.png
+        )
+        add_dependencies(vitaabs_updater_ps4 vitaabs_updater_ps4.data)
+        add_self(vitaabs_updater_ps4)
+        add_pkg(vitaabs_updater_ps4
+            ${CMAKE_BINARY_DIR}/ps4_updater
+            "VSWY00003"
+            "VitaABS Updater"
+            "01.00"
+            8388608
+        )
+
+        # Bundle the helper's pkg INSIDE VitaABS's pkg (as /app0/updater.pkg),
+        # so the user only ever installs one app — the same approach the Vita
+        # build uses for its updater stub. The dependency forces the helper's
+        # pkg to be built and copied in BEFORE VitaABS's pkg is packed. The pkg
+        # tool names its output from the CONTENT_ID (IV0001-VSWY00003_00-...),
+        # so the file is located by glob at build time.
+        add_custom_target(vitaabs_updater_ps4.bundle
+            COMMAND "${CMAKE_COMMAND}"
+                -DSRC_DIR=${CMAKE_BINARY_DIR}
+                -DDST=${CMAKE_BINARY_DIR}/ps4/updater.pkg
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/bundle_updater_pkg.cmake
+            DEPENDS vitaabs_updater_ps4_pkg
+        )
+        add_dependencies(${PROJECT_NAME}_pkg vitaabs_updater_ps4.bundle)
+    endif()
+
 elseif(PLATFORM_SWITCH)
     # Build NRO with embedded romfs resources (matches switchfin approach).
     # nx_create_nro doesn't embed romfs or set metadata correctly, so we

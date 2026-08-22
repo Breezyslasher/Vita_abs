@@ -124,13 +124,15 @@ jobs:
       contents: write
     if: startsWith(github.ref, 'refs/tags/')
     steps:
+      - uses: actions/checkout@v4
       - name: Download Assets
         uses: actions/download-artifact@v4
-      - name: Package Windows assets
-        run: |
-          for p in VitaABS-windows-*; do
-            [[ -d $p ]] && 7z a -mx=9 $p.7z ./$p/* && rm -rf $p
-          done
+      # Same renaming as the pre-release job (scripts/ci/rename_release_assets.sh):
+      # the asset names are a contract with the in-app updater's assetSuffix().
+      - name: Rename artifacts for release
+        env:
+          FVER: ${{ needs.resolve-version.outputs.version_tag }}
+        run: bash scripts/ci/rename_release_assets.sh
       - name: Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
@@ -138,15 +140,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
           draft: true
-          files: |
-            VitaABS-windows-*.7z
-            VitaABS-macos-*/*
-            VitaABS-nx-*/*.nro
-            VitaABS-ps4-*/*
-            VitaABS-vita-*/*.vpk
-            VitaABS-Flatpak-*/*
-            VitaABS-aur-*/*.pkg.tar.*
-            VitaABS-android-*/*
+          files: release/*
 
   # ───────────────────────────────────────────────
   # Pre-release — manually triggered
@@ -158,73 +152,15 @@ jobs:
       contents: write
     if: ${{ !cancelled() && !failure() && github.event_name == 'workflow_dispatch' && inputs.pre_release == true }}
     steps:
+      # Checkout FIRST: actions/checkout cleans the workspace, so downloading
+      # artifacts before it would delete them.
+      - uses: actions/checkout@v4
       - name: Download all artifacts
         uses: actions/download-artifact@v4
       - name: Rename artifacts for release
         env:
           FVER: ${{ needs.resolve-version.outputs.version_tag }}
-        run: |
-          mkdir -p release
-
-          # Vita VPK
-          for f in $(find . -name "*.vpk"); do
-            cp "$f" "release/VitaABS.${FVER}.vpk"
-          done
-
-          # Android APKs (Gradle names them VitaABS-{abi}.apk)
-          for apk in $(find . -name "*.apk"); do
-            abi=$(basename "$apk" .apk | sed 's/VitaABS-//')
-            [ -n "$abi" ] && cp "$apk" "release/VitaABS.${FVER}-${abi}.apk"
-          done
-
-          # Windows — zip each arch (exe + dlls + resources)
-          for dir in VitaABS-mingw-*; do
-            [ -d "$dir" ] || continue
-            arch=$(echo "$dir" | sed -E 's/VitaABS-mingw-([^-]+)-.*/\1/')
-            (cd "$dir" && zip -r "../release/VitaABS.${FVER}-windows-${arch}.zip" .)
-          done
-
-          # Flatpak tarballs
-          for tgz in $(find . -name "VitaABS-Linux-*.tar.gz"); do
-            base=$(basename "$tgz")
-            info=$(echo "$base" | sed -E 's/VitaABS-Linux-(.+)-[0-9]+\.tar\.gz/\1/')
-            cp "$tgz" "release/VitaABS.${FVER}-Flatpak-${info}.tar.gz"
-          done
-
-          # Switch NRO
-          for dir in VitaABS-nx-*; do
-            [ -d "$dir" ] || continue
-            driver=$(echo "$dir" | sed -E 's/VitaABS-nx-([^-]+)-.*/\1/')
-            nro=$(find "$dir" -name "*.nro" | head -1)
-            [ -n "$nro" ] && cp "$nro" "release/VitaABS.${FVER}-nx-${driver}.nro"
-          done
-
-          # PS4 pkg
-          for f in $(find . -path "*ps4*" -name "*.pkg"); do
-            cp "$f" "release/VitaABS.${FVER}-ps4.pkg"
-          done
-
-          # macOS DMG
-          for dir in VitaABS-macos-*; do
-            [ -d "$dir" ] || continue
-            tag=$(echo "$dir" | sed -E 's/VitaABS-macos-([^-]+)-.*/\1/')
-            dmg=$(find "$dir" -name "*.dmg" | head -1)
-            [ -n "$dmg" ] && cp "$dmg" "release/VitaABS.${FVER}-macOS-${tag}.dmg"
-          done
-
-          # Deb
-          for f in $(find . -name "*.deb"); do
-            arch=$(dpkg-deb -f "$f" Architecture 2>/dev/null || echo "amd64")
-            cp "$f" "release/VitaABS.${FVER}-Linux_${arch}.deb"
-          done
-
-          # AUR
-          for f in $(find . -name "*.pkg.tar.zst"); do
-            cp "$f" "release/VitaABS.${FVER}-Linux.pkg.tar.zst"
-          done
-
-          echo "Release files:"
-          ls -lh release/
+        run: bash scripts/ci/rename_release_assets.sh
       - name: Create pre-release
         uses: softprops/action-gh-release@v2
         with:
@@ -426,6 +362,38 @@ jobs:
         with:
           name: VitaABS-Flatpak-${{ matrix.arch }}-${{ matrix.driver }}-${{ github.run_number }}
           path: VitaABS-Linux-${{ matrix.arch }}-${{ matrix.driver }}-${{ github.run_number }}.tar.gz
+      - name: Build AppImage
+        # AppImage is the one Linux format that self-updates in place (the
+        # in-app updater downloads -{arch}.AppImage and swaps $APPIMAGE).
+        if: matrix.driver == 'gl'
+        run: |
+          ARCH=${{ matrix.arch }}
+          APPDIR=AppDir
+          rm -rf $APPDIR && mkdir -p $APPDIR/usr/bin $APPDIR/usr/share/VitaABS
+          cp build/VitaABS $APPDIR/usr/bin/VitaABS
+          cp -r build/resources $APPDIR/usr/share/VitaABS/resources
+          cp app/platform/icon_desktop.png $APPDIR/vitaabs.png
+          printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=VitaABS' \
+            'Exec=VitaABS' 'Icon=vitaabs' 'Categories=AudioVideo;Player;' \
+            > $APPDIR/VitaABS.desktop
+          printf '%s\n' '#!/bin/sh' \
+            'HERE="$(dirname "$(readlink -f "$0")")"' \
+            'cd "$HERE/usr/share/VitaABS"' \
+            'exec "$HERE/usr/bin/VitaABS" "$@"' \
+            > $APPDIR/AppRun
+          chmod +x $APPDIR/AppRun
+          curl -sSL -o appimagetool \
+            "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${ARCH}.AppImage"
+          chmod +x appimagetool
+          # Runners have no FUSE: extract the tool and run its AppRun directly
+          ./appimagetool --appimage-extract >/dev/null
+          ARCH=${ARCH} ./squashfs-root/AppRun $APPDIR VitaABS-${ARCH}.AppImage
+      - name: Upload AppImage artifact
+        if: matrix.driver == 'gl'
+        uses: actions/upload-artifact@v4
+        with:
+          name: VitaABS-AppImage-${{ matrix.arch }}-${{ github.run_number }}
+          path: VitaABS-${{ matrix.arch }}.AppImage
 
   # ───────────────────────────────────────────────
   # Nintendo Switch — Matrix (opengl + deko3d)
