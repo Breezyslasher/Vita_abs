@@ -35,17 +35,15 @@ for dir in VitaABS-mingw-*; do
     (cd "$dir" && zip -r "../release/VitaABS.${FVER}-windows-${arch}.zip" .)
 done
 
-# Flatpak tarballs (no updater suffix — Flathub is the update channel)
-for tgz in $(find . -name "VitaABS-Linux-*.tar.gz"); do
-    base=$(basename "$tgz")
-    info=$(echo "$base" | sed -E 's/VitaABS-Linux-(.+)-[0-9]+\.tar\.gz/\1/')
-    cp "$tgz" "release/VitaABS.${FVER}-Flatpak-${info}.tar.gz"
-done
+# Flatpak bundle (no updater suffix — Flathub is the update channel; the
+# bundle ships for sideloading / testing)
+flatpak_bundle=$(find . -name "*.flatpak" | head -1)
+[ -n "$flatpak_bundle" ] && cp "$flatpak_bundle" "release/VitaABS.${FVER}.flatpak"
 
-# AppImages (self-updating Linux format; suffix: -{arch}.AppImage)
-for f in $(find . -name "VitaABS-*.AppImage"); do
-    base=$(basename "$f" .AppImage)
-    arch=${base##*-}
+# AppImages: VitaABS-{arch}-{run}.AppImage (suffix contract: -{arch}.AppImage)
+for f in $(find . -name "VitaABS-*.AppImage" -not -name "appimagetool*"); do
+    base=$(basename "$f")
+    arch=$(echo "$base" | sed -E 's/VitaABS-(.+)-[0-9]+\.AppImage/\1/')
     cp "$f" "release/VitaABS.${FVER}-${arch}.AppImage"
 done
 

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.breezyslasher.VitaABS</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+  <name>VitaABS</name>
+  <summary>Native Audiobookshelf client for desktop and consoles</summary>
+  <description>
+    <p>
+      VitaABS is a native Audiobookshelf client built on borealis and libmpv.
+      It browses your audiobook and podcast libraries and plays them with a
+      controller-friendly interface.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Audiobook and podcast playback via libmpv</li>
+      <li>Listening progress synced with the server</li>
+      <li>Downloads for offline playback</li>
+      <li>Playback speed control and chapter navigation</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.breezyslasher.VitaABS.desktop</launchable>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+    <category>Player</category>
+  </categories>
+  <url type="homepage">https://github.com/Breezyslasher/Vita_abs</url>
+  <url type="bugtracker">https://github.com/Breezyslasher/Vita_abs/issues</url>
+  <developer id="io.github.breezyslasher">
+    <name>Breezyslasher</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="2.0.0" date="2026-08-22"/>
+  </releases>
+</component>

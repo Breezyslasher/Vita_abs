@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=VitaABS
+Comment=Native Audiobookshelf client
+Exec=VitaABS
+Icon=io.github.breezyslasher.VitaABS
+Terminal=false
+Categories=AudioVideo;Audio;Player;Network;
+Keywords=Audiobookshelf;Audiobook;Podcast;Audio;Streaming;

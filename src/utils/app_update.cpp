@@ -1892,7 +1892,8 @@ void checkForUpdates(bool manual) {
                     auto* d = new brls::Dialog(
                         "Version " + rel.tag + " is available.\n\nThis install is "
                         "managed by Flatpak - the update arrives through your "
-                        "software centre (or run: flatpak update).");
+                        "software centre (or run: flatpak update "
+                        "io.github.breezyslasher.VitaABS).");
                     d->addButton("OK", []() {});
                     d->open();
                 });
