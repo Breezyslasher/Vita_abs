@@ -152,6 +152,22 @@ else()
     message(FATAL_ERROR "Patch file not found: ${FONTSTASH_PATCH}")
 endif()
 
+# Borealis hints.json patch (all platforms): borealis 0bbc4222's new soft
+# keyboard (EditTextDialog) registers a password show/hide action labelled
+# "hints/password"_i18n, but that key is missing from borealis's own
+# hints.json — and its i18n falls back to printing the raw key name, so the
+# login password field showed a literal "hints/password". Ship the file with
+# the key added. Every platform copies borealis's i18n dir, so patching the
+# source file fixes them all without per-platform resource wiring.
+set(HINTS_PATCH  ${CMAKE_CURRENT_SOURCE_DIR}/patches/hints.json)
+set(HINTS_TARGET ${BOREALIS_DIR}/resources/i18n/en-US/hints.json)
+if(EXISTS ${HINTS_PATCH})
+    message(STATUS "Applying patch: hints.json")
+    configure_file(${HINTS_PATCH} ${HINTS_TARGET} COPYONLY)
+else()
+    message(FATAL_ERROR "Patch file not found: ${HINTS_PATCH}")
+endif()
+
 # Borealis nanovg patch (all platforms): adds nvgTextBatchBegin/End so a run of
 # nvgText calls sharing identical state flush as a single render call. Used by
 # RecyclingGrid's batched title drawing. Purely additive to the bundled copy.
