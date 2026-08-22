@@ -210,7 +210,7 @@ void LibrarySectionTab::loadContent() {
         int total = -1;
         int rawCount = 0;
 
-        if (client.fetchLibraryItemsPage(key, items, 0, PAGE_SIZE, total, "", &rawCount)) {
+        if (client.fetchLibraryItemsPage(key, items, 0, kPageSize, total, "", &rawCount)) {
             brls::Logger::info("LibraryTab: Got {} items for section {} (total={}, raw={})",
                                items.size(), key, total, rawCount);
 
@@ -229,7 +229,7 @@ void LibrarySectionTab::loadContent() {
                 // A full raw page means the server likely has more; a short one
                 // means we've reached the end (raw count, not accepted count —
                 // items dropped for missing id/title must not wedge pagination).
-                m_hasMore = (rawCount >= PAGE_SIZE);
+                m_hasMore = (rawCount >= kPageSize);
                 // Only update grid if we're in ALL_ITEMS mode
                 if (m_viewMode == LibraryViewMode::ALL_ITEMS) {
                     m_contentGrid->setDataSource(m_items);
@@ -280,7 +280,7 @@ void LibrarySectionTab::loadNextPage() {
         int total = -1;
         int rawCount = 0;
 
-        bool ok = client.fetchLibraryItemsPage(key, items, page, PAGE_SIZE, total, "", &rawCount);
+        bool ok = client.fetchLibraryItemsPage(key, items, page, kPageSize, total, "", &rawCount);
 
         brls::sync([this, items, total, rawCount, ok, gen, aliveWeak]() {
             auto alive = aliveWeak.lock();
@@ -299,7 +299,7 @@ void LibrarySectionTab::loadNextPage() {
             m_items.insert(m_items.end(), items.begin(), items.end());
             m_page++;
             if (total >= 0) m_serverTotal = total;
-            m_hasMore = (rawCount >= PAGE_SIZE);
+            m_hasMore = (rawCount >= kPageSize);
 
             brls::Logger::info("LibraryTab: Page {} added {} items ({} / {})",
                                m_page - 1, items.size(), m_items.size(), m_serverTotal);

@@ -84,7 +84,7 @@ private:
     bool m_genresLoaded = false;
 
     // Infinite-scroll pagination state (like Vita-Music-Assistant)
-    static constexpr int PAGE_SIZE = 100;
+    static constexpr int kPageSize = 100;
     int m_page = 0;            // next page index to fetch
     int m_serverTotal = -1;    // total items the server reported
     bool m_hasMore = false;
