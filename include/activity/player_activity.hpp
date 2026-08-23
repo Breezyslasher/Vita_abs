@@ -10,6 +10,9 @@
 #include <memory>
 #include <atomic>
 #include <string>
+#include <vector>
+
+#include "app/audiobookshelf_client.hpp"   // MediaItem, Chapter
 
 namespace vitaabs {
 
@@ -41,6 +44,15 @@ public:
 private:
     void loadMedia();
     void loadCoverArt(const std::string& coverUrl);
+    // Fill the eyebrow / subline / context slot / right stat tile from a
+    // fetched item. Books get the chapter line, podcasts get the episode
+    // eyebrow and description — same layout either way, different slots.
+    void applyItemInfo(const MediaItem& item);
+    // Lighter variant for the offline paths, which have loose strings from
+    // DownloadItem rather than a full MediaItem.
+    void applyLocalInfo(const std::string& subline, bool isPodcast);
+    // Keeps the right tile's "CHAPTER n / m" current as playback moves.
+    void updateChapterTile(double position);
     void updateProgress();
     void syncProgressToServer();  // Periodic sync to server during playback
     void updatePlayPauseButton();
@@ -71,6 +83,12 @@ private:
     int m_syncCounter = 0;        // Counter for periodic server sync (every 30 updates = 30 seconds)
     float m_lastSyncedTime = 0.0f; // Last position synced to server
     std::string m_sessionId;      // Active playback session ID (for server sync)
+    // Chapter list of the item being played, kept so the right stat tile can
+    // report "CHAPTER n / m" without refetching. Empty for podcasts and for
+    // books the server reports no chapters for.
+    std::vector<Chapter> m_chapters;
+    int m_currentChapter = -1;    // Index into m_chapters; -1 = unknown
+    bool m_isPodcastItem = false; // Drives which context slot is visible
 
     // Main UI bindings
     BRLS_BIND(brls::Box, playerContainer, "player/container");
@@ -86,9 +104,15 @@ private:
     BRLS_BIND(brls::Label, rewindLabel, "player/rewindLabel");
     BRLS_BIND(brls::Label, forwardLabel, "player/forwardLabel");
     BRLS_BIND(brls::Label, playPauseIcon, "player/playPauseIcon");
-    BRLS_BIND(brls::Button, btnSpeed, "player/btnSpeed");
     BRLS_BIND(brls::Label, speedLabel, "player/speedLabel");
     BRLS_BIND(brls::Label, chapterInfoLabel, "player/chapterInfo");
+
+    // Split-shelf layout additions
+    BRLS_BIND(brls::Label, eyebrowLabel, "player/eyebrow");
+    BRLS_BIND(brls::Label, subtitleLabel, "player/subtitle");
+    BRLS_BIND(brls::Label, tileRightCaption, "player/tileRightCaption");
+    BRLS_BIND(brls::Label, tileRightValue, "player/tileRightValue");
+    BRLS_BIND(brls::Label, descriptionLabel, "player/description");
 
 };
 
