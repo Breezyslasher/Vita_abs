@@ -207,6 +207,7 @@ set(APP_SOURCES
     src/view/media_detail_view.cpp
     src/view/media_item_cell.cpp
     src/view/recycling_grid.cpp
+    src/view/horizontal_scroll_row.cpp
     src/view/downloads_tab.cpp
     src/view/progress_dialog.cpp
     src/view/podcast_search_tab.cpp
@@ -260,6 +261,14 @@ elseif(PLATFORM_ANDROID)
     list(APPEND APP_SOURCES src/platform/platform_android.cpp)
 else()
     list(APPEND APP_SOURCES src/platform/platform_desktop.cpp)
+endif()
+
+# Windows: embed the app icon in the .exe. Without an ICON resource the
+# shell falls back to the generic executable icon in Explorer, the taskbar
+# and Alt-Tab. windres ships with the MinGW toolchains CI builds against.
+if(WIN32)
+    enable_language(RC)
+    list(APPEND APP_SOURCES app/platform/app.rc)
 endif()
 
 set(APP_INCLUDES

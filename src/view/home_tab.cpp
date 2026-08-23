@@ -44,17 +44,19 @@ HomeTab::HomeTab() {
     m_continueLabel->setVisibility(brls::Visibility::GONE);  // Hidden until loaded
     m_contentBox->addView(m_continueLabel);
 
-    // Horizontal scrolling container for Continue Listening
-    m_continueScroll = new brls::HScrollingFrame();
-    m_continueScroll->setHeight(200);
-    m_continueScroll->setVisibility(brls::Visibility::GONE);
-
-    m_continueBox = new brls::Box();
-    m_continueBox->setAxis(brls::Axis::ROW);  // Horizontal layout
-    m_continueBox->setJustifyContent(brls::JustifyContent::FLEX_START);
-
-    m_continueScroll->setContentView(m_continueBox);
-    m_contentBox->addView(m_continueScroll);
+    // Horizontal row for Continue Listening. Deliberately NOT an
+    // HScrollingFrame: that view is focusable and defaults to
+    // ScrollingBehavior::NATURAL, so its per-frame naturalScrollingBehaviour()
+    // yanks focus back onto itself and then onto findLeftMostFocusableView().
+    // Pressing LEFT on the first cell therefore never reached the sidebar —
+    // focus was pulled straight back into the row. HorizontalScrollRow is a
+    // plain non-focusable Box that scrolls by translating its children, so a
+    // boundary press falls through to the parent chain and lands on the
+    // sidebar (TabFrame's row Box has the sidebar as child 0).
+    m_continueBox = new HorizontalScrollRow();
+    m_continueBox->setHeight(200);
+    m_continueBox->setVisibility(brls::Visibility::GONE);
+    m_contentBox->addView(m_continueBox);
 
     // Recently Added Episodes section
     m_recentEpisodesLabel = new brls::Label();
@@ -65,17 +67,11 @@ HomeTab::HomeTab() {
     m_recentEpisodesLabel->setVisibility(brls::Visibility::GONE);  // Hidden until loaded
     m_contentBox->addView(m_recentEpisodesLabel);
 
-    // Horizontal scrolling container for Recently Added Episodes
-    m_recentEpisodesScroll = new brls::HScrollingFrame();
-    m_recentEpisodesScroll->setHeight(200);
-    m_recentEpisodesScroll->setVisibility(brls::Visibility::GONE);
-
-    m_recentEpisodesBox = new brls::Box();
-    m_recentEpisodesBox->setAxis(brls::Axis::ROW);  // Horizontal layout
-    m_recentEpisodesBox->setJustifyContent(brls::JustifyContent::FLEX_START);
-
-    m_recentEpisodesScroll->setContentView(m_recentEpisodesBox);
-    m_contentBox->addView(m_recentEpisodesScroll);
+    // Horizontal row for Recently Added Episodes (see above)
+    m_recentEpisodesBox = new HorizontalScrollRow();
+    m_recentEpisodesBox->setHeight(200);
+    m_recentEpisodesBox->setVisibility(brls::Visibility::GONE);
+    m_contentBox->addView(m_recentEpisodesBox);
 
     m_scrollView->setContentView(m_contentBox);
     this->addView(m_scrollView);
@@ -194,14 +190,14 @@ void HomeTab::loadContent() {
             // Show Continue Listening section if we have items
             if (!m_continueItems.empty()) {
                 m_continueLabel->setVisibility(brls::Visibility::VISIBLE);
-                m_continueScroll->setVisibility(brls::Visibility::VISIBLE);
+                m_continueBox->setVisibility(brls::Visibility::VISIBLE);
                 populateHorizontalRow(m_continueBox, m_continueItems);
             }
 
             // Show Recently Added Episodes section if we have items
             if (!m_recentEpisodes.empty()) {
                 m_recentEpisodesLabel->setVisibility(brls::Visibility::VISIBLE);
-                m_recentEpisodesScroll->setVisibility(brls::Visibility::VISIBLE);
+                m_recentEpisodesBox->setVisibility(brls::Visibility::VISIBLE);
 
                 // Apply max episodes limit from settings
                 int maxEpisodes = Application::getInstance().getSettings().maxRecentEpisodes;
@@ -228,9 +224,9 @@ void HomeTab::populateHorizontalRow(brls::Box* container, const std::vector<Medi
     // Clear existing items
     container->clearViews();
 
-    // Set container width to fit all items (130px per item: 120 width + 10 margin)
-    float totalWidth = items.size() * 130.0f;
-    container->setWidth(totalWidth);
+    // No setWidth() here: the row is the visible, clipped view and must stay
+    // at its laid-out width. HorizontalScrollRow measures its own content in
+    // onLayout() and scrolls by translating the cells.
 
     // Add cells for each item (cells default to 120x150 and draw their own
     // NanoVG cover + title when used standalone outside a RecyclingGrid)
@@ -250,7 +246,7 @@ void HomeTab::populateHorizontalRow(brls::Box* container, const std::vector<Medi
         container->addView(cell);
     }
 
-    brls::Logger::debug("HomeTab: Populated horizontal row with {} items, width={}", items.size(), totalWidth);
+    brls::Logger::debug("HomeTab: Populated horizontal row with {} items", items.size());
 }
 
 void HomeTab::onItemSelected(const MediaItem& item) {

@@ -1,0 +1,8 @@
+/* Windows resource script.
+ *
+ * The shell (Explorer, taskbar, Alt-Tab, the installer) shows the icon
+ * resource with the lowest numeric id, so this single entry is all the
+ * .exe needs. Path is relative to this file's directory, which is how
+ * windres resolves it.
+ */
+1 ICON "icon_windows.ico"

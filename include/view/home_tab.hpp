@@ -9,6 +9,7 @@
 #include <memory>
 #include <atomic>
 #include "app/audiobookshelf_client.hpp"
+#include "view/horizontal_scroll_row.hpp"
 
 namespace vitaabs {
 
@@ -34,16 +35,16 @@ private:
     brls::ScrollingFrame* m_scrollView = nullptr;
     brls::Box* m_contentBox = nullptr;
 
-    // Continue Listening section (horizontal row)
+    // Continue Listening section (horizontal row). The row IS the cell
+    // container — HorizontalScrollRow scrolls by translating its own
+    // children, so there is no separate content box to wrap them in.
     brls::Label* m_continueLabel = nullptr;
-    brls::HScrollingFrame* m_continueScroll = nullptr;
-    brls::Box* m_continueBox = nullptr;
+    HorizontalScrollRow* m_continueBox = nullptr;
     std::vector<MediaItem> m_continueItems;
 
     // Recently Added Episodes section (horizontal row)
     brls::Label* m_recentEpisodesLabel = nullptr;
-    brls::HScrollingFrame* m_recentEpisodesScroll = nullptr;
-    brls::Box* m_recentEpisodesBox = nullptr;
+    HorizontalScrollRow* m_recentEpisodesBox = nullptr;
     std::vector<MediaItem> m_recentEpisodes;
 
     bool m_loaded = false;

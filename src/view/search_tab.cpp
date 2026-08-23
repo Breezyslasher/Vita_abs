@@ -67,15 +67,11 @@ SearchTab::SearchTab() {
     booksLabel->setVisibility(brls::Visibility::GONE);
     m_scrollContent->addView(booksLabel);
 
-    m_moviesRow = new brls::HScrollingFrame();
+    m_moviesRow = new HorizontalScrollRow();
     m_moviesRow->setHeight(180);
     m_moviesRow->setMarginBottom(15);
     m_moviesRow->setVisibility(brls::Visibility::GONE);
-
-    m_moviesContent = new brls::Box();
-    m_moviesContent->setAxis(brls::Axis::ROW);
-    m_moviesContent->setJustifyContent(brls::JustifyContent::FLEX_START);
-    m_moviesRow->setContentView(m_moviesContent);
+    m_moviesContent = m_moviesRow;
     m_scrollContent->addView(m_moviesRow);
 
     // Podcasts row (replaces TV Shows for Audiobookshelf)
@@ -86,15 +82,11 @@ SearchTab::SearchTab() {
     podcastsLabel->setVisibility(brls::Visibility::GONE);
     m_scrollContent->addView(podcastsLabel);
 
-    m_showsRow = new brls::HScrollingFrame();
+    m_showsRow = new HorizontalScrollRow();
     m_showsRow->setHeight(180);
     m_showsRow->setMarginBottom(15);
     m_showsRow->setVisibility(brls::Visibility::GONE);
-
-    m_showsContent = new brls::Box();
-    m_showsContent->setAxis(brls::Axis::ROW);
-    m_showsContent->setJustifyContent(brls::JustifyContent::FLEX_START);
-    m_showsRow->setContentView(m_showsContent);
+    m_showsContent = m_showsRow;
     m_scrollContent->addView(m_showsRow);
 
     // Episodes row (podcast episodes)
@@ -105,15 +97,11 @@ SearchTab::SearchTab() {
     episodesLabel->setVisibility(brls::Visibility::GONE);
     m_scrollContent->addView(episodesLabel);
 
-    m_episodesRow = new brls::HScrollingFrame();
+    m_episodesRow = new HorizontalScrollRow();
     m_episodesRow->setHeight(180);
     m_episodesRow->setMarginBottom(15);
     m_episodesRow->setVisibility(brls::Visibility::GONE);
-
-    m_episodesContent = new brls::Box();
-    m_episodesContent->setAxis(brls::Axis::ROW);
-    m_episodesContent->setJustifyContent(brls::JustifyContent::FLEX_START);
-    m_episodesRow->setContentView(m_episodesContent);
+    m_episodesContent = m_episodesRow;
     m_scrollContent->addView(m_episodesRow);
 
     // Hide music row - not applicable for Audiobookshelf

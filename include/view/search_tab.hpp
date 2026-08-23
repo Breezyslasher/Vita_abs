@@ -8,6 +8,7 @@
 #include <borealis.hpp>
 #include "app/audiobookshelf_client.hpp"
 #include "view/recycling_grid.hpp"
+#include "view/horizontal_scroll_row.hpp"
 
 namespace vitaabs {
 
@@ -31,13 +32,15 @@ private:
     brls::Box* m_scrollContent = nullptr;
 
     // Category rows
-    brls::HScrollingFrame* m_moviesRow = nullptr;
+    // Each *Row IS its own cell container (HorizontalScrollRow scrolls by
+    // translating its children), so *Content simply aliases the row.
+    HorizontalScrollRow* m_moviesRow = nullptr;
     brls::Box* m_moviesContent = nullptr;
-    brls::HScrollingFrame* m_showsRow = nullptr;
+    HorizontalScrollRow* m_showsRow = nullptr;
     brls::Box* m_showsContent = nullptr;
-    brls::HScrollingFrame* m_episodesRow = nullptr;
+    HorizontalScrollRow* m_episodesRow = nullptr;
     brls::Box* m_episodesContent = nullptr;
-    brls::HScrollingFrame* m_musicRow = nullptr;
+    HorizontalScrollRow* m_musicRow = nullptr;
     brls::Box* m_musicContent = nullptr;
 
     std::string m_searchQuery;
