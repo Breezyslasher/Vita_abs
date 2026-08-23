@@ -651,6 +651,13 @@ if(PLATFORM_PSV)
         FILE resources/xml/view/media_item.xml   resources/xml/view/media_item.xml
        
 
+        # Settings rail glyphs (see SettingsTab's kSections table).
+        FILE resources/icons/account.png                  resources/icons/account.png
+        FILE resources/icons/theme-light-dark.png         resources/icons/theme-light-dark.png
+        FILE resources/icons/play.png                     resources/icons/play.png
+        FILE resources/icons/music.png                    resources/icons/music.png
+        FILE resources/icons/information.png              resources/icons/information.png
+
         FILE resources/icons/a.png                        resources/icons/a.png
         FILE resources/icons/az.png                       resources/icons/az.png
         FILE resources/icons/za.png                       resources/icons/za.png
