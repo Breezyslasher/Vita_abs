@@ -9,6 +9,7 @@
 #include "player/mpv_player.hpp"
 #include "utils/image_loader.hpp"
 #include "view/progress_dialog.hpp"
+#include "utils/ui_theme.hpp"
 
 #include <cstdio>
 #include <cmath>
@@ -28,15 +29,9 @@ namespace vitaabs {
 // so the player matches the rest of the app in Light and Dark. The root
 // box paints no background of its own — the frame's "brls/background"
 // shows through, exactly like every other screen.
-namespace ptok {
-    static inline NVGcolor text()     { return brls::Application::getTheme()["brls/text"]; }
-    static inline NVGcolor muted()    { return brls::Application::getTheme()["brls/text_disabled"]; }
-    static inline NVGcolor hairline() { return brls::Application::getTheme()["brls/sidebar/separator"]; }
-    static inline NVGcolor panel()    { return brls::Application::getTheme()["brls/sidebar/background"]; }
-    // Audiobookshelf bronze — a brand colour, fixed across themes.
-    static inline NVGcolor accent()   { return nvgRGB(0xd7, 0x9b, 0x5a); }
-    static inline NVGcolor accentInk(){ return nvgRGB(0x14, 0x16, 0x1e); }
-}
+// See utils/ui_theme.hpp — panel/hairline are derived contrast steps so the
+// stat tiles and transport pills read as raised surfaces, not as the page.
+namespace ptok = uitok;
 
 // Helper function to check if content should be marked as finished based on settings
 static bool shouldMarkAsFinished(float currentTime, float totalDuration, bool isPodcast) {

@@ -8,6 +8,7 @@
 #include "app/audiobookshelf_client.hpp"
 #include "view/progress_dialog.hpp"
 #include "utils/async.hpp"
+#include "utils/ui_theme.hpp"
 
 #include <memory>
 
@@ -15,13 +16,14 @@ namespace vitaabs {
 
 namespace {
 
-// Everything but the brand accent and the error tint comes from borealis'
-// active theme, so the screen matches the rest of the app in Light and Dark.
-inline NVGcolor kValueText()   { return brls::Application::getTheme()["brls/text"]; }
-inline NVGcolor kMuted()       { return brls::Application::getTheme()["brls/text_disabled"]; }
-inline NVGcolor kPlaceholder() { return brls::Application::getTheme()["brls/text_disabled"]; }
-inline NVGcolor kPanel()       { return brls::Application::getTheme()["brls/sidebar/background"]; }
-inline NVGcolor kBorderIdle()  { return brls::Application::getTheme()["brls/sidebar/separator"]; }
+// See utils/ui_theme.hpp — panel/hairline are derived contrast steps, not
+// nearby theme keys, so a bordered input row cannot blend into the page.
+inline NVGcolor kValueText()   { return uitok::text(); }
+inline NVGcolor kMuted()       { return uitok::muted(); }
+inline NVGcolor kPlaceholder() { return uitok::muted(); }
+inline NVGcolor kPanel()       { return uitok::panel(); }
+inline NVGcolor kBorderIdle()  { return uitok::hairline(); }
+inline NVGcolor kAccent_()     { return uitok::accent(); }
 const NVGcolor kBorderFocused = nvgRGB(0xd7, 0x9b, 0x5a);
 const NVGcolor kAccent        = nvgRGB(0xd7, 0x9b, 0x5a);
 const NVGcolor kAccentInk     = nvgRGB(0x14, 0x16, 0x1e);
