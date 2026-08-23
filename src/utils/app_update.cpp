@@ -322,7 +322,7 @@ struct ReleaseInfo {
 // ── Dialog building blocks ───────────────────────────────────────────────
 // The offer and progress dialogs follow design_handoff_update — the same
 // visual language as the Live TV dialogs (livetv_actions.cpp): scrim, dark
-// panel, gold accents. The tokens are that file's, plus the success green
+// panel, Audiobookshelf bronze accents, plus the success green
 // this handoff introduces.
 
 namespace tok {
@@ -330,13 +330,17 @@ namespace tok {
     inline NVGcolor panelLine()   { return nvgRGB(0x45, 0x45, 0x4d); }
     inline NVGcolor hairline()    { return nvgRGB(0x47, 0x47, 0x47); }
     inline NVGcolor inputBg()     { return nvgRGB(0x2e, 0x2e, 0x34); }
-    inline NVGcolor gold()        { return nvgRGB(0xe5, 0xa0, 0x0d); }
-    inline NVGcolor goldBright()  { return nvgRGB(0xff, 0xc2, 0x3d); }
-    inline NVGcolor goldInk()     { return nvgRGB(0x24, 0x1c, 0x08); }
-    inline NVGcolor goldTileBg()  { return nvgRGBA(0xe5, 0xa0, 0x0d, 33); }   // .13
-    inline NVGcolor goldTileBrd() { return nvgRGBA(0xe5, 0xa0, 0x0d, 89); }   // .35
-    inline NVGcolor goldCardBg()  { return nvgRGBA(0xe5, 0xa0, 0x0d, 23); }   // .09
-    inline NVGcolor goldCardBrd() { return nvgRGBA(0xe5, 0xa0, 0x0d, 102); }  // .4
+    // Accent: Audiobookshelf's bronze, sampled from the official logo this
+    // app ships (app/platform/icon_master.png — #cd9d49 is its dominant
+    // non-white colour). Replaces the Plex brand gold (#e5a00d) the updater
+    // UI was originally designed against.
+    inline NVGcolor accent()       { return nvgRGB(0xcd, 0x9d, 0x49); }
+    inline NVGcolor accentBright() { return nvgRGB(0xe6, 0xbd, 0x7a); }
+    inline NVGcolor accentInk()    { return nvgRGB(0x1f, 0x18, 0x09); }
+    inline NVGcolor accentTileBg()  { return nvgRGBA(0xcd, 0x9d, 0x49, 33); }   // .13
+    inline NVGcolor accentTileBrd() { return nvgRGBA(0xcd, 0x9d, 0x49, 89); }   // .35
+    inline NVGcolor accentCardBg()  { return nvgRGBA(0xcd, 0x9d, 0x49, 23); }   // .09
+    inline NVGcolor accentCardBrd() { return nvgRGBA(0xcd, 0x9d, 0x49, 102); }  // .4
     inline NVGcolor green()       { return nvgRGB(0x5f, 0xe2, 0x87); }
     inline NVGcolor greenBg()     { return nvgRGBA(0x42, 0xd7, 0x6a, 36); }   // .14
     inline NVGcolor greenBrd()    { return nvgRGBA(0x42, 0xd7, 0x6a, 89); }   // .35
@@ -367,7 +371,7 @@ brls::Label* makeLabel(const std::string& text, float size, NVGcolor color,
     return l;
 }
 
-enum class BtnStyle { Gold, Gray, Ghost };
+enum class BtnStyle { Accent, Gray, Ghost };
 
 brls::Box* makeButton(const std::string& text, BtnStyle style,
                       std::function<void()> onClick) {
@@ -380,14 +384,14 @@ brls::Box* makeButton(const std::string& text, BtnStyle style,
     b->setFocusable(true);
     b->setHighlightCornerRadius(10.0f);
     // Focus = the warm halo ring only. The highlight fill borealis paints
-    // behind a focused view washes out a gold-filled button (same fix as
+    // behind a focused view washes out an accent-filled button (same fix as
     // the guide hero buttons / downloads_tab).
     b->setHideHighlightBackground(true);
 
     NVGcolor fg = tok::text();
-    if (style == BtnStyle::Gold) {
-        b->setBackgroundColor(tok::gold());
-        fg = tok::goldInk();
+    if (style == BtnStyle::Accent) {
+        b->setBackgroundColor(tok::accent());
+        fg = tok::accentInk();
     } else if (style == BtnStyle::Gray) {
         b->setBackgroundColor(tok::btnGray());
         b->setBorderColor(tok::hairline());
@@ -417,7 +421,7 @@ std::string mbLabel(int64_t bytes) {
 
 // One row of the progress checklist (design_handoff_update, dialog C):
 // a 26px state circle — hairline when pending, spinner while active, green
-// check when done — a text line, and an optional 5px gold bar underneath.
+// check when done — a text line, and an optional 5px accent bar underneath.
 struct StepRow {
     brls::Box*             icon    = nullptr;
     brls::Label*           glyph   = nullptr;
@@ -479,7 +483,7 @@ StepRow makeStep(brls::Box* parent, const std::string& label, float barW) {
     r.fill->setWidth(2.0f);
     r.fill->setHeight(5.0f);
     r.fill->setCornerRadius(2.5f);
-    r.fill->setColor(tok::gold());
+    r.fill->setColor(tok::accent());
     r.track->addView(r.fill);
     parent->addView(r.track);
 
@@ -501,13 +505,13 @@ void stepPending(StepRow& r, const std::string& text) {
 
 void stepActive(StepRow& r, const std::string& text, float fraction) {
     r.icon->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
-    r.icon->setBorderColor(tok::goldTileBrd());
+    r.icon->setBorderColor(tok::accentTileBrd());
     r.icon->setBorderThickness(1.5f);
     r.glyph->setVisibility(brls::Visibility::GONE);
     r.spinner->setVisibility(brls::Visibility::VISIBLE);
     r.spinner->animate(true);
     r.text->setText(text);
-    r.text->setTextColor(tok::goldBright());
+    r.text->setTextColor(tok::accentBright());
     if (fraction >= 0.0f) {
         float w = r.barW * fraction;
         if (w < 2.0f) w = 2.0f;
@@ -1384,12 +1388,12 @@ void showNotesSheet(const ReleaseInfo rel) {
     tile->setWidth(38.0f);
     tile->setHeight(38.0f);
     tile->setCornerRadius(10.0f);
-    tile->setBackgroundColor(tok::goldTileBg());
-    tile->setBorderColor(tok::goldTileBrd());
+    tile->setBackgroundColor(tok::accentTileBg());
+    tile->setBorderColor(tok::accentTileBrd());
     tile->setBorderThickness(1.0f);
     tile->setJustifyContent(brls::JustifyContent::CENTER);
     tile->setAlignItems(brls::AlignItems::CENTER);
-    tile->addView(makeLabel("\xE2\x89\xA1", 18.0f, tok::gold()));
+    tile->addView(makeLabel("\xE2\x89\xA1", 18.0f, tok::accent()));
     tile->setMarginRight(12.0f);
     header->addView(tile);
 
@@ -1424,10 +1428,10 @@ void showNotesSheet(const ReleaseInfo rel) {
         chip->setHeight(24.0f);
         chip->setPadding(0.0f, 11.0f, 0.0f, 11.0f);
         chip->setCornerRadius(12.0f);
-        chip->setBackgroundColor(tok::goldTileBg());
-        chip->setBorderColor(tok::goldTileBrd());
+        chip->setBackgroundColor(tok::accentTileBg());
+        chip->setBorderColor(tok::accentTileBrd());
         chip->setBorderThickness(1.0f);
-        chip->addView(makeLabel("Pre-release", 10.5f, tok::goldBright()));
+        chip->addView(makeLabel("Pre-release", 10.5f, tok::accentBright()));
         chip->setMarginLeft(10.0f);
         header->addView(chip);
     }
@@ -1466,7 +1470,7 @@ void showNotesSheet(const ReleaseInfo rel) {
             tick->setWidth(4.0f);
             tick->setHeight(16.0f);
             tick->setCornerRadius(2.0f);
-            tick->setColor(tok::gold());
+            tick->setColor(tok::accent());
             tick->setMarginRight(9.0f);
             row->addView(tick);
             row->addView(makeLabel(n.text, 15.0f, nvgRGB(0xea, 0xea, 0xee)));
@@ -1538,7 +1542,7 @@ void showNotesSheet(const ReleaseInfo rel) {
 #if defined(__SWITCH__) || defined(__PSV__) || defined(ANDROID) || defined(__PS4__) || \
     defined(_WIN32) || VITAABS_MACOS_DESKTOP || (defined(__linux__) && !defined(ANDROID))
     if (!rel.assetUrl.empty()) {
-        primary = makeButton("\xE2\x86\x93  Update Now", BtnStyle::Gold, [rel]() {
+        primary = makeButton("\xE2\x86\x93  Update Now", BtnStyle::Accent, [rel]() {
             // Pop the sheet, then the offer beneath it, then install.
             brls::Application::popActivity(brls::TransitionAnimation::NONE, [rel]() {
                 brls::Application::popActivity(brls::TransitionAnimation::FADE,
@@ -1546,7 +1550,7 @@ void showNotesSheet(const ReleaseInfo rel) {
             });
         });
     } else {
-        primary = makeButton("Open release page", BtnStyle::Gold, [rel]() {
+        primary = makeButton("Open release page", BtnStyle::Accent, [rel]() {
             brls::Application::getPlatform()->openBrowser(rel.pageUrl);
             s_busy = false;
             brls::Application::popActivity(brls::TransitionAnimation::NONE,
@@ -1556,7 +1560,7 @@ void showNotesSheet(const ReleaseInfo rel) {
 #else
     {
         std::string url = !rel.assetUrl.empty() ? rel.assetUrl : rel.pageUrl;
-        primary = makeButton("Download", BtnStyle::Gold, [url]() {
+        primary = makeButton("Download", BtnStyle::Accent, [url]() {
             brls::Application::getPlatform()->openBrowser(url);
             s_busy = false;
             brls::Application::popActivity(brls::TransitionAnimation::NONE,
@@ -1600,7 +1604,7 @@ void showNotesSheet(const ReleaseInfo rel) {
     brls::Application::giveFocus(primary);
 }
 
-// The offer dialog (design_handoff_update, dialog B): gold strip, icon
+// The offer dialog (design_handoff_update, dialog B): accent strip, icon
 // tile, current → new version cards, size/platform caption, then the
 // per-platform actions. Release notes render in-app — the What's New
 // button opens the notes sheet above.
@@ -1633,14 +1637,14 @@ void offerUpdate(const ReleaseInfo rel) {
     panel->setBorderThickness(1.0f);
     panel->setCornerRadius(16.0f);
     panel->setShadowType(brls::ShadowType::GENERIC);
-    // The gold strip runs flush along the top edge; the panel's rounded
+    // The accent strip runs flush along the top edge; the panel's rounded
     // corners clip its ends.
     panel->setClipsToBounds(true);
 
     auto* strip = new brls::Box();
     strip->setHeight(5.0f);
     strip->setAlignSelf(brls::AlignSelf::STRETCH);
-    strip->setBackgroundColor(tok::gold());
+    strip->setBackgroundColor(tok::accent());
     panel->addView(strip);
 
     // ── Header: icon tile + titles ──────────────────────────────────────
@@ -1653,12 +1657,12 @@ void offerUpdate(const ReleaseInfo rel) {
     tile->setWidth(52.0f);
     tile->setHeight(52.0f);
     tile->setCornerRadius(14.0f);
-    tile->setBackgroundColor(tok::goldTileBg());
-    tile->setBorderColor(tok::goldTileBrd());
+    tile->setBackgroundColor(tok::accentTileBg());
+    tile->setBorderColor(tok::accentTileBrd());
     tile->setBorderThickness(1.0f);
     tile->setJustifyContent(brls::JustifyContent::CENTER);
     tile->setAlignItems(brls::AlignItems::CENTER);
-    tile->addView(makeLabel("\xE2\x86\x93", 22.0f, tok::gold()));
+    tile->addView(makeLabel("\xE2\x86\x93", 22.0f, tok::accent()));
     tile->setMarginRight(14.0f);
     header->addView(tile);
 
@@ -1701,8 +1705,8 @@ void offerUpdate(const ReleaseInfo rel) {
     arrow->setMarginLeft(10.0f);
     arrow->setMarginRight(10.0f);
     cards->addView(arrow);
-    cards->addView(makeCard("NEW", tok::gold(), rel.tag,
-                            tok::goldBright(), tok::goldCardBg(), tok::goldCardBrd()));
+    cards->addView(makeCard("NEW", tok::accent(), rel.tag,
+                            tok::accentBright(), tok::accentCardBg(), tok::accentCardBrd()));
     panel->addView(cards);
 
     // ── Size / platform caption ─────────────────────────────────────────
@@ -1755,7 +1759,7 @@ void offerUpdate(const ReleaseInfo rel) {
     defined(_WIN32) || VITAABS_MACOS_DESKTOP || (defined(__linux__) && !defined(ANDROID))
     // These install in place; the notes sheet is the secondary action.
     if (!rel.assetUrl.empty()) {
-        primary = makeButton("\xE2\x86\x93  Update", BtnStyle::Gold, [rel]() {
+        primary = makeButton("\xE2\x86\x93  Update", BtnStyle::Accent, [rel]() {
             brls::Application::popActivity(brls::TransitionAnimation::FADE,
                                            [rel]() { startInstall(rel); });
         });
@@ -1770,7 +1774,7 @@ void offerUpdate(const ReleaseInfo rel) {
     } else {
         // The release carries no asset for this platform/flavour — the
         // notes (whose sheet links out to the page) are all there is.
-        primary = makeButton("What's New", BtnStyle::Gold,
+        primary = makeButton("What's New", BtnStyle::Accent,
                              [rel]() { showNotesSheet(rel); });
         primary->setGrow(1.0f);
         buttons->addView(primary);
@@ -1780,7 +1784,7 @@ void offerUpdate(const ReleaseInfo rel) {
     // the release page (the asset directly when one matched).
     {
         std::string url = !rel.assetUrl.empty() ? rel.assetUrl : rel.pageUrl;
-        primary = makeButton("Download", BtnStyle::Gold, [url, dismiss]() {
+        primary = makeButton("Download", BtnStyle::Accent, [url, dismiss]() {
             brls::Application::getPlatform()->openBrowser(url);
             dismiss();
         });
