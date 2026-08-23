@@ -47,11 +47,11 @@ const char* kTargetId   = "VABS00001";
 #define C_BG        RGBA8(0x14, 0x14, 0x16, 0xFF)
 #define C_PANEL     RGBA8(0x1E, 0x1E, 0x21, 0xFF)
 #define C_DIVIDER   RGBA8(0x2A, 0x2A, 0x2E, 0xFF)
-#define C_GOLD      RGBA8(0xE5, 0xA0, 0x0D, 0xFF)
-#define C_GOLDBR    RGBA8(0xFF, 0xC2, 0x3D, 0xFF)
-#define C_TILEBG    RGBA8(0xE5, 0xA0, 0x0D, 26)
-#define C_TILEBRD   RGBA8(0xE5, 0xA0, 0x0D, 77)
-#define C_GOLDFILL  RGBA8(0xE5, 0xA0, 0x0D, 26)
+#define C_ACCENT    RGBA8(0xCD, 0x9D, 0x49, 0xFF)
+#define C_ACCENTBR  RGBA8(0xE6, 0xBD, 0x7A, 0xFF)
+#define C_TILEBG    RGBA8(0xCD, 0x9D, 0x49, 26)
+#define C_TILEBRD   RGBA8(0xCD, 0x9D, 0x49, 77)
+#define C_ACCENTFILL RGBA8(0xCD, 0x9D, 0x49, 26)
 #define C_GREEN     RGBA8(0x5F, 0xE2, 0x87, 0xFF)
 #define C_GREENRING RGBA8(0x5F, 0xE2, 0x87, 128)
 #define C_GREENFILL RGBA8(0x5F, 0xE2, 0x87, 31)
@@ -73,7 +73,7 @@ struct Ui {
     StepState steps[4] = { TODO, TODO, TODO, TODO };
     int   pct = 0;               // overall bar 0-100
     int   spinTick = 0;          // frame counter for the spinner
-    std::string version;         // "Beta 1.3.0" or empty
+    std::string version;         // e.g. "Beta 0.4.0", or empty
     std::string sizeMB;          // "44.6" or empty
     std::string installCap;      // caption under the Install step
     std::string note;            // bottom note (overridden on failure)
@@ -143,7 +143,7 @@ void drawCross(float cx, float cy, unsigned c) {
 // A rotating gold dot inside the active circle (the spinner).
 void drawSpinner(float cx, float cy, int tick) {
     float a = (float)tick * 0.5f;
-    vita2d_draw_fill_circle(cx + std::cos(a) * 6.0f, cy + std::sin(a) * 6.0f, 2.4f, C_GOLD);
+    vita2d_draw_fill_circle(cx + std::cos(a) * 6.0f, cy + std::sin(a) * 6.0f, 2.4f, C_ACCENT);
 }
 
 // Word-wrap `text` to `maxW` and draw from (x, y) downward at `scale`.
@@ -190,19 +190,19 @@ void render() {
     vita2d_draw_rectangle(103, 160, 1, 58, C_TILEBRD);
     {
         float cx = 75.0f;
-        vita2d_draw_rectangle(cx - 1, 176, 2, 18, C_GOLD);       // shaft
-        thick(cx, 196, cx - 7, 189, C_GOLD);                     // arrowhead L
-        thick(cx, 196, cx + 7, 189, C_GOLD);                     // arrowhead R
-        vita2d_draw_rectangle(cx - 10, 202, 20, 2, C_GOLD);      // tray
+        vita2d_draw_rectangle(cx - 1, 176, 2, 18, C_ACCENT);       // shaft
+        thick(cx, 196, cx - 7, 189, C_ACCENT);                     // arrowhead L
+        thick(cx, 196, cx + 7, 189, C_ACCENT);                     // arrowhead R
+        vita2d_draw_rectangle(cx - 10, 202, 20, 2, C_ACCENT);      // tray
     }
 
-    // Title: "Vita" white + "Plex" gold + " Updater" white.
+    // Title: "Vita" white + "ABS" accent + " Updater" white.
     {
         float x = 46, y = 262, s = 1.4f;
         vita2d_pgf_draw_text(g_font, x, y, C_WHITE, s, "Vita");
         x += vita2d_pgf_text_width(g_font, s, "Vita");
-        vita2d_pgf_draw_text(g_font, x, y, C_GOLD, s, "Plex");
-        x += vita2d_pgf_text_width(g_font, s, "Plex");
+        vita2d_pgf_draw_text(g_font, x, y, C_ACCENT, s, "ABS");
+        x += vita2d_pgf_text_width(g_font, s, "ABS");
         vita2d_pgf_draw_text(g_font, x, y, C_WHITE, s, " Updater");
     }
 
@@ -210,7 +210,7 @@ void render() {
     if (!g_ui.version.empty()) {
         vita2d_pgf_draw_text(g_font, 46, 294, C_MUTED, 0.85f, "Updating to");
         float vx = 46 + vita2d_pgf_text_width(g_font, 0.85f, "Updating to ");
-        vita2d_pgf_draw_text(g_font, vx, 294, C_GOLDBR, 0.85f, g_ui.version.c_str());
+        vita2d_pgf_draw_text(g_font, vx, 294, C_ACCENTBR, 0.85f, g_ui.version.c_str());
         drawWrapped(46, 316, 308, 0.85f, C_MUTED,
                     "VitaABS will restart automatically when this finishes.", 22);
     } else {
@@ -241,8 +241,8 @@ void render() {
         if (s == TODO) {
             drawRing(colX, cy, 13, C_OUTLINE, C_BG);
         } else if (s == NOW) {
-            drawRing(colX, cy, 13, C_GOLD, C_BG);
-            vita2d_draw_fill_circle(colX, cy, 11.4f, C_GOLDFILL);
+            drawRing(colX, cy, 13, C_ACCENT, C_BG);
+            vita2d_draw_fill_circle(colX, cy, 11.4f, C_ACCENTFILL);
             drawSpinner(colX, cy, g_ui.spinTick);
         } else if (s == DONE) {
             drawRing(colX, cy, 13, C_GREENRING, C_BG);
@@ -267,7 +267,7 @@ void render() {
         vita2d_draw_rectangle(bx, by, bw, 6, C_TRACK);
         int p = g_ui.pct < 0 ? 0 : (g_ui.pct > 100 ? 100 : g_ui.pct);
         if (p > 0)
-            vita2d_draw_rectangle(bx, by, bw * p / 100.0f, 6, g_ui.failed ? C_RED : C_GOLD);
+            vita2d_draw_rectangle(bx, by, bw * p / 100.0f, 6, g_ui.failed ? C_RED : C_ACCENT);
         vita2d_pgf_draw_text(g_font, bx, by + 26, C_FAINT, 0.75f, g_ui.note.c_str());
     }
 
