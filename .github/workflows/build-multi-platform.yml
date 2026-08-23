@@ -981,11 +981,11 @@ jobs:
             echo '[Desktop Entry]'
             echo 'Type=Application'
             echo 'Name=VitaABS'
-            echo 'Comment=Suwayomi desktop client'
+            echo 'Comment=Audiobookshelf client'
             echo 'Exec=VitaABS'
             echo 'Icon=VitaABS'
             echo 'Terminal=false'
-            echo 'Categories=Network;Utility;'
+            echo 'Categories=AudioVideo;Audio;Player;Network;'
           } > "$PKGROOT/usr/share/applications/VitaABS.desktop"
           ARCH="$(dpkg --print-architecture)"
           {
