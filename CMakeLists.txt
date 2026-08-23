@@ -263,6 +263,14 @@ else()
     list(APPEND APP_SOURCES src/platform/platform_desktop.cpp)
 endif()
 
+# Windows: embed the app icon in the .exe. Without an ICON resource the
+# shell falls back to the generic executable icon in Explorer, the taskbar
+# and Alt-Tab. windres ships with the MinGW toolchains CI builds against.
+if(WIN32)
+    enable_language(RC)
+    list(APPEND APP_SOURCES app/platform/app.rc)
+endif()
+
 set(APP_INCLUDES
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${BOREALIS_LIBRARY}/include

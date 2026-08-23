@@ -803,14 +803,20 @@ jobs:
           APP_ROOT="build/dmg-root"
           APP_DIR="$APP_ROOT/VitaABS.app"
           MACOS_DIR="$APP_DIR/Contents/MacOS"
+          RES_DIR="$APP_DIR/Contents/Resources"
 
           rm -rf "$APP_ROOT"
-          mkdir -p "$MACOS_DIR"
+          mkdir -p "$MACOS_DIR" "$RES_DIR"
 
           cp -f build/VitaABS "$MACOS_DIR/VitaABS"
           cp -R build/resources "$MACOS_DIR/resources"
           cp -f build/*.dylib "$MACOS_DIR/" 2>/dev/null || true
           chmod +x "$MACOS_DIR/VitaABS"
+
+          # Bundle icon. Finder, the Dock and the DMG window all read
+          # CFBundleIconFile out of Contents/Resources; without it the .app
+          # shows the blank generic-application icon.
+          cp -f app/platform/icon_macos.icns "$RES_DIR/VitaABS.icns"
 
           cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
@@ -824,6 +830,7 @@ jobs:
             <key>CFBundleShortVersionString</key><string>${{ needs.resolve-version.outputs.version }}</string>
             <key>CFBundlePackageType</key><string>APPL</string>
             <key>CFBundleExecutable</key><string>VitaABS</string>
+            <key>CFBundleIconFile</key><string>VitaABS</string>
           </dict>
           </plist>
           PLIST
