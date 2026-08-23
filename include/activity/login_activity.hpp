@@ -49,9 +49,17 @@ private:
     void showStatus(const std::string& text, const std::string& hint = "",
                     bool isError = false);
     void clearStatus();
+    // Paint the screen from borealis' active theme so it matches the rest of
+    // the app; only the bronze accent is fixed. The theme is loaded during app
+    // init, so it is already correct when this screen first renders.
+    void applyThemeColors();
 
     BRLS_BIND(brls::Label, titleLabel, "login/title");
     BRLS_BIND(brls::Box, inputContainer, "login/input_container");
+    BRLS_BIND(brls::Label, subline, "login/subline");
+    BRLS_BIND(brls::Label, serverCaption, "login/server_caption");
+    BRLS_BIND(brls::Label, usernameCaption, "login/username_caption");
+    BRLS_BIND(brls::Label, offlineLabel, "login/offline_label");
 
     BRLS_BIND(brls::Box, serverRow, "login/server_row");
     BRLS_BIND(brls::Label, serverLabel, "login/server_label");

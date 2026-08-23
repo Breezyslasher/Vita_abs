@@ -15,14 +15,16 @@ namespace vitaabs {
 
 namespace {
 
-// Design tokens, shared with the player screen.
-const NVGcolor kBorderIdle    = nvgRGB(0x2a, 0x2f, 0x3c);
+// Everything but the brand accent and the error tint comes from borealis'
+// active theme, so the screen matches the rest of the app in Light and Dark.
+inline NVGcolor kValueText()   { return brls::Application::getTheme()["brls/text"]; }
+inline NVGcolor kMuted()       { return brls::Application::getTheme()["brls/text_disabled"]; }
+inline NVGcolor kPlaceholder() { return brls::Application::getTheme()["brls/text_disabled"]; }
+inline NVGcolor kPanel()       { return brls::Application::getTheme()["brls/sidebar/background"]; }
+inline NVGcolor kBorderIdle()  { return brls::Application::getTheme()["brls/sidebar/separator"]; }
 const NVGcolor kBorderFocused = nvgRGB(0xd7, 0x9b, 0x5a);
-const NVGcolor kValueText     = nvgRGB(0xf0, 0xf1, 0xf5);
-const NVGcolor kPlaceholder   = nvgRGB(0x6f, 0x74, 0x88);
 const NVGcolor kAccent        = nvgRGB(0xd7, 0x9b, 0x5a);
 const NVGcolor kAccentInk     = nvgRGB(0x14, 0x16, 0x1e);
-const NVGcolor kMuted         = nvgRGB(0x92, 0x98, 0xab);
 const NVGcolor kErrorText     = nvgRGB(0xe0, 0xa2, 0xa2);
 const NVGcolor kErrorFill     = nvgRGB(0x24, 0x1c, 0x1c);
 const NVGcolor kErrorBorder   = nvgRGB(0x4a, 0x2b, 0x2b);
@@ -62,10 +64,10 @@ void LoginActivity::setValue(brls::Label* label, const std::string& value,
     if (!label) return;
     if (value.empty()) {
         label->setText(placeholder);
-        label->setTextColor(kPlaceholder);
+        label->setTextColor(kPlaceholder());
     } else {
         label->setText(value);
-        label->setTextColor(kValueText);
+        label->setTextColor(kValueText());
     }
 }
 
@@ -102,7 +104,7 @@ void LoginActivity::setupFieldRow(brls::Box* row, brls::Label* editHint,
         if (editHint) editHint->setVisibility(brls::Visibility::VISIBLE);
     });
     row->getFocusLostEvent()->subscribe([row, editHint](brls::View*) {
-        row->setBorderColor(kBorderIdle);
+        row->setBorderColor(kBorderIdle());
         if (editHint) editHint->setVisibility(brls::Visibility::INVISIBLE);
     });
 }
@@ -113,7 +115,7 @@ void LoginActivity::showStatus(const std::string& text, const std::string& hint,
 
     statusBox->setVisibility(brls::Visibility::VISIBLE);
     statusLabel->setText(text);
-    statusLabel->setTextColor(isError ? kErrorText : kMuted);
+    statusLabel->setTextColor(isError ? kErrorText : kMuted());
 
     if (isError) {
         statusBox->setBackgroundColor(kErrorFill);
@@ -131,7 +133,7 @@ void LoginActivity::showStatus(const std::string& text, const std::string& hint,
             statusHint->setVisibility(brls::Visibility::GONE);
         } else {
             statusHint->setText(hint);
-            statusHint->setTextColor(isError ? kErrorText : kMuted);
+            statusHint->setTextColor(isError ? kErrorText : kMuted());
             statusHint->setVisibility(brls::Visibility::VISIBLE);
         }
     }
@@ -146,10 +148,10 @@ void LoginActivity::setBusy(bool busy) {
 
     if (loginLabel) {
         loginLabel->setText(busy ? "Signing in…" : "Sign in");
-        loginLabel->setTextColor(busy ? kPlaceholder : kAccentInk);
+        loginLabel->setTextColor(busy ? kPlaceholder() : kAccentInk);
     }
     if (loginButton) {
-        loginButton->setBackgroundColor(busy ? nvgRGB(0x1c, 0x1f, 0x29) : kAccent);
+        loginButton->setBackgroundColor(busy ? kPanel() : kAccent);
         loginButton->setFocusable(!busy);
     }
     if (testLabel) testLabel->setText(busy ? "Cancel" : "Test");
@@ -180,8 +182,43 @@ void LoginActivity::toggleTokenMode() {
 
 // ── setup ──────────────────────────────────────────────────────────────
 
+void LoginActivity::applyThemeColors() {
+    // BoundView's operator T*() is non-const, so collect plain pointers first.
+    brls::Box*   rows[]     = { serverRow, usernameRow, passwordRow };
+    brls::Label* captions[] = { serverCaption, usernameCaption, passwordCaption };
+    brls::Label* muted[]    = { subline, passwordShow, tokenToggle, offlineLabel };
+
+    for (brls::Box* r : rows) {
+        if (!r) continue;
+        r->setBackgroundColor(kPanel());
+        r->setBorderColor(kBorderIdle());
+    }
+    for (brls::Label* l : captions) { if (l) l->setTextColor(kMuted()); }
+    for (brls::Label* l : muted)    { if (l) l->setTextColor(kMuted()); }
+
+    if (titleLabel) titleLabel->setTextColor(kValueText());
+    if (loginButton) loginButton->setBackgroundColor(kAccent);
+    if (loginLabel)  loginLabel->setTextColor(kAccentInk);
+    if (testButton) {
+        testButton->setBackgroundColor(kPanel());
+        testButton->setBorderColor(kBorderIdle());
+    }
+    if (testLabel) testLabel->setTextColor(kValueText());
+}
+
 void LoginActivity::onContentAvailable() {
     brls::Logger::debug("LoginActivity content available");
+
+    applyThemeColors();
+
+    // Focus paints a ring, not a fill: borealis draws a highlight BACKGROUND
+    // behind a focused view, which flattens the accent-filled Sign in button
+    // to a dark square the moment it takes focus.
+    if (loginButton) { loginButton->setHideHighlightBackground(true); loginButton->setHighlightCornerRadius(8.0f); }
+    if (testButton)  { testButton->setHideHighlightBackground(true);  testButton->setHighlightCornerRadius(8.0f); }
+    for (brls::Box* r : { (brls::Box*)serverRow, (brls::Box*)usernameRow, (brls::Box*)passwordRow }) {
+        if (r) { r->setHideHighlightBackground(true); r->setHighlightCornerRadius(6.0f); }
+    }
 
     setValue(serverLabel, m_serverUrl);
     setValue(usernameLabel, m_username);

@@ -56,6 +56,14 @@ private:
     void updateProgress();
     void syncProgressToServer();  // Periodic sync to server during playback
     void updatePlayPauseButton();
+    // Pick the rewind/fast-forward glyphs matching the configured seek
+    // interval (the icon set ships 5/10/15/30/45/60 second variants).
+    void applySeekIcons(int seconds);
+    // The screen paints with borealis' active theme so it matches the rest of
+    // the app in Light and Dark; only the bronze accent is fixed. Applied once
+    // in onContentAvailable — the theme can only be changed from Settings, and
+    // the player is built fresh on every push, so there is nothing to re-tint.
+    void applyThemeColors();
     void updateSpeedLabel();
     void cyclePlaybackSpeed();
     void togglePlayPause();
@@ -76,6 +84,9 @@ private:
     bool m_isPreDownloaded = false; // File was pre-downloaded before player push
     bool m_destroying = false;    // Flag to prevent timer callbacks during destruction
     bool m_loadingMedia = false;  // Flag to prevent rapid re-entry of loadMedia
+    // Last state pushed to the play/pause image. setImageFromRes decodes and
+    // uploads a texture, so the once-a-second tick must not call it blindly.
+    int m_playIconState = -1;     // -1 unset, 0 = showing play, 1 = showing pause
     std::shared_ptr<std::atomic<bool>> m_alive = std::make_shared<std::atomic<bool>>(true);
     double m_pendingSeek = 0.0;   // Pending seek position (set when resuming)
     double m_totalDuration = 0.0; // Total duration for display
@@ -98,12 +109,12 @@ private:
     BRLS_BIND(brls::Slider, progressSlider, "player/progress");
     BRLS_BIND(brls::Label, timeElapsedLabel, "player/timeElapsed");
     BRLS_BIND(brls::Label, timeRemainingLabel, "player/timeRemaining");
-    BRLS_BIND(brls::Button, btnRewind, "player/btnRewind");
-    BRLS_BIND(brls::Button, btnPlayPause, "player/btnPlayPause");
-    BRLS_BIND(brls::Button, btnForward, "player/btnForward");
-    BRLS_BIND(brls::Label, rewindLabel, "player/rewindLabel");
-    BRLS_BIND(brls::Label, forwardLabel, "player/forwardLabel");
-    BRLS_BIND(brls::Label, playPauseIcon, "player/playPauseIcon");
+    BRLS_BIND(brls::Box, btnRewind, "player/btnRewind");
+    BRLS_BIND(brls::Box, btnPlayPause, "player/btnPlayPause");
+    BRLS_BIND(brls::Box, btnForward, "player/btnForward");
+    BRLS_BIND(brls::Image, rewindIcon, "player/rewindIcon");
+    BRLS_BIND(brls::Image, forwardIcon, "player/forwardIcon");
+    BRLS_BIND(brls::Image, playPauseIcon, "player/playPauseIcon");
     BRLS_BIND(brls::Label, speedLabel, "player/speedLabel");
     BRLS_BIND(brls::Label, chapterInfoLabel, "player/chapterInfo");
 
@@ -113,6 +124,10 @@ private:
     BRLS_BIND(brls::Label, tileRightCaption, "player/tileRightCaption");
     BRLS_BIND(brls::Label, tileRightValue, "player/tileRightValue");
     BRLS_BIND(brls::Label, descriptionLabel, "player/description");
+    BRLS_BIND(brls::Box, tileLeft, "player/tileLeft");
+    BRLS_BIND(brls::Box, tileRight, "player/tileRight");
+    BRLS_BIND(brls::Label, tileLeftCaption, "player/tileLeftCaption");
+    BRLS_BIND(brls::Rectangle, headerRule, "player/rule");
 
 };
 

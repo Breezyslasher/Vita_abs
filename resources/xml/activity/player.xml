@@ -23,7 +23,7 @@
     paddingBottom="36"
     paddingLeft="40"
     paddingRight="40"
-    backgroundColor="#14161e">
+>
 
     <!-- ── Left column: cover + stat tiles ───────────────────────────── -->
     <brls:Box
@@ -38,8 +38,7 @@
             height="300"
             scalingType="fit"
             cornerRadius="8"
-            marginBottom="18"
-            backgroundColor="#1e2230"/>
+            marginBottom="18"/>
 
         <!-- Two stat tiles. Captions and values are rewritten per media
              type in PlayerActivity::updateInfoSlots(). -->
@@ -48,6 +47,7 @@
             alignItems="stretch">
 
             <brls:Box
+                id="player/tileLeft"
                 grow="1"
                 axis="column"
                 marginRight="10"
@@ -56,24 +56,22 @@
                 paddingLeft="12"
                 paddingRight="12"
                 cornerRadius="6"
-                borderThickness="1"
-                borderColor="#2a2f3c"
-                backgroundColor="#1c1f29">
+                borderThickness="1">
                 <brls:Label
+                    id="player/tileLeftCaption"
                     text="SPEED"
                     fontSize="10"
-                    textColor="#6f7488"
                     singleLine="true"/>
                 <brls:Label
                     id="player/speedLabel"
                     text="1.0x"
                     fontSize="17"
-                    textColor="#d79b5a"
                     marginTop="2"
                     singleLine="true"/>
             </brls:Box>
 
             <brls:Box
+                id="player/tileRight"
                 grow="1"
                 axis="column"
                 paddingTop="10"
@@ -81,20 +79,16 @@
                 paddingLeft="12"
                 paddingRight="12"
                 cornerRadius="6"
-                borderThickness="1"
-                borderColor="#2a2f3c"
-                backgroundColor="#1c1f29">
+                borderThickness="1">
                 <brls:Label
                     id="player/tileRightCaption"
                     text="CHAPTER"
                     fontSize="10"
-                    textColor="#6f7488"
                     singleLine="true"/>
                 <brls:Label
                     id="player/tileRightValue"
                     text="—"
                     fontSize="17"
-                    textColor="#f0f1f5"
                     marginTop="2"
                     singleLine="true"/>
             </brls:Box>
@@ -113,7 +107,6 @@
             id="player/eyebrow"
             text="NOW PLAYING"
             fontSize="11"
-            textColor="#6f7488"
             marginBottom="14"
             singleLine="true"/>
 
@@ -122,7 +115,6 @@
             id="player/title"
             text="Now Playing"
             fontSize="34"
-            textColor="#f0f1f5"
             maxHeight="88"
             marginBottom="8"/>
 
@@ -130,7 +122,6 @@
             id="player/author"
             text=""
             fontSize="18"
-            textColor="#9298ab"
             marginBottom="6"
             singleLine="true"/>
 
@@ -138,12 +129,11 @@
             id="player/subtitle"
             text=""
             fontSize="15"
-            textColor="#6f7488"
             singleLine="true"/>
 
         <brls:Rectangle
+            id="player/rule"
             height="1"
-            color="#262a34"
             marginTop="22"
             marginBottom="20"/>
 
@@ -153,7 +143,6 @@
             id="player/chapterInfo"
             text=""
             fontSize="17"
-            textColor="#f0f1f5"
             marginBottom="20"
             singleLine="true"/>
 
@@ -161,7 +150,6 @@
             id="player/description"
             text=""
             fontSize="15"
-            textColor="#9298ab"
             lineHeight="1.55"
             maxHeight="70"
             marginBottom="20"
@@ -181,75 +169,76 @@
                 id="player/timeElapsed"
                 text="0:00"
                 fontSize="14"
-                textColor="#9298ab"
                 singleLine="true"/>
             <brls:Label
                 id="player/timeRemaining"
                 text="-0:00"
                 fontSize="14"
-                textColor="#9298ab"
                 singleLine="true"/>
         </brls:Box>
 
-        <!-- Transport. Pill labels come from the configured seek interval,
-             filled in by PlayerActivity::onContentAvailable(). -->
+        <!-- Transport. Plain focusable Boxes rather than brls::Button:
+             borealis paints a highlight FILL behind a focused Button, which
+             washes out the accent play button to a flat dark square (the
+             same fix the in-app updater's makeButton uses). Focus is the
+             ring only — see setHideHighlightBackground in onContentAvailable.
+             Icon paths and the panel colours are set from code so they can
+             follow the seek interval and the app theme. -->
         <brls:Box
             id="player/controlButtons"
             axis="row"
             alignItems="center"
             marginTop="26">
 
-            <brls:Button
+            <brls:Box
                 id="player/btnRewind"
-                style="borderless"
+                axis="row"
+                justifyContent="center"
+                alignItems="center"
                 width="96"
                 height="64"
                 cornerRadius="8"
-                backgroundColor="#1c1f29"
-                marginRight="22">
-                <brls:Label
-                    id="player/rewindLabel"
-                    text="-30"
-                    fontSize="17"
-                    textColor="#c8cdda"
-                    horizontalAlign="center"
-                    width="96"
-                    singleLine="true"/>
-            </brls:Button>
+                marginRight="22"
+                focusable="true">
+                <brls:Image
+                    id="player/rewindIcon"
+                    width="34"
+                    height="34"
+                    scalingType="fit"/>
+            </brls:Box>
 
-            <brls:Button
+            <brls:Box
                 id="player/btnPlayPause"
-                style="borderless"
+                axis="row"
+                justifyContent="center"
+                alignItems="center"
                 width="88"
                 height="88"
                 cornerRadius="44"
-                backgroundColor="#d79b5a"
-                marginRight="22">
-                <brls:Label
+                marginRight="22"
+                focusable="true">
+                <brls:Image
                     id="player/playPauseIcon"
-                    text="||"
-                    fontSize="26"
-                    textColor="#14161e"
-                    horizontalAlign="center"
-                    width="88"/>
-            </brls:Button>
+                    width="40"
+                    height="40"
+                    scalingType="fit"/>
+            </brls:Box>
 
-            <brls:Button
+            <brls:Box
                 id="player/btnForward"
-                style="borderless"
+                axis="row"
+                justifyContent="center"
+                alignItems="center"
                 width="96"
                 height="64"
                 cornerRadius="8"
-                backgroundColor="#1c1f29">
-                <brls:Label
-                    id="player/forwardLabel"
-                    text="+30"
-                    fontSize="17"
-                    textColor="#c8cdda"
-                    horizontalAlign="center"
-                    width="96"
-                    singleLine="true"/>
-            </brls:Button>
+                focusable="true">
+                <brls:Image
+                    id="player/forwardIcon"
+                    width="34"
+                    height="34"
+                    scalingType="fit"/>
+            </brls:Box>
 
         </brls:Box>
 

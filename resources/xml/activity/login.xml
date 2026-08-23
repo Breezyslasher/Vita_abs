@@ -8,10 +8,11 @@
     caption-over-value row, so a focused row reads as a control rather
     than as a line of text.
 
-    Same tokens as the player screen — no new colours, no second font.
-    Like the player, this screen keeps a fixed palette instead of
-    following the app theme: it renders before any account (and so any
-    theme preference) is known.
+    Colours come from borealis' active theme (applied in
+    LoginActivity::applyThemeColors) so this screen matches the rest of
+    the app in Light and Dark; only the bronze accent is fixed, as a
+    brand colour. The theme is loaded from settings during app init, so
+    it is already correct by the time this screen renders.
 -->
 <brls:Box
     width="100%"
@@ -19,8 +20,7 @@
     axis="column"
     justifyContent="center"
     alignItems="center"
-    padding="40"
-    backgroundColor="#14161e">
+    padding="40">
 
     <brls:Box
         id="login/input_container"
@@ -32,13 +32,12 @@
             id="login/title"
             text="Sign in to Audiobookshelf"
             fontSize="30"
-            textColor="#f0f1f5"
             marginBottom="6"/>
 
         <brls:Label
+            id="login/subline"
             text="Credentials are stored on this device only."
             fontSize="15"
-            textColor="#9298ab"
             marginBottom="30"/>
 
         <!-- ── SERVER ───────────────────────────────────────────────── -->
@@ -47,8 +46,6 @@
             axis="row"
             alignItems="center"
             cornerRadius="6"
-            backgroundColor="#1c1f29"
-            borderColor="#2a2f3c"
             borderThickness="1"
             paddingTop="12"
             paddingBottom="12"
@@ -58,15 +55,14 @@
             focusable="true">
             <brls:Box axis="column" grow="1">
                 <brls:Label
+                    id="login/server_caption"
                     text="SERVER"
                     fontSize="10"
-                    textColor="#6f7488"
                     singleLine="true"/>
                 <brls:Label
                     id="login/server_label"
                     text="Not set"
                     fontSize="17"
-                    textColor="#6f7488"
                     marginTop="2"
                     singleLine="true"/>
             </brls:Box>
@@ -74,7 +70,6 @@
                 id="login/server_edit"
                 text="Edit"
                 fontSize="14"
-                textColor="#d79b5a"
                 singleLine="true"
                 visibility="invisible"/>
         </brls:Box>
@@ -85,8 +80,6 @@
             axis="row"
             alignItems="center"
             cornerRadius="6"
-            backgroundColor="#1c1f29"
-            borderColor="#2a2f3c"
             borderThickness="1"
             paddingTop="12"
             paddingBottom="12"
@@ -96,15 +89,14 @@
             focusable="true">
             <brls:Box axis="column" grow="1">
                 <brls:Label
+                    id="login/username_caption"
                     text="USERNAME"
                     fontSize="10"
-                    textColor="#6f7488"
                     singleLine="true"/>
                 <brls:Label
                     id="login/username_label"
                     text="Not set"
                     fontSize="17"
-                    textColor="#6f7488"
                     marginTop="2"
                     singleLine="true"/>
             </brls:Box>
@@ -112,7 +104,6 @@
                 id="login/username_edit"
                 text="Edit"
                 fontSize="14"
-                textColor="#d79b5a"
                 singleLine="true"
                 visibility="invisible"/>
         </brls:Box>
@@ -132,8 +123,6 @@
                 alignItems="center"
                 grow="1"
                 cornerRadius="6"
-                backgroundColor="#1c1f29"
-                borderColor="#2a2f3c"
                 borderThickness="1"
                 paddingTop="12"
                 paddingBottom="12"
@@ -145,13 +134,11 @@
                         id="login/password_caption"
                         text="PASSWORD"
                         fontSize="10"
-                        textColor="#6f7488"
                         singleLine="true"/>
                     <brls:Label
                         id="login/password_label"
                         text="Not set"
                         fontSize="17"
-                        textColor="#6f7488"
                         marginTop="2"
                         singleLine="true"/>
                 </brls:Box>
@@ -159,7 +146,6 @@
                     id="login/password_edit"
                     text="Edit"
                     fontSize="14"
-                    textColor="#d79b5a"
                     singleLine="true"
                     visibility="invisible"/>
             </brls:Box>
@@ -168,7 +154,6 @@
                 id="login/password_show"
                 text="Show"
                 fontSize="14"
-                textColor="#9298ab"
                 marginLeft="14"
                 singleLine="true"
                 focusable="true"/>
@@ -186,13 +171,11 @@
                 id="login/login_button"
                 style="borderless"
                 grow="1"
-                cornerRadius="8"
-                backgroundColor="#d79b5a">
+                cornerRadius="8">
                 <brls:Label
                     id="login/login_label"
                     text="Sign in"
                     fontSize="17"
-                    textColor="#14161e"
                     horizontalAlign="center"
                     width="100%"
                     singleLine="true"/>
@@ -204,14 +187,11 @@
                 width="120"
                 marginLeft="14"
                 cornerRadius="8"
-                backgroundColor="#1c1f29"
-                borderColor="#2a2f3c"
                 borderThickness="1">
                 <brls:Label
                     id="login/test_label"
                     text="Test"
                     fontSize="15"
-                    textColor="#c8cdda"
                     horizontalAlign="center"
                     width="100%"
                     singleLine="true"/>
@@ -230,7 +210,6 @@
                 id="login/token_toggle"
                 text="Use an API token"
                 fontSize="15"
-                textColor="#9298ab"
                 singleLine="true"
                 focusable="true"/>
 
@@ -238,9 +217,9 @@
                 id="login/offline_button"
                 style="borderless">
                 <brls:Label
+                    id="login/offline_label"
                     text="Continue offline"
                     fontSize="15"
-                    textColor="#9298ab"
                     singleLine="true"/>
             </brls:Button>
 
@@ -259,13 +238,11 @@
             <brls:Label
                 id="login/status"
                 text=""
-                fontSize="15"
-                textColor="#9298ab"/>
+                fontSize="15"/>
             <brls:Label
                 id="login/status_hint"
                 text=""
                 fontSize="15"
-                textColor="#9298ab"
                 marginTop="2"
                 visibility="gone"/>
         </brls:Box>

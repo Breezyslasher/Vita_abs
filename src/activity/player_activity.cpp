@@ -23,6 +23,21 @@
 
 namespace vitaabs {
 
+// ─── design tokens ────────────────────────────────────────────────────
+// Everything except the brand accent resolves from borealis' active theme
+// so the player matches the rest of the app in Light and Dark. The root
+// box paints no background of its own — the frame's "brls/background"
+// shows through, exactly like every other screen.
+namespace ptok {
+    static inline NVGcolor text()     { return brls::Application::getTheme()["brls/text"]; }
+    static inline NVGcolor muted()    { return brls::Application::getTheme()["brls/text_disabled"]; }
+    static inline NVGcolor hairline() { return brls::Application::getTheme()["brls/sidebar/separator"]; }
+    static inline NVGcolor panel()    { return brls::Application::getTheme()["brls/sidebar/background"]; }
+    // Audiobookshelf bronze — a brand colour, fixed across themes.
+    static inline NVGcolor accent()   { return nvgRGB(0xd7, 0x9b, 0x5a); }
+    static inline NVGcolor accentInk(){ return nvgRGB(0x14, 0x16, 0x1e); }
+}
+
 // Helper function to check if content should be marked as finished based on settings
 static bool shouldMarkAsFinished(float currentTime, float totalDuration, bool isPodcast) {
     if (totalDuration <= 0) return false;
@@ -122,31 +137,34 @@ void PlayerActivity::onContentAvailable() {
     }
 
     // Set up button click handlers
+    // Focus paints a ring, not a fill. borealis draws a highlight BACKGROUND
+    // behind a focused view, which turned the accent play button into a flat
+    // dark square the moment it took focus — the same wash the in-app
+    // updater's makeButton disables.
+    if (btnRewind)   { btnRewind->setHideHighlightBackground(true);   btnRewind->setHighlightCornerRadius(8.0f); }
+    if (btnForward)  { btnForward->setHideHighlightBackground(true);  btnForward->setHighlightCornerRadius(8.0f); }
+    if (btnPlayPause){ btnPlayPause->setHideHighlightBackground(true); btnPlayPause->setHighlightCornerRadius(44.0f); }
+
     if (btnPlayPause) {
         btnPlayPause->registerClickAction([this](brls::View* view) {
             togglePlayPause();
             return true;
         });
-        btnPlayPause->setFocusable(true);
+        btnPlayPause->addGestureRecognizer(new brls::TapGestureRecognizer(btnPlayPause));
     }
 
     // Get seek interval from settings
     AppSettings& settings = Application::getInstance().getSettings();
     int seekInterval = settings.seekInterval;
 
-    // Update skip button labels
-    if (rewindLabel) {
-        rewindLabel->setText("-" + std::to_string(seekInterval));
-    }
-    if (forwardLabel) {
-        forwardLabel->setText("+" + std::to_string(seekInterval));
-    }
+    applySeekIcons(seekInterval);
 
     if (btnRewind) {
         btnRewind->registerClickAction([this, seekInterval](brls::View* view) {
             seek(-seekInterval);
             return true;
         });
+        btnRewind->addGestureRecognizer(new brls::TapGestureRecognizer(btnRewind));
     }
 
     if (btnForward) {
@@ -154,6 +172,7 @@ void PlayerActivity::onContentAvailable() {
             seek(seekInterval);
             return true;
         });
+        btnForward->addGestureRecognizer(new brls::TapGestureRecognizer(btnForward));
     }
 
     // Register controller actions
@@ -187,6 +206,8 @@ void PlayerActivity::onContentAvailable() {
         cyclePlaybackSpeed();
         return true;
     });
+
+    applyThemeColors();
 
     // Initialize speed label from settings
     updateSpeedLabel();
@@ -275,6 +296,48 @@ void PlayerActivity::willDisappear(bool resetState) {
 // The layout is identical for both media types; only the slot contents
 // differ. Exactly one of the two context labels (chapter line / episode
 // description) is visible at a time.
+
+void PlayerActivity::applyThemeColors() {
+    // BRLS_BIND yields a BoundView whose operator T*() is non-const, so the
+    // bound views cannot go straight into a braced-init list — pull them out
+    // into plain pointers first.
+    brls::Box*   tiles[]  = { tileLeft, tileRight };
+    brls::Box*   pills[]  = { btnRewind, btnForward };
+    brls::Label* dim[]    = { eyebrowLabel, tileLeftCaption, tileRightCaption,
+                              authorLabel, descriptionLabel, subtitleLabel,
+                              timeElapsedLabel, timeRemainingLabel };
+    brls::Label* bright[] = { titleLabel, chapterInfoLabel, tileRightValue };
+
+    for (brls::Box* tile : tiles) {
+        if (!tile) continue;
+        tile->setBackgroundColor(ptok::panel());
+        tile->setBorderColor(ptok::hairline());
+    }
+    for (brls::Box* b : pills) {
+        if (b) b->setBackgroundColor(ptok::panel());
+    }
+    if (btnPlayPause) btnPlayPause->setBackgroundColor(ptok::accent());
+    if (headerRule)   headerRule->setColor(ptok::hairline());
+
+    for (brls::Label* l : dim)    { if (l) l->setTextColor(ptok::muted()); }
+    for (brls::Label* l : bright) { if (l) l->setTextColor(ptok::text()); }
+    if (speedLabel) speedLabel->setTextColor(ptok::accent());
+}
+
+// The icon set ships 5/10/15/30/45/60-second variants; ABS offers
+// 5/10/15/30/60. Fall back to the plain glyph if a value ever drifts off
+// that list so the button is never blank.
+void PlayerActivity::applySeekIcons(int seconds) {
+    static const int kHave[] = { 5, 10, 15, 30, 45, 60 };
+    bool exact = false;
+    for (int v : kHave) if (v == seconds) { exact = true; break; }
+
+    const std::string suffix = exact ? ("-" + std::to_string(seconds)) : std::string();
+    if (rewindIcon)
+        rewindIcon->setImageFromRes("icons/rewind" + (exact ? suffix : std::string("-30")) + ".png");
+    if (forwardIcon)
+        forwardIcon->setImageFromRes("icons/fast-forward" + (exact ? suffix : std::string("-30")) + ".png");
+}
 
 void PlayerActivity::applyItemInfo(const MediaItem& item) {
     m_isPodcastItem = (item.mediaType == MediaType::PODCAST_EPISODE) ||
@@ -991,12 +1054,11 @@ void PlayerActivity::updatePlayPauseButton() {
     if (!playPauseIcon) return;
 
     MpvPlayer& player = MpvPlayer::getInstance();
+    const int want = player.isPlaying() ? 1 : 0;   // 1 = show pause, 0 = show play
+    if (want == m_playIconState) return;           // decoding a texture is not free
 
-    if (player.isPlaying()) {
-        playPauseIcon->setText("||");  // Pause icon (show pause when playing)
-    } else {
-        playPauseIcon->setText(">");   // Play icon (show play when paused)
-    }
+    m_playIconState = want;
+    playPauseIcon->setImageFromRes(want ? "icons/pause.png" : "icons/play.png");
 }
 
 void PlayerActivity::seek(int seconds) {

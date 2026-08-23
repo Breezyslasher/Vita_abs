@@ -193,6 +193,7 @@ set(APP_SOURCES
     src/app/application.cpp
     src/app/audiobookshelf_client.cpp
     src/app/downloads_manager.cpp
+    src/app/hint_icons.cpp
 
     # Activities
     src/activity/main_activity.cpp
@@ -605,6 +606,29 @@ if(PLATFORM_PSV)
         VERSION 01.00
         NAME "VitaABS Updater")
 
+    # Pack resources/icons/*.png by globbing rather than by hand. CONFIGURE_DEPENDS
+    # makes cmake re-run when a file is added or removed, so adding an icon to the
+    # tree is enough to get it into the VPK.
+    file(GLOB _VITA_ICONS CONFIGURE_DEPENDS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+         ${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/*.png)
+    set(VITA_ICON_FILES "")
+    foreach(_icon ${_VITA_ICONS})
+        list(APPEND VITA_ICON_FILES FILE ${_icon} ${_icon})
+    endforeach()
+    list(LENGTH _VITA_ICONS _VITA_ICON_COUNT)
+    message(STATUS "Vita VPK: packing ${_VITA_ICON_COUNT} icons from resources/icons/")
+
+    # Hint glyphs: only the PSV set. resources/images/ also carries the PS4,
+    # Switch, Keyboard, Touch and Steam Deck families for HintIcons, but the
+    # Vita can never display those and every VPK entry is listed one by one —
+    # packing all ~590 would bloat the VPK for nothing. Platforms that copy
+    # the resources directory wholesale get the lot.
+    file(GLOB _VITA_HINTS CONFIGURE_DEPENDS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+         ${CMAKE_CURRENT_SOURCE_DIR}/resources/images/PSV/*.png)
+    foreach(_hint ${_VITA_HINTS})
+        list(APPEND VITA_ICON_FILES FILE ${_hint} ${_hint})
+    endforeach()
+
     vita_create_self(${PROJECT_NAME}.self ${PROJECT_NAME} UNSAFE NOASLR)
 
     vita_create_vpk(${PROJECT_NAME}.vpk ${VITA_TITLEID} ${PROJECT_NAME}.self
@@ -651,51 +675,12 @@ if(PLATFORM_PSV)
         FILE resources/xml/view/media_item.xml   resources/xml/view/media_item.xml
        
 
-        # Settings rail glyphs (see SettingsTab's kSections table).
-        FILE resources/icons/account.png                  resources/icons/account.png
-        FILE resources/icons/theme-light-dark.png         resources/icons/theme-light-dark.png
-        FILE resources/icons/play.png                     resources/icons/play.png
-        FILE resources/icons/music.png                    resources/icons/music.png
-        FILE resources/icons/information.png              resources/icons/information.png
-
-        FILE resources/icons/a.png                        resources/icons/a.png
-        FILE resources/icons/az.png                       resources/icons/az.png
-        FILE resources/icons/za.png                       resources/icons/za.png
-        FILE resources/icons/back.png                     resources/icons/back.png
-        FILE resources/icons/checkbox.png                 resources/icons/checkbox.png
-        FILE resources/icons/checkbox_checked.png         resources/icons/checkbox_checked.png
-        FILE resources/icons/checkbox_crossed.png         resources/icons/checkbox_crossed.png
-        FILE resources/icons/circle.png                   resources/icons/circle.png
-        FILE resources/icons/cross.png                    resources/icons/cross.png
-        FILE resources/icons/download.png                 resources/icons/download.png
-        FILE resources/icons/hide.png                     resources/icons/hide.png
-        FILE resources/icons/history.png                  resources/icons/history.png
-        FILE resources/icons/hot.png                      resources/icons/hot.png
-        FILE resources/icons/import.png                   resources/icons/import.png
-        FILE resources/icons/left.png                     resources/icons/left.png
-        FILE resources/icons/menu.png                     resources/icons/menu.png
-        FILE resources/icons/mini_star.png                resources/icons/mini_star.png
-        FILE resources/icons/options.png                  resources/icons/options.png
-        FILE resources/icons/radio.png                    resources/icons/radio.png
-        FILE resources/icons/radio_checked.png            resources/icons/radio_checked.png
-        FILE resources/icons/refresh.png                  resources/icons/refresh.png
-        FILE resources/icons/right.png                    resources/icons/right.png
-        FILE resources/icons/search.png                   resources/icons/search.png
-        FILE resources/icons/show.png                     resources/icons/show.png
-        FILE resources/icons/sort-1-9.png                 resources/icons/sort-1-9.png
-        FILE resources/icons/sort-9-1.png                 resources/icons/sort-9-1.png
-        FILE resources/icons/sort-clock-ascending.png     resources/icons/sort-clock-ascending.png
-        FILE resources/icons/sort-clock-descending.png    resources/icons/sort-clock-descending.png
-        FILE resources/icons/sort-calendar-ascending.png  resources/icons/sort-calendar-ascending.png
-        FILE resources/icons/sort-calendar-descending.png resources/icons/sort-calendar-descending.png
-        FILE resources/icons/book-open-page-variant.png   resources/icons/book-open-page-variant.png
-        FILE resources/icons/book-multiple.png            resources/icons/book-multiple.png
-        FILE resources/icons/book-arrow-down.png          resources/icons/book-arrow-down.png
-        FILE resources/icons/star.png                     resources/icons/star.png
-        FILE resources/icons/tag.png                      resources/icons/tag.png
-        FILE resources/icons/web.png                      resources/icons/web.png
-        FILE resources/icons/filter-menu-outline.png      resources/icons/filter-menu-outline.png
-        FILE resources/icons/format-list-group.png        resources/icons/format-list-group.png
+        # Every PNG under resources/icons/ is packed, generated at configure
+        # time from VITA_ICON_FILES above. It used to be a hand-written list,
+        # which silently shipped a VPK missing whatever icon a new screen had
+        # just started using — the directory is copied wholesale on every
+        # other platform, so nothing else caught it.
+        ${VITA_ICON_FILES}
 
         FILE resources/images/circle_button.png   resources/images/circle_button.png
         FILE resources/images/cross_button.png    resources/images/cross_button.png
