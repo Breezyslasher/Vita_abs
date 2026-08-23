@@ -40,7 +40,6 @@ private:
         SEC_PLAYBACK,
         SEC_AUDIO,
         SEC_DOWNLOADS,
-        SEC_DEBUG,
         SEC_ABOUT,
         SEC_COUNT
     };
@@ -55,7 +54,6 @@ private:
     brls::Box* createPlaybackSection();
     brls::Box* createAudioSection();
     brls::Box* createDownloadsSection();
-    brls::Box* createDebugSection();
     brls::Box* createAboutSection();
 
     // Master/detail plumbing — see settings_tab.cpp for the layout.
@@ -74,8 +72,15 @@ private:
     // showSection and by any handler that programmatically changes it.
     void paintRailRowSelection();
 
+    // The page paints with borealis' active theme so it matches the rest
+    // of the app in both Light and Dark. Colours are read once here and
+    // re-applied from draw() whenever the variant changes, so switching
+    // the theme from this very page repaints it immediately.
+    void draw(NVGcontext* vg, float x, float y, float width, float height,
+              brls::Style style, brls::FrameContext* ctx) override;
+    void applyThemeColors();
+
     void onLogout();
-    void onTestLocalPlayback();
     void onThemeChanged(int index);
     void onSeekIntervalChanged(int index);
 
@@ -89,6 +94,14 @@ private:
     brls::Label*          m_detailSubtitle  = nullptr;
     brls::ScrollingFrame* m_detailScroll    = nullptr;
     brls::Box*            m_detailContent   = nullptr;  // holds the active section's Box
+
+    // Theme-coloured chrome, re-tinted by applyThemeColors().
+    brls::Label* m_railTitle      = nullptr;
+    brls::Label* m_railSubtitle   = nullptr;
+    brls::Box*   m_railHairline   = nullptr;
+    brls::Box*   m_detailHairline = nullptr;
+    brls::Label* m_versionLabel   = nullptr;
+    brls::ThemeVariant m_themeVariant = brls::ThemeVariant::DARK;
 
     std::vector<brls::Box*> m_railRows;      // one per section, indexed by SectionId
     std::vector<brls::Box*> m_sectionBoxes;  // one per section, indexed by SectionId

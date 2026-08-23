@@ -11,11 +11,7 @@
 #include "app/application.hpp"
 #include "app/audiobookshelf_client.hpp"
 #include "app/downloads_manager.hpp"
-#include "player/mpv_player.hpp"
-#include "activity/player_activity.hpp"
-#include "platform/platform.hpp"
 #include "utils/app_update.hpp"
-#include <set>
 
 // Version macros come from CMakeLists.txt (VITAABS_VERSION numeric,
 // VITAABS_DISPLAY_VERSION human-readable); guard for odd build setups.
@@ -26,17 +22,22 @@
 namespace vitaabs {
 
 // ─── design tokens ────────────────────────────────────────────────────
-// Kept inline (rather than in a header) because this is the only file
-// that paints with them. The accent is the Audiobookshelf bronze already
-// used by the in-app updater, not Plex's brand gold.
+// Everything except the brand accent comes from borealis' active theme,
+// so this page matches the rest of the app in both Light and Dark. The
+// page background is deliberately NOT painted: leaving it unset lets the
+// frame's own "brls/background" show through, exactly like every other
+// tab. The rail uses ViewBackground::SIDEBAR — the same background the
+// app's real sidebar paints, resolved live at draw time.
 namespace tok {
-    static inline NVGcolor bg()       { return nvgRGB(0x14, 0x14, 0x17); }
-    static inline NVGcolor railBg()   { return nvgRGB(0x1a, 0x1a, 0x1f); }
-    static inline NVGcolor raised()   { return nvgRGB(0x26, 0x26, 0x2d); }
-    static inline NVGcolor hairline() { return nvgRGBA(0xff, 0xff, 0xff, 20); }
-    static inline NVGcolor text()     { return nvgRGB(0xf2, 0xf2, 0xf4); }
-    static inline NVGcolor muted()    { return nvgRGB(0x9a, 0x9a, 0xa4); }
+    static inline NVGcolor text()     { return brls::Application::getTheme()["brls/text"]; }
+    static inline NVGcolor muted()    { return brls::Application::getTheme()["brls/text_disabled"]; }
+    static inline NVGcolor hairline() { return brls::Application::getTheme()["brls/sidebar/separator"]; }
+    // Audiobookshelf bronze — a brand colour, so it stays fixed across
+    // themes (as the in-app updater's accent does).
     static inline NVGcolor accent()   { return nvgRGB(0xcd, 0x9d, 0x49); }
+    // Selected rail row: a wash of the accent rather than a fixed grey,
+    // so it reads correctly on both the light and dark sidebar.
+    static inline NVGcolor raised()   { return nvgRGBA(0xcd, 0x9d, 0x49, 46); }
 }
 
 // Per-section metadata. The rail rows + detail header pull from this
@@ -60,8 +61,6 @@ static const SectionMeta kSections[] = {
                           "Volume boost and chapter list." },
     /* SEC_DOWNLOADS */ { "Downloads",       "download.png",
                           "Storage, cleanup, and offline behaviour." },
-    /* SEC_DEBUG     */ { "Debug",           "options.png",
-                          "Local playback test for troubleshooting." },
     /* SEC_ABOUT     */ { "About",           "information.png",
                           "Updates and app information." },
 };
@@ -90,14 +89,18 @@ SettingsTab::SettingsTab() {
     this->setJustifyContent(brls::JustifyContent::FLEX_START);
     this->setAlignItems(brls::AlignItems::STRETCH);
     this->setGrow(1.0f);
-    this->setBackgroundColor(tok::bg());
+    // No background here on purpose — the frame's "brls/background"
+    // shows through, so the page sits on the same field as every other
+    // tab instead of a colour of its own.
 
     // ─── Rail (left) ────────────────────────────────────────────────
     m_railContainer = new brls::Box();
     m_railContainer->setAxis(brls::Axis::COLUMN);
     m_railContainer->setAlignItems(brls::AlignItems::STRETCH);
     m_railContainer->setWidth(railWidthForViewport());
-    m_railContainer->setBackgroundColor(tok::railBg());
+    // Same background the app's real sidebar uses, resolved from the
+    // theme at draw time — so the rail reads as a continuation of it.
+    m_railContainer->setBackground(brls::ViewBackground::SIDEBAR);
 
     // Rail header — "Settings" and the signed-in user.
     auto* railHeader = new brls::Box();
@@ -107,29 +110,26 @@ SettingsTab::SettingsTab() {
     railHeader->setPaddingTop(18);
     railHeader->setPaddingBottom(14);
 
-    auto* railTitle = new brls::Label();
-    railTitle->setText("Settings");
-    railTitle->setFontSize(22);
-    railTitle->setTextColor(tok::text());
-    railHeader->addView(railTitle);
+    m_railTitle = new brls::Label();
+    m_railTitle->setText("Settings");
+    m_railTitle->setFontSize(22);
+    railHeader->addView(m_railTitle);
 
-    auto* railSubtitle = new brls::Label();
+    m_railSubtitle = new brls::Label();
     {
         const auto& app = Application::getInstance();
-        railSubtitle->setText(app.getUsername().empty()
-                                  ? std::string("Not signed in")
-                                  : app.getUsername());
+        m_railSubtitle->setText(app.getUsername().empty()
+                                    ? std::string("Not signed in")
+                                    : app.getUsername());
     }
-    railSubtitle->setFontSize(13);
-    railSubtitle->setTextColor(tok::muted());
-    railSubtitle->setMarginTop(2);
-    railHeader->addView(railSubtitle);
+    m_railSubtitle->setFontSize(13);
+    m_railSubtitle->setMarginTop(2);
+    railHeader->addView(m_railSubtitle);
 
     // Thin divider under the rail header.
-    auto* railHairline = new brls::Box();
-    railHairline->setHeight(1);
-    railHairline->setBackgroundColor(tok::hairline());
-    railHeader->addView(railHairline);
+    m_railHairline = new brls::Box();
+    m_railHairline->setHeight(1);
+    railHeader->addView(m_railHairline);
 
     m_railContainer->addView(railHeader);
 
@@ -175,12 +175,10 @@ SettingsTab::SettingsTab() {
 
     m_detailTitle = new brls::Label();
     m_detailTitle->setFontSize(26);
-    m_detailTitle->setTextColor(tok::text());
     headerTextCol->addView(m_detailTitle);
 
     m_detailSubtitle = new brls::Label();
     m_detailSubtitle->setFontSize(13);
-    m_detailSubtitle->setTextColor(tok::muted());
     m_detailSubtitle->setMarginTop(3);
     headerTextCol->addView(m_detailSubtitle);
 
@@ -188,11 +186,10 @@ SettingsTab::SettingsTab() {
     m_detailContainer->addView(m_detailHeader);
 
     // Hairline under the section header.
-    auto* detailHairline = new brls::Box();
-    detailHairline->setHeight(1);
-    detailHairline->setBackgroundColor(tok::hairline());
-    detailHairline->setMarginBottom(10);
-    m_detailContainer->addView(detailHairline);
+    m_detailHairline = new brls::Box();
+    m_detailHairline->setHeight(1);
+    m_detailHairline->setMarginBottom(10);
+    m_detailContainer->addView(m_detailHairline);
 
     // Scrolling holder for the active section box.
     m_detailScroll = new brls::ScrollingFrame();
@@ -219,7 +216,6 @@ SettingsTab::SettingsTab() {
     m_sectionBoxes[SEC_PLAYBACK]  = createPlaybackSection();
     m_sectionBoxes[SEC_AUDIO]     = createAudioSection();
     m_sectionBoxes[SEC_DOWNLOADS] = createDownloadsSection();
-    m_sectionBoxes[SEC_DEBUG]     = createDebugSection();
     m_sectionBoxes[SEC_ABOUT]     = createAboutSection();
 
     // Stage every section's box but do NOT add any of them to the
@@ -258,6 +254,46 @@ SettingsTab::SettingsTab() {
     // Default landing — Account on first open.
     m_activeSection = SEC_ACCOUNT;
     showSection(m_activeSection);
+
+    m_themeVariant = brls::Application::getThemeVariant();
+    applyThemeColors();
+}
+
+// Tint every piece of chrome this page owns from the active theme.
+// Labels bake their colour at construction (brls::Label reads
+// "brls/text" in its constructor), so a theme switch has to re-apply
+// them — draw() below does that when the variant changes.
+void SettingsTab::applyThemeColors() {
+    if (m_railTitle)      m_railTitle->setTextColor(tok::text());
+    if (m_railSubtitle)   m_railSubtitle->setTextColor(tok::muted());
+    if (m_detailTitle)    m_detailTitle->setTextColor(tok::text());
+    if (m_detailSubtitle) m_detailSubtitle->setTextColor(tok::muted());
+    if (m_versionLabel)   m_versionLabel->setTextColor(tok::muted());
+
+    if (m_railHairline)   m_railHairline->setBackgroundColor(tok::hairline());
+    if (m_detailHairline) m_detailHairline->setBackgroundColor(tok::hairline());
+
+    for (brls::Box* row : m_railRows) {
+        if (!row) continue;
+        if (auto* label = dynamic_cast<brls::Label*>(row->getView("rail/label")))
+            label->setTextColor(tok::text());
+    }
+
+    paintRailRowSelection();
+}
+
+void SettingsTab::draw(NVGcontext* vg, float x, float y, float width, float height,
+                       brls::Style style, brls::FrameContext* ctx) {
+    // Picking the theme up here (rather than only in the constructor)
+    // means changing it from this page's own Interface section repaints
+    // the page on the very next frame.
+    brls::ThemeVariant variant = brls::Application::getThemeVariant();
+    if (variant != m_themeVariant) {
+        m_themeVariant = variant;
+        applyThemeColors();
+    }
+
+    brls::Box::draw(vg, x, y, width, height, style, ctx);
 }
 
 SettingsTab::~SettingsTab() {
@@ -333,7 +369,7 @@ brls::Box* SettingsTab::makeRailRow(const std::string& iconPath,
     label->setFontSize(15);
     label->setTextColor(tok::text());
     label->setGrow(1.0f);
-    label->setId("rail/label");
+    label->setId("rail/label");   // applyThemeColors() re-tints via this id
     row->addView(label);
 
     // Right chevron — `right.png` is small enough to read as a hint
@@ -390,12 +426,12 @@ brls::Box* SettingsTab::makeRailInfoRow(const std::string& iconPath,
     icon->setImageFromRes("icons/" + iconPath);
     row->addView(icon);
 
-    auto* label = new brls::Label();
-    label->setText(title);
-    label->setFontSize(13);
-    label->setTextColor(tok::muted());
-    label->setGrow(1.0f);
-    row->addView(label);
+    m_versionLabel = new brls::Label();
+    m_versionLabel->setText(title);
+    m_versionLabel->setFontSize(13);
+    m_versionLabel->setTextColor(tok::muted());
+    m_versionLabel->setGrow(1.0f);
+    row->addView(m_versionLabel);
 
     return row;
 }
@@ -913,31 +949,6 @@ brls::Box* SettingsTab::createDownloadsSection() {
     return box;
 }
 
-brls::Box* SettingsTab::createDebugSection() {
-    brls::Box* box = makeSectionBox();
-
-    // Test local playback button
-    auto* testLocalCell = new brls::DetailCell();
-    testLocalCell->setText("Test Local Playback");
-    testLocalCell->setDetailText(platform::path("test.mp3"));
-    testLocalCell->registerClickAction([this](brls::View* view) {
-        onTestLocalPlayback();
-        return true;
-    });
-    box->addView(testLocalCell);
-
-    // Info label
-    auto* infoLabel = new brls::Label();
-    infoLabel->setText("Place test.mp3 or test.mp4 in " + platform::dataDir());
-    infoLabel->setFontSize(14);
-    infoLabel->setMarginLeft(16);
-    infoLabel->setMarginTop(8);
-    infoLabel->setMarginBottom(16);
-    box->addView(infoLabel);
-
-    return box;
-}
-
 brls::Box* SettingsTab::createAboutSection() {
     brls::Box* box = makeSectionBox();
 
@@ -1035,38 +1046,6 @@ void SettingsTab::onSeekIntervalChanged(int index) {
     }
 
     app.saveSettings();
-}
-
-void SettingsTab::onTestLocalPlayback() {
-    brls::Logger::info("SettingsTab: Testing local playback...");
-
-    // Check for test files
-    std::string testFile;
-
-    std::vector<std::string> testFiles = {
-        platform::path("test.mp4"),
-        platform::path("test.mp3"),
-        platform::path("test.ogg"),
-        platform::path("test.wav")
-    };
-
-    for (const auto& file : testFiles) {
-        if (platform::fileExists(file)) {
-            testFile = file;
-            brls::Logger::info("SettingsTab: Found test file: {}", testFile);
-            break;
-        }
-    }
-
-    if (testFile.empty()) {
-        brls::Application::notify("No test file found in " + platform::dataDir());
-        brls::Logger::error("SettingsTab: No test file found");
-        return;
-    }
-
-    brls::Logger::info("SettingsTab: Pushing player activity for: {}", testFile);
-    PlayerActivity* activity = PlayerActivity::createForDirectFile(testFile);
-    brls::Application::pushActivity(activity);
 }
 
 } // namespace vitaabs
