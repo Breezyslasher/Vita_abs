@@ -119,7 +119,7 @@ std::string systemPath(const std::string& sandboxPath) {
 }
 
 // Title id of the bundled updater helper (see src/updater_ps4 + CMakeLists).
-constexpr const char* kUpdaterTitle = "VSWY00003";
+constexpr const char* kUpdaterTitle = "VABS00003";
 
 // Load + initialise the installer modules once. EVERY AppInstUtil/BGFT call
 // must come after this: calling into a module the process hasn't loaded faults

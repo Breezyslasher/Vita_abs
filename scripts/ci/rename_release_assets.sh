@@ -56,12 +56,12 @@ for dir in VitaABS-nx-*; do
 done
 
 # PS4 pkg (suffix: -ps4.pkg). The build now also produces the bundled updater
-# helper pkg (VSWY00003) and stages updater.pkg — the release asset must be
-# the MAIN title's pkg (VSWY00002) only.
-main_pkg=$(find . -path "*ps4*" -name "*VSWY00002*.pkg" | head -1)
+# helper pkg (VABS00003) and stages updater.pkg — the release asset must be
+# the MAIN title's pkg (VABS00002) only.
+main_pkg=$(find . -path "*ps4*" -name "*VABS00002*.pkg" | head -1)
 if [ -z "$main_pkg" ]; then
     main_pkg=$(find . -path "*ps4*" -name "*.pkg" \
-        -not -name "*VSWY00003*" -not -name "updater.pkg" | head -1)
+        -not -name "*VABS00003*" -not -name "updater.pkg" | head -1)
 fi
 [ -n "$main_pkg" ] && cp "$main_pkg" "release/VitaABS.${FVER}-ps4.pkg"
 

@@ -23,7 +23,7 @@ namespace ps4 {
 /// Returns 0 once the install task is registered and started.
 int installPkg(const std::string& pkgPath, const std::string& contentName, std::string& err);
 
-/// Launch the separate updater helper app (title VSWY00003), which installs
+/// Launch the separate updater helper app (title VABS00003), which installs
 /// the downloaded pkg (/data/VitaABS/update.pkg, by convention) while
 /// VitaABS is closed — the only way to replace the running title, since the
 /// system won't install over it in place. VitaABS must quit right after a

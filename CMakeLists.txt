@@ -121,7 +121,7 @@ set(APP_SFO_VERSION "${_SFO_MAJOR}.${_SFO_MINOR}")
 # ---------------------------------------------------------------------------
 if(PLATFORM_PSV)
     set(VITA_APP_NAME "VitaABS")
-    set(VITA_TITLEID  "VSWY00001")
+    set(VITA_TITLEID  "VABS00001")
     set(VITA_VERSION  "${APP_SFO_VERSION}")
     set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d PARENTAL_LEVEL=1 -d ATTRIBUTE2=12")
 endif()
@@ -519,7 +519,7 @@ endif()
 # ---------------------------------------------------------------------------
 if(PLATFORM_PSV)
     # ── Updater stub (self-update helper) ───────────────────────────────
-    # A second, tiny Vita app with its own title id (VSWYUPD01). VitaABS
+    # A second, tiny Vita app with its own title id (VABSUPD01). VitaABS
     # cannot promote over itself — the installer returns 0x80101114 "in
     # use" for the running title — so at update time VitaABS installs and
     # launches this stub; with VitaABS now closed, the stub promotes the
@@ -558,7 +558,7 @@ if(PLATFORM_PSV)
     # No FILE args: vita_create_vpk accumulates them in a variable it does
     # not clear between calls, so any file listed here would leak into the
     # main VitaABS.vpk below and get packed twice. The stub is headless.
-    vita_create_vpk(vitaabs_updater.vpk VSWYUPD01 vitaabs_updater.self
+    vita_create_vpk(vitaabs_updater.vpk VABSUPD01 vitaabs_updater.self
         VERSION 01.00
         NAME "VitaABS Updater")
 
@@ -669,7 +669,7 @@ elseif(PLATFORM_PS4)
         add_self(${PROJECT_NAME})
         add_pkg(${PROJECT_NAME}
             ${CMAKE_BINARY_DIR}/ps4
-            "VSWY00002"
+            "VABS00002"
             "VitaABS"
             "${APP_SFO_VERSION}"
             # https://psdevwiki.com/ps4/param.sfo#ATTRIBUTE - Support PS4 Pro
@@ -690,15 +690,15 @@ elseif(PLATFORM_PS4)
     add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}.data)
 
     # ── PS4 updater helper (self-update) ────────────────────────────────
-    # A second, tiny PS4 app with its own title id (VSWY00003). VitaABS
+    # A second, tiny PS4 app with its own title id (VABS00003). VitaABS
     # cannot replace itself in place: BGFT installs into the running
-    # /user/app/VSWY00002 (locked), the installer returns 0x80990088
+    # /user/app/VABS00002 (locked), the installer returns 0x80990088
     # "already installed", and uninstalling the running title just kills the
     # process. So at update time VitaABS launches this helper and quits;
-    # with VitaABS closed the helper uninstalls VSWY00002 and hands the
+    # with VitaABS closed the helper uninstalls VABS00002 and hands the
     # downloaded pkg to the system installer (BGFT), which finishes in the
     # background. Shipped as its own pkg, installed once (like the Vita
-    # updater stub VSWYUPD01). It has no UI, so it needs only the borealis
+    # updater stub VABSUPD01). It has no UI, so it needs only the borealis
     # PS4 base (sce_module + sce_sys) — no app resources.
     if(PS4)
         add_executable(vitaabs_updater_ps4 src/updater_ps4/main.cpp)
@@ -733,7 +733,7 @@ elseif(PLATFORM_PS4)
         add_self(vitaabs_updater_ps4)
         add_pkg(vitaabs_updater_ps4
             ${CMAKE_BINARY_DIR}/ps4_updater
-            "VSWY00003"
+            "VABS00003"
             "VitaABS Updater"
             "01.00"
             8388608
@@ -743,7 +743,7 @@ elseif(PLATFORM_PS4)
         # so the user only ever installs one app — the same approach the Vita
         # build uses for its updater stub. The dependency forces the helper's
         # pkg to be built and copied in BEFORE VitaABS's pkg is packed. The pkg
-        # tool names its output from the CONTENT_ID (IV0001-VSWY00003_00-...),
+        # tool names its output from the CONTENT_ID (IV0001-VABS00003_00-...),
         # so the file is located by glob at build time.
         add_custom_target(vitaabs_updater_ps4.bundle
             COMMAND "${CMAKE_COMMAND}"

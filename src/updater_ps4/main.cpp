@@ -8,7 +8,7 @@
     system reports 0x80990088 (SAME_APPLICATION_ALREADY_INSTALLED) if you try
     to register over it, and uninstalling your OWN running title just kills the
     process. So VitaABS launches THIS helper and quits; with VitaABS no
-    longer running, the helper uninstalls VSWY00002 (its data under
+    longer running, the helper uninstalls VABS00002 (its data under
     /data/VitaABS is on a different partition and is untouched) and hands the
     downloaded pkg to the system installer (BGFT).
 
@@ -25,7 +25,7 @@
 
     Everything is fixed by convention so no arguments cross the app boundary:
       - the pkg to install : /data/VitaABS/update.pkg
-      - the app to replace : VSWY00002 (VitaABS's title id)
+      - the app to replace : VABS00002 (VitaABS's title id)
 
     The BGFT / AppInstUtil calls mirror utils/ps4_install.cpp but are kept
     self-contained here (file logging instead of borealis) so the helper links
@@ -142,7 +142,7 @@ const char* kPkgPath  = "/data/VitaABS/update.pkg";
 // flatz's BGFT writeup installs local pkgs from "/user/data/".
 const char* kPkgPathSystem = "/user/data/VitaABS/update.pkg";
 const char* kLogPath  = "/data/VitaABS/updater_ps4.log";
-const char* kTargetId = "VSWY00002";
+const char* kTargetId = "VABS00002";
 
 constexpr size_t kBgftHeapSize  = 1 * 1024 * 1024;
 // SCE_BGFT_TASK_OPT_FORCE_UPDATE, per flatz's bgft.h. VitaABS is closed while
@@ -540,7 +540,7 @@ int main(int, char*[]) {
     //     never acquires video-out here — every SDL call succeeds but nothing
     //     reaches the screen (blank). Rendering worked only when the helper was
     //     launched manually from the home screen.
-    //   * Relaunching VSWY00002 the moment the transfer starts launches a title
+    //   * Relaunching VABS00002 the moment the transfer starts launches a title
     //     that was just uninstalled and is still being written, which the
     //     system reports as a crash (CE-36329-3).
     // The user reopens VitaABS from the home screen once the install

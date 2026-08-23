@@ -542,7 +542,7 @@ void finishInstall(std::shared_ptr<ProgressUi> ui, std::function<void()> then) {
 // brls::Application::quit() does an orderly shutdown, but VitaABS keeps live
 // HTTP threads (session/PIN polling, the update check) that don't stop on a
 // dime, so the process can still be alive a few seconds later — exactly when
-// the helper, after its short startup wait, uninstalls VSWY00002. Uninstalling
+// the helper, after its short startup wait, uninstalls VABS00002. Uninstalling
 // a title whose process is still running is reported as a crash (CE-36329-3),
 // which is what took VitaABS down on the system-UI build. _Exit() ends the
 // process at once — no destructors, no thread joins, no lingering title — so
@@ -826,7 +826,7 @@ void startInstall(const ReleaseInfo rel) {
         // A running PS4 title can't be replaced in place (BGFT installs into
         // the locked /user/app/<titleid>, and uninstalling the running title
         // kills this process), so hand off to the separate updater helper
-        // (VSWY00003): with VitaABS closed it uninstalls the old title and
+        // (VABS00003): with VitaABS closed it uninstalls the old title and
         // installs the downloaded pkg via BGFT, which shows its own progress.
         // If the helper isn't installed, keep the pkg and guide a manual
         // install.
@@ -841,7 +841,7 @@ void startInstall(const ReleaseInfo rel) {
                 });
                 // Terminate IMMEDIATELY (see ps4HandoffExit), no confirmation
                 // dialog: the helper waits a few seconds and then uninstalls
-                // VSWY00002, so VitaABS's process must be fully gone by then. An
+                // VABS00002, so VitaABS's process must be fully gone by then. An
                 // orderly quit() leaves HTTP threads running, and uninstalling a
                 // title whose process is still alive is killed as a crash
                 // (CE-36329-3) — which is exactly what took VitaABS down.
@@ -1170,7 +1170,7 @@ void startInstall(const ReleaseInfo rel) {
             if (!ui->dismissed->load()) stepActive(ui->relaunch, "Installing update\xE2\x80\xA6", -1.0f);
         });
         finishInstall(ui, []() {
-            vita::launchTitle("VSWYUPD01");
+            vita::launchTitle("VABSUPD01");
             brls::Application::quit();
         });
 #endif
@@ -1795,7 +1795,7 @@ void checkForUpdates(bool manual) {
         ps4::removeUpdaterApp();
 #endif
 #ifdef __PSV__
-        // Same self-cleanup on Vita: the updater stub (VSWYUPD01) is left
+        // Same self-cleanup on Vita: the updater stub (VABSUPD01) is left
         // installed after an update — remove it from the MAIN app on next
         // boot, never from the stub itself. Gated on the bubble existing, so
         // a normal boot never pays the promoter module-load cost.

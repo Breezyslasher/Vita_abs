@@ -517,7 +517,7 @@ void launchTitle(const std::string& titleId) {
 }
 
 void removeUpdaterStub() {
-    const char* kStubId = "VSWYUPD01";
+    const char* kStubId = "VABSUPD01";
 
     // No-op on a normal boot: don't pay the ScePaf/promoter module-load cost
     // unless the stub bubble is actually installed.

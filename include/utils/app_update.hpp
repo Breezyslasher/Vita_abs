@@ -12,7 +12,7 @@
  *              (path captured from argv[0]); relaunch applies it.
  *   PS Vita  — downloads the .vpk. A title can't promote over itself
  *              (0x80101114 = in use), so VitaABS installs and launches a
- *              tiny bundled updater stub (VSWYUPD01) and quits; with
+ *              tiny bundled updater stub (VABSUPD01) and quits; with
  *              VitaABS closed the stub promotes the .vpk and relaunches
  *              VitaABS (the AutoPlugin2 technique, utils/vita_install +
  *              src/updater_stub). Falls back to a VitaShell install if the

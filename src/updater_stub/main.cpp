@@ -12,7 +12,7 @@
     boundary:
       - the VPK to install : ux0:data/VitaABS/update.vpk
       - the target version : ux0:data/VitaABS/update_version.txt (optional)
-      - the app to relaunch : VSWY00001 (VitaABS's title id)
+      - the app to relaunch : VABS00001 (VitaABS's title id)
 
     The heavy lifting (extract + head.bin forge + promote) is shared verbatim
     with VitaABS via utils/vita_install, which is deliberately free of any
@@ -41,7 +41,7 @@ namespace {
 const char* kUpdateVpk  = "ux0:data/VitaABS/update.vpk";
 const char* kVersionTxt = "ux0:data/VitaABS/update_version.txt";
 const char* kWorkDir    = "ux0:data/VitaABS/updater_work";
-const char* kTargetId   = "VSWY00001";
+const char* kTargetId   = "VABS00001";
 
 // ── Palette (design_handoff_stub_B) ──────────────────────────────────────
 #define C_BG        RGBA8(0x14, 0x14, 0x16, 0xFF)
