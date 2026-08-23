@@ -1,10 +1,10 @@
 {
     "app": {
-        "name": "VitaPlex",
-        "version": "2.0.0"
+        "name": "VitaABS",
+        "version": "0.3.5"
     },
     "login": {
-        "title": "VitaPlex",
+        "title": "VitaABS",
         "server": "Server URL",
         "username": "Username",
         "password": "Password",
