@@ -75,33 +75,33 @@ const char* ps4Path(brls::ControllerButton b) {
 
 const char* switchPath(brls::ControllerButton b) {
     switch (b) {
-        case brls::BUTTON_A:     return "images/Nintendo Switch/Default/switch_button_a.png";
-        case brls::BUTTON_B:     return "images/Nintendo Switch/Default/switch_button_b.png";
-        case brls::BUTTON_X:     return "images/Nintendo Switch/Default/switch_button_x.png";
-        case brls::BUTTON_Y:     return "images/Nintendo Switch/Default/switch_button_y.png";
-        case brls::BUTTON_START: return "images/Nintendo Switch/Default/switch_button_plus.png";
-        case brls::BUTTON_BACK:  return "images/Nintendo Switch/Default/switch_button_minus.png";
-        case brls::BUTTON_LB:    return "images/Nintendo Switch/Default/switch_button_l.png";
-        case brls::BUTTON_RB:    return "images/Nintendo Switch/Default/switch_button_r.png";
-        case brls::BUTTON_LT:    return "images/Nintendo Switch/Default/switch_button_zl.png";
-        case brls::BUTTON_RT:    return "images/Nintendo Switch/Default/switch_button_zr.png";
+        case brls::BUTTON_A:     return "images/Switch/Default/switch_button_a.png";
+        case brls::BUTTON_B:     return "images/Switch/Default/switch_button_b.png";
+        case brls::BUTTON_X:     return "images/Switch/Default/switch_button_x.png";
+        case brls::BUTTON_Y:     return "images/Switch/Default/switch_button_y.png";
+        case brls::BUTTON_START: return "images/Switch/Default/switch_button_plus.png";
+        case brls::BUTTON_BACK:  return "images/Switch/Default/switch_button_minus.png";
+        case brls::BUTTON_LB:    return "images/Switch/Default/switch_button_l.png";
+        case brls::BUTTON_RB:    return "images/Switch/Default/switch_button_r.png";
+        case brls::BUTTON_LT:    return "images/Switch/Default/switch_button_zl.png";
+        case brls::BUTTON_RT:    return "images/Switch/Default/switch_button_zr.png";
         default:                 return "";
     }
 }
 
 const char* steamDeckPath(brls::ControllerButton b) {
     switch (b) {
-        case brls::BUTTON_A:     return "images/Steam Deck/Default/steamdeck_button_a.png";
-        case brls::BUTTON_B:     return "images/Steam Deck/Default/steamdeck_button_b.png";
-        case brls::BUTTON_X:     return "images/Steam Deck/Default/steamdeck_button_x.png";
-        case brls::BUTTON_Y:     return "images/Steam Deck/Default/steamdeck_button_y.png";
-        case brls::BUTTON_START: return "images/Steam Deck/Default/steamdeck_button_options.png";
-        case brls::BUTTON_BACK:  return "images/Steam Deck/Default/steamdeck_button_view.png";
-        case brls::BUTTON_LB:    return "images/Steam Deck/Default/steamdeck_button_l1.png";
-        case brls::BUTTON_RB:    return "images/Steam Deck/Default/steamdeck_button_r1.png";
-        case brls::BUTTON_LT:    return "images/Steam Deck/Default/steamdeck_button_l2.png";
-        case brls::BUTTON_RT:    return "images/Steam Deck/Default/steamdeck_button_r2.png";
-        case brls::BUTTON_GUIDE: return "images/Steam Deck/Default/steamdeck_button_guide.png";
+        case brls::BUTTON_A:     return "images/SteamDeck/Default/steamdeck_button_a.png";
+        case brls::BUTTON_B:     return "images/SteamDeck/Default/steamdeck_button_b.png";
+        case brls::BUTTON_X:     return "images/SteamDeck/Default/steamdeck_button_x.png";
+        case brls::BUTTON_Y:     return "images/SteamDeck/Default/steamdeck_button_y.png";
+        case brls::BUTTON_START: return "images/SteamDeck/Default/steamdeck_button_options.png";
+        case brls::BUTTON_BACK:  return "images/SteamDeck/Default/steamdeck_button_view.png";
+        case brls::BUTTON_LB:    return "images/SteamDeck/Default/steamdeck_button_l1.png";
+        case brls::BUTTON_RB:    return "images/SteamDeck/Default/steamdeck_button_r1.png";
+        case brls::BUTTON_LT:    return "images/SteamDeck/Default/steamdeck_button_l2.png";
+        case brls::BUTTON_RT:    return "images/SteamDeck/Default/steamdeck_button_r2.png";
+        case brls::BUTTON_GUIDE: return "images/SteamDeck/Default/steamdeck_button_guide.png";
         default:                 return "";
     }
 }
@@ -118,18 +118,18 @@ const char* keyboardPath(brls::ControllerButton b) {
     //   LB/RB  -> Q / E
     //   dpad   -> arrow keys
     switch (b) {
-        case brls::BUTTON_A:     return "images/Keyboard & Mouse/Default/keyboard_enter.png";
-        case brls::BUTTON_B:     return "images/Keyboard & Mouse/Default/keyboard_escape.png";
-        case brls::BUTTON_X:     return "images/Keyboard & Mouse/Default/keyboard_x.png";
-        case brls::BUTTON_Y:     return "images/Keyboard & Mouse/Default/keyboard_y.png";
-        case brls::BUTTON_START: return "images/Keyboard & Mouse/Default/keyboard_f1.png";
-        case brls::BUTTON_BACK:  return "images/Keyboard & Mouse/Default/keyboard_minus.png";
-        case brls::BUTTON_LB:    return "images/Keyboard & Mouse/Default/keyboard_q.png";
-        case brls::BUTTON_RB:    return "images/Keyboard & Mouse/Default/keyboard_e.png";
-        case brls::BUTTON_UP:    return "images/Keyboard & Mouse/Default/keyboard_arrow_up.png";
-        case brls::BUTTON_DOWN:  return "images/Keyboard & Mouse/Default/keyboard_arrow_down.png";
-        case brls::BUTTON_LEFT:  return "images/Keyboard & Mouse/Default/keyboard_arrow_left.png";
-        case brls::BUTTON_RIGHT: return "images/Keyboard & Mouse/Default/keyboard_arrow_right.png";
+        case brls::BUTTON_A:     return "images/Keyboard/Default/keyboard_enter.png";
+        case brls::BUTTON_B:     return "images/Keyboard/Default/keyboard_escape.png";
+        case brls::BUTTON_X:     return "images/Keyboard/Default/keyboard_x.png";
+        case brls::BUTTON_Y:     return "images/Keyboard/Default/keyboard_y.png";
+        case brls::BUTTON_START: return "images/Keyboard/Default/keyboard_f1.png";
+        case brls::BUTTON_BACK:  return "images/Keyboard/Default/keyboard_minus.png";
+        case brls::BUTTON_LB:    return "images/Keyboard/Default/keyboard_q.png";
+        case brls::BUTTON_RB:    return "images/Keyboard/Default/keyboard_e.png";
+        case brls::BUTTON_UP:    return "images/Keyboard/Default/keyboard_arrow_up.png";
+        case brls::BUTTON_DOWN:  return "images/Keyboard/Default/keyboard_arrow_down.png";
+        case brls::BUTTON_LEFT:  return "images/Keyboard/Default/keyboard_arrow_left.png";
+        case brls::BUTTON_RIGHT: return "images/Keyboard/Default/keyboard_arrow_right.png";
         default:                 return "";
     }
 }

@@ -19,8 +19,8 @@ namespace {
 // See utils/ui_theme.hpp — panel/hairline are derived contrast steps, not
 // nearby theme keys, so a bordered input row cannot blend into the page.
 inline NVGcolor kValueText()   { return uitok::text(); }
-inline NVGcolor kMuted()       { return uitok::muted(); }
-inline NVGcolor kPlaceholder() { return uitok::muted(); }
+inline NVGcolor kMuted()       { return uitok::secondary(); }
+inline NVGcolor kPlaceholder() { return uitok::secondary(); }
 inline NVGcolor kPanel()       { return uitok::panel(); }
 inline NVGcolor kBorderIdle()  { return uitok::hairline(); }
 inline NVGcolor kAccent_()     { return uitok::accent(); }

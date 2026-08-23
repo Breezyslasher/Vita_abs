@@ -183,6 +183,66 @@ endif()
 add_subdirectory(${BOREALIS_LIBRARY})
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Resource path hygiene
+# ---------------------------------------------------------------------------
+# The PS4 packager builds a .gp4 XML manifest listing every packaged file. A
+# bare "&" in a path is an XML entity start, so a directory like
+# "Keyboard & Mouse" makes the pkg step die with "An error occurred while
+# parsing EntityName" — after a full successful compile, which makes it look
+# like a toolchain fault rather than an asset-naming one. Spaces are legal in
+# XML but break enough shell/manifest paths elsewhere to be worth refusing too.
+file(GLOB_RECURSE _ALL_RESOURCES CONFIGURE_DEPENDS
+     RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/resources/*)
+set(_BAD_RESOURCES "")
+foreach(_res ${_ALL_RESOURCES})
+    if(_res MATCHES "[ &]")
+        list(APPEND _BAD_RESOURCES ${_res})
+    endif()
+endforeach()
+if(_BAD_RESOURCES)
+    string(REPLACE ";" "\n    " _BAD_LIST "${_BAD_RESOURCES}")
+    message(FATAL_ERROR
+        "Resource paths must not contain spaces or '&' — the PS4 .gp4 XML "
+        "manifest cannot represent them:\n    ${_BAD_LIST}")
+endif()
+
+# ---------------------------------------------------------------------------
+# Hint-icon families
+# ---------------------------------------------------------------------------
+# HintIcons picks its art set at COMPILE time from the platform macros
+# (__vita__ / __PS4__ / __SWITCH__ / __ANDROID__), so a build can only ever
+# display one family. resources/images/ carries all six for the repo's benefit;
+# shipping the other five is dead weight — ~2.5 MB, most of it the 257-file
+# keyboard set. APP_HINT_FAMILIES lists the directories this platform can
+# actually use, and prune_hint_families() deletes the rest from a staged copy.
+if(PLATFORM_PSV)
+    set(APP_HINT_FAMILIES PSV)
+elseif(PLATFORM_PS4)
+    set(APP_HINT_FAMILIES Ps4)
+elseif(PLATFORM_SWITCH)
+    set(APP_HINT_FAMILIES Switch)
+elseif(PLATFORM_ANDROID)
+    # Touch on handhelds; Android TV switches to the generic controller set at
+    # runtime (SDL_IsAndroidTV), so both must ship.
+    set(APP_HINT_FAMILIES Touch SteamDeck)
+else()
+    set(APP_HINT_FAMILIES Keyboard)
+endif()
+set(APP_ALL_HINT_FAMILIES PSV Ps4 Switch Keyboard Touch SteamDeck)
+
+# Emits the remove_directory commands for the families this platform cannot
+# use, to be appended to a target that has just staged resources into <dir>.
+function(hint_prune_commands out_var dir)
+    set(_cmds "")
+    foreach(_fam ${APP_ALL_HINT_FAMILIES})
+        if(NOT _fam IN_LIST APP_HINT_FAMILIES)
+            list(APPEND _cmds COMMAND "${CMAKE_COMMAND}" -E rm -rf "${dir}/images/${_fam}")
+        endif()
+    endforeach()
+    set(${out_var} "${_cmds}" PARENT_SCOPE)
+endfunction()
+
 # Application sources
 # ---------------------------------------------------------------------------
 set(APP_SOURCES
@@ -715,6 +775,7 @@ elseif(PLATFORM_PS4)
             8388608
         )
     endif()
+    hint_prune_commands(_PS4_HINT_PRUNE "${CMAKE_BINARY_DIR}/ps4/resources")
     add_custom_target(${PROJECT_NAME}.data
         # Copy borealis PS4 base files (sce_module, about/right.sprx)
         COMMAND "${CMAKE_COMMAND}" -E copy_directory ${BOREALIS_DIR}/ps4 ${CMAKE_BINARY_DIR}/ps4
@@ -722,6 +783,7 @@ elseif(PLATFORM_PS4)
         COMMAND "${CMAKE_COMMAND}" -E copy_directory ${CMAKE_SOURCE_DIR}/app/platform/ps4 ${CMAKE_BINARY_DIR}/ps4
         # Copy app resources
         COMMAND "${CMAKE_COMMAND}" -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/resources ${CMAKE_BINARY_DIR}/ps4/resources
+        ${_PS4_HINT_PRUNE}
         # Copy borealis system resources
         COMMAND "${CMAKE_COMMAND}" -E copy_directory ${BOREALIS_DIR}/resources/i18n ${CMAKE_BINARY_DIR}/ps4/resources/i18n
         COMMAND "${CMAKE_COMMAND}" -E copy_directory ${BOREALIS_DIR}/resources/img ${CMAKE_BINARY_DIR}/ps4/resources/img
@@ -801,6 +863,7 @@ elseif(PLATFORM_SWITCH)
     if(USE_DEKO3D)
         gen_dksh("${CMAKE_CURRENT_SOURCE_DIR}/resources/shaders")
     endif()
+    hint_prune_commands(_NX_HINT_PRUNE "${CMAKE_BINARY_DIR}/resources")
     add_custom_target(${PROJECT_NAME}.nro ALL DEPENDS ${PROJECT_NAME}
         # Generate NACP metadata (author, version shown in hbmenu)
         COMMAND ${NX_NACPTOOL_EXE} --create "VitaABS" "Breezyslasher"
@@ -812,6 +875,7 @@ elseif(PLATFORM_SWITCH)
             ${BOREALIS_DIR}/resources/i18n ${CMAKE_BINARY_DIR}/resources/i18n
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${BOREALIS_DIR}/resources/img ${CMAKE_BINARY_DIR}/resources/img
+        ${_NX_HINT_PRUNE}
         # Build NRO with icon, metadata, and romfs
         COMMAND ${NX_ELF2NRO_EXE} ${PROJECT_NAME}.elf ${PROJECT_NAME}.nro
             --icon=${CMAKE_CURRENT_SOURCE_DIR}/app/platform/icon_switch.jpg
@@ -823,10 +887,12 @@ elseif(PLATFORM_DESKTOP)
     # Copy app resources next to the binary so relative paths resolve.
     # Also copy borealis system resources (i18n/hints.json, img/sys/) which
     # are not checked in to resources/ but are required by borealis at runtime.
+    hint_prune_commands(_DESK_HINT_PRUNE "$<TARGET_FILE_DIR:${PROJECT_NAME}>/resources")
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_CURRENT_SOURCE_DIR}/resources
             $<TARGET_FILE_DIR:${PROJECT_NAME}>/resources
+        ${_DESK_HINT_PRUNE}
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${BOREALIS_DIR}/resources/i18n
             $<TARGET_FILE_DIR:${PROJECT_NAME}>/resources/i18n

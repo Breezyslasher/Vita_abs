@@ -29,6 +29,14 @@ inline NVGcolor mix(NVGcolor a, NVGcolor b, float t) {
 
 inline NVGcolor background() { return brls::Application::getTheme()["brls/background"]; }
 inline NVGcolor text()       { return brls::Application::getTheme()["brls/text"]; }
+// Secondary text: captions, sublines, timestamps, placeholders.
+//
+// NOT "brls/text_disabled" — that is a DISABLED colour, RGB(80,80,80) in the
+// dark theme, which lands at 1.2:1 against a panel and is unreadable. Derived
+// the same way as panel/hairline, it measures 5.5:1 on dark and 4.0:1 on
+// light against the panel fill, so it clears WCAG AA for UI text on both.
+inline NVGcolor secondary()  { return mix(background(), text(), 0.70f); }
+// Genuinely de-emphasised / disabled state, straight from the theme.
 inline NVGcolor muted()      { return brls::Application::getTheme()["brls/text_disabled"]; }
 
 // A raised surface: cards, input rows, transport pills, stat tiles.

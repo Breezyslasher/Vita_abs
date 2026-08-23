@@ -314,7 +314,7 @@ void PlayerActivity::applyThemeColors() {
     if (btnPlayPause) btnPlayPause->setBackgroundColor(ptok::accent());
     if (headerRule)   headerRule->setColor(ptok::hairline());
 
-    for (brls::Label* l : dim)    { if (l) l->setTextColor(ptok::muted()); }
+    for (brls::Label* l : dim)    { if (l) l->setTextColor(ptok::secondary()); }
     for (brls::Label* l : bright) { if (l) l->setTextColor(ptok::text()); }
     if (speedLabel) speedLabel->setTextColor(ptok::accent());
 }
