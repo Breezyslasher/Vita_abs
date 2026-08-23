@@ -61,8 +61,8 @@ static const SectionMeta kSections[] = {
                           "Volume boost and chapter list." },
     /* SEC_DOWNLOADS */ { "Downloads",       "download.png",
                           "Storage, cleanup, and offline behaviour." },
-    /* SEC_ABOUT     */ { "About",           "information.png",
-                          "Updates and app information." },
+    /* SEC_UPDATES   */ { "Updates",         "refresh.png",
+                          "Check for and install new versions." },
 };
 
 // ─── responsive sizing ────────────────────────────────────────────────
@@ -216,7 +216,7 @@ SettingsTab::SettingsTab() {
     m_sectionBoxes[SEC_PLAYBACK]  = createPlaybackSection();
     m_sectionBoxes[SEC_AUDIO]     = createAudioSection();
     m_sectionBoxes[SEC_DOWNLOADS] = createDownloadsSection();
-    m_sectionBoxes[SEC_ABOUT]     = createAboutSection();
+    m_sectionBoxes[SEC_UPDATES]   = createUpdatesSection();
 
     // Stage every section's box but do NOT add any of them to the
     // detail content yet — showSection() adds exactly one at a time.
@@ -251,6 +251,17 @@ SettingsTab::SettingsTab() {
     m_railBox->addView(makeRailInfoRow("information.png",
                                        VITAABS_DISPLAY_VERSION));
 
+    // The app/credit lines the old About section carried. They are not
+    // settings, so they sit under the version readout rather than occupying
+    // a rail row of their own.
+    m_creditLabel = new brls::Label();
+    m_creditLabel->setText("Audiobookshelf client · UI by Borealis");
+    m_creditLabel->setFontSize(11);
+    m_creditLabel->setMarginLeft(20);
+    m_creditLabel->setMarginRight(10);
+    m_creditLabel->setMarginBottom(10);
+    m_railBox->addView(m_creditLabel);
+
     // Default landing — Account on first open.
     m_activeSection = SEC_ACCOUNT;
     showSection(m_activeSection);
@@ -269,6 +280,7 @@ void SettingsTab::applyThemeColors() {
     if (m_detailTitle)    m_detailTitle->setTextColor(tok::text());
     if (m_detailSubtitle) m_detailSubtitle->setTextColor(tok::muted());
     if (m_versionLabel)   m_versionLabel->setTextColor(tok::muted());
+    if (m_creditLabel)    m_creditLabel->setTextColor(tok::muted());
 
     if (m_railHairline)   m_railHairline->setBackgroundColor(tok::hairline());
     if (m_detailHairline) m_detailHairline->setBackgroundColor(tok::hairline());
@@ -949,12 +961,12 @@ brls::Box* SettingsTab::createDownloadsSection() {
     return box;
 }
 
-brls::Box* SettingsTab::createAboutSection() {
+brls::Box* SettingsTab::createUpdatesSection() {
     brls::Box* box = makeSectionBox();
 
-    // No "Version" row here, and the update cell below no longer repeats
-    // the version either — the rail footer is the single place the app
-    // reports it. Showing it in all three was the duplication.
+    // Update controls only — hence the section name. The version readout and
+    // the app/credit lines live in the rail footer, so nothing here is
+    // "about" text pretending to be a setting.
 
     // In-app updates: manual check now, plus the startup check toggle.
     auto* checkUpdatesCell = new brls::DetailCell();
@@ -975,23 +987,6 @@ brls::Box* SettingsTab::createAboutSection() {
             Application::getInstance().saveSettings();
         });
     box->addView(autoUpdateToggle);
-
-    // App description
-    auto* descLabel = new brls::Label();
-    descLabel->setText("VitaABS - Audiobookshelf client for PS Vita, PS4, Switch, Android and desktop");
-    descLabel->setFontSize(16);
-    descLabel->setMarginLeft(16);
-    descLabel->setMarginTop(8);
-    box->addView(descLabel);
-
-    // Credit
-    auto* creditLabel = new brls::Label();
-    creditLabel->setText("UI powered by Borealis");
-    creditLabel->setFontSize(14);
-    creditLabel->setMarginLeft(16);
-    creditLabel->setMarginTop(4);
-    creditLabel->setMarginBottom(20);
-    box->addView(creditLabel);
 
     return box;
 }
