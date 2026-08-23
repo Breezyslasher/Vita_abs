@@ -9,6 +9,7 @@
 #include "player/mpv_player.hpp"
 #include "utils/image_loader.hpp"
 #include "view/progress_dialog.hpp"
+#include "utils/ui_theme.hpp"
 
 #include <cstdio>
 #include <cmath>
@@ -22,6 +23,15 @@
 #endif
 
 namespace vitaabs {
+
+// ─── design tokens ────────────────────────────────────────────────────
+// Everything except the brand accent resolves from borealis' active theme
+// so the player matches the rest of the app in Light and Dark. The root
+// box paints no background of its own — the frame's "brls/background"
+// shows through, exactly like every other screen.
+// See utils/ui_theme.hpp — panel/hairline are derived contrast steps so the
+// stat tiles and transport pills read as raised surfaces, not as the page.
+namespace ptok = uitok;
 
 // Helper function to check if content should be marked as finished based on settings
 static bool shouldMarkAsFinished(float currentTime, float totalDuration, bool isPodcast) {
@@ -122,31 +132,34 @@ void PlayerActivity::onContentAvailable() {
     }
 
     // Set up button click handlers
+    // Focus paints a ring, not a fill. borealis draws a highlight BACKGROUND
+    // behind a focused view, which turned the accent play button into a flat
+    // dark square the moment it took focus — the same wash the in-app
+    // updater's makeButton disables.
+    if (btnRewind)   { btnRewind->setHideHighlightBackground(true);   btnRewind->setHighlightCornerRadius(8.0f); }
+    if (btnForward)  { btnForward->setHideHighlightBackground(true);  btnForward->setHighlightCornerRadius(8.0f); }
+    if (btnPlayPause){ btnPlayPause->setHideHighlightBackground(true); btnPlayPause->setHighlightCornerRadius(44.0f); }
+
     if (btnPlayPause) {
         btnPlayPause->registerClickAction([this](brls::View* view) {
             togglePlayPause();
             return true;
         });
-        btnPlayPause->setFocusable(true);
+        btnPlayPause->addGestureRecognizer(new brls::TapGestureRecognizer(btnPlayPause));
     }
 
     // Get seek interval from settings
     AppSettings& settings = Application::getInstance().getSettings();
     int seekInterval = settings.seekInterval;
 
-    // Update skip button labels
-    if (rewindLabel) {
-        rewindLabel->setText("-" + std::to_string(seekInterval));
-    }
-    if (forwardLabel) {
-        forwardLabel->setText("+" + std::to_string(seekInterval));
-    }
+    applySeekIcons(seekInterval);
 
     if (btnRewind) {
         btnRewind->registerClickAction([this, seekInterval](brls::View* view) {
             seek(-seekInterval);
             return true;
         });
+        btnRewind->addGestureRecognizer(new brls::TapGestureRecognizer(btnRewind));
     }
 
     if (btnForward) {
@@ -154,6 +167,7 @@ void PlayerActivity::onContentAvailable() {
             seek(seekInterval);
             return true;
         });
+        btnForward->addGestureRecognizer(new brls::TapGestureRecognizer(btnForward));
     }
 
     // Register controller actions
@@ -179,16 +193,24 @@ void PlayerActivity::onContentAvailable() {
         return true;
     });
 
-    // Set up speed button
-    if (btnSpeed) {
-        btnSpeed->registerClickAction([this](brls::View* view) {
-            cyclePlaybackSpeed();
-            return true;
-        });
-    }
+    // Speed no longer has its own on-screen button — it reads out in the
+    // left stat tile and cycles from Triangle. On Vita that is BUTTON_Y
+    // (psv_input.cpp maps SCE_CTRL_TRIANGLE -> BUTTON_Y); the same slot is
+    // the "top" face button on every other pad borealis supports.
+    this->registerAction("Speed", brls::ControllerButton::BUTTON_Y, [this](brls::View* view) {
+        cyclePlaybackSpeed();
+        return true;
+    });
+
+    applyThemeColors();
 
     // Initialize speed label from settings
     updateSpeedLabel();
+
+    // Focus starts on play/pause.
+    if (btnPlayPause) {
+        brls::Application::giveFocus(btnPlayPause);
+    }
 
     // Start update timer
     m_updateTimer.setCallback([this]() {
@@ -265,6 +287,171 @@ void PlayerActivity::willDisappear(bool resetState) {
     m_tempFilePath.clear();
 }
 
+// ── Split-shelf info slots ─────────────────────────────────────────────
+// The layout is identical for both media types; only the slot contents
+// differ. Exactly one of the two context labels (chapter line / episode
+// description) is visible at a time.
+
+void PlayerActivity::applyThemeColors() {
+    // BRLS_BIND yields a BoundView whose operator T*() is non-const, so the
+    // bound views cannot go straight into a braced-init list — pull them out
+    // into plain pointers first.
+    brls::Box*   tiles[]  = { tileLeft, tileRight };
+    brls::Box*   pills[]  = { btnRewind, btnForward };
+    brls::Label* dim[]    = { eyebrowLabel, tileLeftCaption, tileRightCaption,
+                              authorLabel, descriptionLabel, subtitleLabel,
+                              timeElapsedLabel, timeRemainingLabel };
+    brls::Label* bright[] = { titleLabel, chapterInfoLabel, tileRightValue };
+
+    for (brls::Box* tile : tiles) {
+        if (!tile) continue;
+        tile->setBackgroundColor(ptok::panel());
+        tile->setBorderColor(ptok::hairline());
+    }
+    for (brls::Box* b : pills) {
+        if (b) b->setBackgroundColor(ptok::panel());
+    }
+    if (btnPlayPause) btnPlayPause->setBackgroundColor(ptok::accent());
+    if (headerRule)   headerRule->setColor(ptok::hairline());
+
+    for (brls::Label* l : dim)    { if (l) l->setTextColor(ptok::secondary()); }
+    for (brls::Label* l : bright) { if (l) l->setTextColor(ptok::text()); }
+    if (speedLabel) speedLabel->setTextColor(ptok::accent());
+}
+
+// The icon set ships 5/10/15/30/45/60-second variants; ABS offers
+// 5/10/15/30/60. Fall back to the plain glyph if a value ever drifts off
+// that list so the button is never blank.
+void PlayerActivity::applySeekIcons(int seconds) {
+    static const int kHave[] = { 5, 10, 15, 30, 45, 60 };
+    bool exact = false;
+    for (int v : kHave) if (v == seconds) { exact = true; break; }
+
+    const std::string suffix = exact ? ("-" + std::to_string(seconds)) : std::string();
+    if (rewindIcon)
+        rewindIcon->setImageFromRes("icons/rewind" + (exact ? suffix : std::string("-30")) + ".png");
+    if (forwardIcon)
+        forwardIcon->setImageFromRes("icons/fast-forward" + (exact ? suffix : std::string("-30")) + ".png");
+}
+
+void PlayerActivity::applyItemInfo(const MediaItem& item) {
+    m_isPodcastItem = (item.mediaType == MediaType::PODCAST_EPISODE) ||
+                      (item.type == "podcast") || !m_episodeId.empty();
+
+    m_chapters = item.chapters;
+    m_currentChapter = -1;
+
+    if (titleLabel) {
+        // For a podcast the episode title is the headline, not the show.
+        const std::string& headline =
+            (m_isPodcastItem && !item.subtitle.empty()) ? item.subtitle : item.title;
+        titleLabel->setText(headline);
+    }
+
+    if (authorLabel) {
+        authorLabel->setText(m_isPodcastItem ? item.title : item.authorName);
+    }
+
+    if (eyebrowLabel) {
+        std::string eyebrow = "NOW PLAYING";
+        if (m_isPodcastItem) {
+            // "EPISODE 50 · 14 JUL 2013" — each half only if we have it.
+            std::string left;
+            if (item.episodeNumber > 0)
+                left = "EPISODE " + std::to_string(item.episodeNumber);
+            std::string right = item.pubDate;
+            if (!left.empty() && !right.empty())      eyebrow = left + "  " + right;
+            else if (!left.empty())                   eyebrow = left;
+            else if (!right.empty())                  eyebrow = right;
+        }
+        eyebrowLabel->setText(eyebrow);
+    }
+
+    if (subtitleLabel) {
+        // Narrator for books, host/show for podcasts.
+        std::string subline = m_isPodcastItem ? item.authorName : item.narratorName;
+        if (!subline.empty() && !m_isPodcastItem)
+            subline = "Narrated by " + subline;
+        subtitleLabel->setText(subline);
+        subtitleLabel->setVisibility(subline.empty() ? brls::Visibility::GONE
+                                                     : brls::Visibility::VISIBLE);
+    }
+
+    // Context slot: description for podcasts, chapter line for books.
+    if (descriptionLabel) {
+        bool show = m_isPodcastItem && !item.description.empty();
+        descriptionLabel->setText(item.description);
+        descriptionLabel->setVisibility(show ? brls::Visibility::VISIBLE
+                                             : brls::Visibility::GONE);
+    }
+    if (chapterInfoLabel) {
+        chapterInfoLabel->setVisibility(m_isPodcastItem ? brls::Visibility::GONE
+                                                        : brls::Visibility::VISIBLE);
+    }
+
+    // Right stat tile.
+    if (tileRightCaption && tileRightValue) {
+        if (m_isPodcastItem) {
+            tileRightCaption->setText("DOWNLOADED");
+            bool local = m_isLocalFile || m_isPreDownloaded;
+            if (local && item.size > 0) {
+                tileRightValue->setText(std::to_string(item.size / (1024 * 1024)) + " MB");
+            } else {
+                tileRightValue->setText(local ? "YES" : "STREAMING");
+            }
+        } else {
+            tileRightCaption->setText("CHAPTER");
+            tileRightValue->setText(m_chapters.empty()
+                                        ? "—"
+                                        : "1 / " + std::to_string(m_chapters.size()));
+        }
+    }
+}
+
+void PlayerActivity::applyLocalInfo(const std::string& subline, bool isPodcast) {
+    m_isPodcastItem = isPodcast;
+    m_chapters.clear();
+    m_currentChapter = -1;
+
+    if (eyebrowLabel)  eyebrowLabel->setText("NOW PLAYING");
+    if (subtitleLabel) {
+        subtitleLabel->setText(subline);
+        subtitleLabel->setVisibility(subline.empty() ? brls::Visibility::GONE
+                                                     : brls::Visibility::VISIBLE);
+    }
+    if (descriptionLabel) descriptionLabel->setVisibility(brls::Visibility::GONE);
+    if (chapterInfoLabel) chapterInfoLabel->setVisibility(brls::Visibility::VISIBLE);
+
+    if (tileRightCaption && tileRightValue) {
+        tileRightCaption->setText("DOWNLOADED");
+        tileRightValue->setText("YES");
+    }
+}
+
+void PlayerActivity::updateChapterTile(double position) {
+    if (m_chapters.empty() || !tileRightValue) return;
+
+    int idx = -1;
+    for (size_t i = 0; i < m_chapters.size(); i++) {
+        if (position >= m_chapters[i].start &&
+            (m_chapters[i].end <= 0.0f || position < m_chapters[i].end)) {
+            idx = static_cast<int>(i);
+            break;
+        }
+    }
+    if (idx < 0 || idx == m_currentChapter) return;
+
+    m_currentChapter = idx;
+    tileRightValue->setText(std::to_string(idx + 1) + " / " +
+                            std::to_string(m_chapters.size()));
+
+    // The context line names the chapter the tile is counting.
+    if (chapterInfoLabel && !m_chapters[idx].title.empty()) {
+        chapterInfoLabel->setText("Ch. " + std::to_string(idx + 1) + " — " +
+                                  m_chapters[idx].title);
+    }
+}
+
 void PlayerActivity::loadMedia() {
     // Prevent rapid re-entry
     if (m_loadingMedia) {
@@ -330,8 +517,7 @@ void PlayerActivity::loadMedia() {
             AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
             MediaItem item;
             if (client.fetchItem(m_itemId, item)) {
-                if (titleLabel) titleLabel->setText(item.title);
-                if (authorLabel && !item.authorName.empty()) authorLabel->setText(item.authorName);
+                applyItemInfo(item);
                 if (!item.coverPath.empty()) {
                     std::string fullCoverUrl = client.getCoverUrl(m_itemId);
                     loadCoverArt(fullCoverUrl);
@@ -394,6 +580,7 @@ void PlayerActivity::loadMedia() {
         if (authorLabel) {
             authorLabel->setText("Local File");
         }
+        applyLocalInfo("", /*isPodcast=*/false);
 
         MpvPlayer& player = MpvPlayer::getInstance();
 
@@ -464,6 +651,8 @@ void PlayerActivity::loadMedia() {
                 authorLabel->setText(download->parentTitle);
             }
         }
+        // A downloaded podcast episode carries an episodeId; a book does not.
+        applyLocalInfo(download->parentTitle, /*isPodcast=*/!m_episodeId.empty());
 
         // Load cover art if available
         if (!download->coverUrl.empty()) {
@@ -606,15 +795,8 @@ void PlayerActivity::loadMedia() {
         ImageLoader::cancelAll();
         ImageLoader::clearCache();
 
-        // Set title
-        if (titleLabel) {
-            titleLabel->setText(item.title);
-        }
-
-        // Set author
-        if (authorLabel && !item.authorName.empty()) {
-            authorLabel->setText(item.authorName);
-        }
+        // Title, author, eyebrow, subline, context slot and right tile.
+        applyItemInfo(item);
 
         // Load cover art
         if (!item.coverPath.empty()) {
@@ -768,6 +950,9 @@ void PlayerActivity::updateProgress() {
             timeRemainingLabel->setText(formatTimeRemaining(remaining));
         }
 
+        // Right stat tile + chapter line follow the playhead. No-ops when
+        // the item has no chapters, and when the chapter hasn't changed.
+        updateChapterTile(position);
     }
 
     // Periodic progress sync (every 30 seconds while playing)
@@ -864,12 +1049,11 @@ void PlayerActivity::updatePlayPauseButton() {
     if (!playPauseIcon) return;
 
     MpvPlayer& player = MpvPlayer::getInstance();
+    const int want = player.isPlaying() ? 1 : 0;   // 1 = show pause, 0 = show play
+    if (want == m_playIconState) return;           // decoding a texture is not free
 
-    if (player.isPlaying()) {
-        playPauseIcon->setText("||");  // Pause icon (show pause when playing)
-    } else {
-        playPauseIcon->setText(">");   // Play icon (show play when paused)
-    }
+    m_playIconState = want;
+    playPauseIcon->setImageFromRes(want ? "icons/pause.png" : "icons/play.png");
 }
 
 void PlayerActivity::seek(int seconds) {

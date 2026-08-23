@@ -151,6 +151,20 @@ void Application::applyTheme() {
             break;
     }
 
+    // brls::Slider reads these in its constructor, so every slider the app
+    // builds afterwards (the player's progress bar above all) picks up the
+    // Audiobookshelf accent instead of borealis' stock blue. Set on both
+    // variants — addColor overwrites, so this is safe to re-run.
+    const NVGcolor accent      = nvgRGB(0xd7, 0x9b, 0x5a);
+    const NVGcolor trackEmpty  = nvgRGB(0x26, 0x2a, 0x34);
+    const NVGcolor knob        = nvgRGB(0xf3, 0xe3, 0xd1);
+    for (brls::Theme* t : { &brls::Theme::getLightTheme(), &brls::Theme::getDarkTheme() }) {
+        t->addColor("brls/slider/line_filled", accent);
+        t->addColor("brls/slider/line_empty", trackEmpty);
+        t->addColor("brls/slider/pointer_color", knob);
+        t->addColor("brls/slider/pointer_border_color", accent);
+    }
+
     brls::Application::getPlatform()->setThemeVariant(variant);
     brls::Logger::info("Applied theme: {}", getThemeString(m_settings.theme));
 }

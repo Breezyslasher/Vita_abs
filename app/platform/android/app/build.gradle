@@ -144,9 +144,15 @@ task syncBorealisResources(type: Copy) {
         assetsDir.mkdirs()
     }
 
-    // 1. Copy all app resources
+    // 1. Copy all app resources, minus the hint-icon families this platform
+    //    cannot display. HintIcons selects its set at COMPILE time from the
+    //    platform macros, so an Android build can only ever show the Touch set
+    //    (handheld) or SteamDeck (Android TV, chosen at runtime via
+    //    SDL_IsAndroidTV). The other four families are ~2 MB of dead APK.
     from(appRes) {
         into ""
+        exclude "images/PSV/**", "images/Ps4/**",
+                "images/Switch/**", "images/Keyboard/**"
     }
 
     // 2. Merge borealis i18n (hints.json) — do NOT overwrite app's main.json
