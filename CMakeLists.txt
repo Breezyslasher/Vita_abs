@@ -219,6 +219,7 @@ set(APP_SOURCES
     src/utils/image_loader.cpp
     src/utils/audio_utils.cpp
     src/utils/app_update.cpp
+    src/utils/update_verify.cpp
 )
 
 # vita_stubs.c only needed on Vita (no-op stdio locks, SDL_OpenURL stub)
@@ -427,6 +428,39 @@ target_link_libraries(${PROJECT_NAME}
     ${APP_RENDER_LIBS}
 )
 
+# Update-signature verification (src/utils/update_verify.cpp) uses mbedcrypto,
+# which is linked on every target that installs updates in place: the consoles
+# (Switch gets it via the ffmpeg --start-group above), Android and desktop
+# Linux/macOS. Windows (Schannel, no mbedcrypto) compiles the stub instead and
+# leans on its verified TLS transport.
+if(NOT WIN32)
+    set(_vitaabs_have_mbedcrypto TRUE)
+    if(APPLE)
+        # update_verify.cpp is the ONLY desktop source that includes mbedtls
+        # headers, and Homebrew keeps them in a keg dir (mbedtls is keg-only)
+        # outside the include prefix the other libs use. Locate the header dir
+        # and add it (plus the matching keg lib dir); if it can't be found,
+        # fall back to the stub rather than fail the build — the macOS download
+        # is still TLS-verified, so this only drops the extra check.
+        find_path(MBEDTLS_INCLUDE_DIR mbedtls/sha256.h
+            HINTS /opt/homebrew/include /usr/local/include
+                  /opt/homebrew/opt/mbedtls/include /usr/local/opt/mbedtls/include)
+        if(MBEDTLS_INCLUDE_DIR)
+            target_include_directories(${PROJECT_NAME} PRIVATE "${MBEDTLS_INCLUDE_DIR}")
+            target_link_directories(${PROJECT_NAME} PRIVATE
+                /opt/homebrew/opt/mbedtls/lib /usr/local/opt/mbedtls/lib)
+        else()
+            set(_vitaabs_have_mbedcrypto FALSE)
+            message(WARNING "mbedtls headers not found — update signature "
+                            "verification disabled on this macOS build "
+                            "(the download is still TLS-verified)")
+        endif()
+    endif()
+    if(_vitaabs_have_mbedcrypto)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE VITAABS_HAVE_MBEDCRYPTO=1)
+    endif()
+endif()
+
 if(NOT PLATFORM_SWITCH AND NOT PLATFORM_PS4 AND NOT WIN32 AND NOT PLATFORM_ANDROID)
     target_link_libraries(${PROJECT_NAME} mp3lame)
 endif()
@@ -579,6 +613,10 @@ if(PLATFORM_PSV)
 
         FILE ${BOREALIS_DIR}/resources/i18n/en-US/hints.json resources/i18n/en-US/hints.json
         FILE resources/i18n/en-US/main.json                  resources/i18n/en-US/main.json
+
+        # Mozilla CA bundle — curl's CAINFO trust anchor. Without this in the
+        # VPK, every HTTPS request fails closed (see http_client.cpp).
+        FILE resources/cacert.pem                            resources/cacert.pem
 
         FILE ${BOREALIS_DIR}/resources/img/sys/battery_back_dark.png  resources/img/sys/battery_back_dark.png
         FILE ${BOREALIS_DIR}/resources/img/sys/battery_back_light.png resources/img/sys/battery_back_light.png

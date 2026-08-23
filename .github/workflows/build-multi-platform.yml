@@ -153,6 +153,14 @@ jobs:
         env:
           FVER: ${{ needs.resolve-version.outputs.version_tag }}
         run: bash scripts/ci/rename_release_assets.sh
+      # Detached ECDSA-P256 signatures beside each asset, verified by the
+      # in-app updater before install (src/utils/update_verify.cpp). Signs
+      # into release/, which the upload step globs, so the .sig files ship
+      # automatically. No-op without the UPDATE_SIGNING_KEY secret.
+      - name: Sign release assets
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: bash scripts/ci/sign_release_assets.sh
       - name: Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
@@ -181,6 +189,14 @@ jobs:
         env:
           FVER: ${{ needs.resolve-version.outputs.version_tag }}
         run: bash scripts/ci/rename_release_assets.sh
+      # Detached ECDSA-P256 signatures beside each asset, verified by the
+      # in-app updater before install (src/utils/update_verify.cpp). Signs
+      # into release/, which the upload step globs, so the .sig files ship
+      # automatically. No-op without the UPDATE_SIGNING_KEY secret.
+      - name: Sign release assets
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: bash scripts/ci/sign_release_assets.sh
       - name: Create pre-release
         uses: softprops/action-gh-release@v2
         with:
