@@ -18,12 +18,12 @@ set -euo pipefail
 mkdir -p release
 
 # Vita VPK  (suffix: .vpk)
-for f in $(find . -name "*.vpk" -not -name "*updater*"); do
+for f in $(find . -type f -name "*.vpk" -not -name "*updater*"); do
     cp "$f" "release/VitaABS.${FVER}.vpk"
 done
 
 # Android APKs (Gradle names them VitaABS-{abi}.apk; suffix: -{abi}.apk)
-for apk in $(find . -name "*.apk"); do
+for apk in $(find . -type f -name "*.apk"); do
     abi=$(basename "$apk" .apk | sed 's/VitaABS-//')
     [ -n "$abi" ] && cp "$apk" "release/VitaABS.${FVER}-${abi}.apk"
 done
@@ -36,12 +36,19 @@ for dir in VitaABS-mingw-*; do
 done
 
 # Flatpak bundle (no updater suffix — Flathub is the update channel; the
-# bundle ships for sideloading / testing)
-flatpak_bundle=$(find . -name "*.flatpak" | head -1)
+# bundle ships for sideloading / testing).
+#
+# -type f matters here: downloading every artifact creates one DIRECTORY per
+# artifact, named after it, and the flatpak-builder action publishes its own
+# artifact called "VitaABS-x86_64.flatpak". Without -type f, find matched that
+# directory and cp bailed with "-r not specified; omitting directory". Every
+# find below is likewise restricted to regular files so an artifact directory
+# can never be mistaken for a build output.
+flatpak_bundle=$(find . -type f -name "*.flatpak" | head -1)
 [ -n "$flatpak_bundle" ] && cp "$flatpak_bundle" "release/VitaABS.${FVER}.flatpak"
 
 # AppImages: VitaABS-{arch}-{run}.AppImage (suffix contract: -{arch}.AppImage)
-for f in $(find . -name "VitaABS-*.AppImage" -not -name "appimagetool*"); do
+for f in $(find . -type f -name "VitaABS-*.AppImage" -not -name "appimagetool*"); do
     base=$(basename "$f")
     arch=$(echo "$base" | sed -E 's/VitaABS-(.+)-[0-9]+\.AppImage/\1/')
     cp "$f" "release/VitaABS.${FVER}-${arch}.AppImage"
@@ -51,16 +58,16 @@ done
 for dir in VitaABS-nx-*; do
     [ -d "$dir" ] || continue
     driver=$(echo "$dir" | sed -E 's/VitaABS-nx-([^-]+)-.*/\1/')
-    nro=$(find "$dir" -name "*.nro" | head -1)
+    nro=$(find "$dir" -type f -name "*.nro" | head -1)
     [ -n "$nro" ] && cp "$nro" "release/VitaABS.${FVER}-nx-${driver}.nro"
 done
 
 # PS4 pkg (suffix: -ps4.pkg). The build now also produces the bundled updater
 # helper pkg (VABS00003) and stages updater.pkg — the release asset must be
 # the MAIN title's pkg (VABS00002) only.
-main_pkg=$(find . -path "*ps4*" -name "*VABS00002*.pkg" | head -1)
+main_pkg=$(find . -type f -path "*ps4*" -name "*VABS00002*.pkg" | head -1)
 if [ -z "$main_pkg" ]; then
-    main_pkg=$(find . -path "*ps4*" -name "*.pkg" \
+    main_pkg=$(find . -type f -path "*ps4*" -name "*.pkg" \
         -not -name "*VABS00003*" -not -name "updater.pkg" | head -1)
 fi
 [ -n "$main_pkg" ] && cp "$main_pkg" "release/VitaABS.${FVER}-ps4.pkg"
@@ -69,18 +76,18 @@ fi
 for dir in VitaABS-macos-*; do
     [ -d "$dir" ] || continue
     tag=$(echo "$dir" | sed -E 's/VitaABS-macos-([^-]+)-.*/\1/')
-    dmg=$(find "$dir" -name "*.dmg" | head -1)
+    dmg=$(find "$dir" -type f -name "*.dmg" | head -1)
     [ -n "$dmg" ] && cp "$dmg" "release/VitaABS.${FVER}-macOS-${tag}.dmg"
 done
 
 # Deb (suffix: -Linux_{arch}.deb)
-for f in $(find . -name "*.deb"); do
+for f in $(find . -type f -name "*.deb"); do
     arch=$(dpkg-deb -f "$f" Architecture 2>/dev/null || echo "amd64")
     cp "$f" "release/VitaABS.${FVER}-Linux_${arch}.deb"
 done
 
 # AUR (suffix: -Linux.pkg.tar.zst)
-for f in $(find . -name "*.pkg.tar.zst"); do
+for f in $(find . -type f -name "*.pkg.tar.zst"); do
     cp "$f" "release/VitaABS.${FVER}-Linux.pkg.tar.zst"
 done
 
