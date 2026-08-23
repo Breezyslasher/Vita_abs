@@ -56,7 +56,8 @@
                 paddingLeft="12"
                 paddingRight="12"
                 cornerRadius="6"
-                borderThickness="1">
+                borderThickness="1"
+                focusable="true">
                 <brls:Label
                     id="player/tileLeftCaption"
                     text="SPEED"

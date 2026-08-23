@@ -202,6 +202,27 @@ void PlayerActivity::onContentAvailable() {
         return true;
     });
 
+    // The SPEED tile is the control, not just a readout: Triangle alone was
+    // not discoverable. Focusing it tints the border like the login field
+    // rows, and Cross cycles through the same 0.5x-2.0x list.
+    if (tileLeft) {
+        tileLeft->setHideHighlightBackground(true);
+        tileLeft->setHighlightCornerRadius(6.0f);
+        tileLeft->registerClickAction([this](brls::View*) {
+            cyclePlaybackSpeed();
+            return true;
+        });
+        tileLeft->addGestureRecognizer(new brls::TapGestureRecognizer(tileLeft));
+
+        brls::Box* tile = tileLeft;
+        tile->getFocusEvent()->subscribe([tile](brls::View*) {
+            tile->setBorderColor(ptok::accent());
+        });
+        tile->getFocusLostEvent()->subscribe([tile](brls::View*) {
+            tile->setBorderColor(ptok::hairline());
+        });
+    }
+
     applyThemeColors();
 
     // Initialize speed label from settings
