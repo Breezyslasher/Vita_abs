@@ -244,6 +244,13 @@ public:
     // limit caps the total number of items returned.
     bool fetchLibraryItems(const std::string& libraryId, std::vector<MediaItem>& items,
                            int page = 0, int limit = 0, const std::string& sort = "");
+    // Fetch a single page of library items. totalOut receives the server-reported
+    // total item count (-1 if the response didn't include one). rawCountOut (if
+    // non-null) receives the number of objects the server returned BEFORE any
+    // are dropped for missing id/title — use it for has-more-pages decisions.
+    bool fetchLibraryItemsPage(const std::string& libraryId, std::vector<MediaItem>& items,
+                               int page, int limit, int& totalOut,
+                               const std::string& sort = "", int* rawCountOut = nullptr);
     bool fetchLibraryPersonalized(const std::string& libraryId, std::vector<PersonalizedShelf>& shelves);
     bool fetchLibrarySeries(const std::string& libraryId, std::vector<Series>& series);
     bool fetchLibraryCollections(const std::string& libraryId, std::vector<Collection>& collections);

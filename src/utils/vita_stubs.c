@@ -70,6 +70,33 @@ int SDL_OpenURL(const char *url) {
     return -1;  /* Return error - actual implementation is in PsvPlatform */
 }
 
+/*
+ * getentropy() syscall glue.
+ *
+ * Current vitasdk newlib ships a getentropy() wrapper that calls the
+ * reentrant syscall _getentropy_r(), but nothing in the SDK defines it —
+ * mbedTLS 3.6.7 (switchfin vita-packages) calls getentropy() for its
+ * entropy source, which turned into "undefined reference to
+ * _getentropy_r" at link time. Back it with the Vita kernel RNG
+ * (sceKernelGetRandomNumber, provided by SceLibKernel_stub).
+ */
+#include <errno.h>
+#include <sys/reent.h>
+#include <psp2/kernel/rng.h>
+
+int _getentropy_r(struct _reent *reent, void *buf, size_t buflen) {
+    /* POSIX getentropy() caps requests at 256 bytes. */
+    if (buf == NULL || buflen > 256) {
+        if (reent) reent->_errno = EIO;
+        return -1;
+    }
+    if (sceKernelGetRandomNumber(buf, (unsigned int)buflen) < 0) {
+        if (reent) reent->_errno = EIO;
+        return -1;
+    }
+    return 0;
+}
+
 /* NI flags for getnameinfo (if not defined in headers) */
 #ifndef NI_NUMERICHOST
 #define NI_NUMERICHOST  0x0001

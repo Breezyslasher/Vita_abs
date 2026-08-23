@@ -29,6 +29,7 @@ on:
         - psvita
         - ps4
         - flatpak
+        - appimage
         - android
         - aur
         - deb
@@ -51,6 +52,7 @@ jobs:
       version: ${{ steps.resolve.outputs.version }}
       version_number: ${{ steps.resolve.outputs.version_number }}
       version_tag: ${{ steps.resolve.outputs.version_tag }}
+      version_code: ${{ steps.resolve.outputs.version_code }}
     steps:
       - uses: actions/checkout@v4
       - name: Resolve build version
@@ -83,12 +85,30 @@ jobs:
           fi
           # Filename/tag-safe version (spaces → hyphens)
           TAG="${V// /-}"
+
+          # Android versionCode, derived from the numeric version so it moves
+          # in lockstep with the version the in-app updater compares. It used
+          # to be github.run_number, which grows on EVERY push - so a dev
+          # build from a later run outranked a newer release, and Android
+          # refused the update as a downgrade ("App not installed") even
+          # though the updater offered it by version string. Encode
+          # major.minor.patch.build as M*10^8 + m*10^6 + p*10^4 + (build%10^4).
+          # The 10^8 base clears the old run-number codes, so a build with
+          # this scheme supersedes any run-number install without a manual
+          # reinstall; monotonic with version thereafter.
+          IFS='.' read -r VC_MAJ VC_MIN VC_PAT VC_BLD <<< "${NUM}"
+          VC_MAJ=$((10#${VC_MAJ:-0})); VC_MIN=$((10#${VC_MIN:-0}))
+          VC_PAT=$((10#${VC_PAT:-0})); VC_BLD=$((10#${VC_BLD:-0} % 10000))
+          VERSION_CODE=$((VC_MAJ*100000000 + VC_MIN*1000000 + VC_PAT*10000 + VC_BLD))
+
           echo "version=${V}" >> "$GITHUB_OUTPUT"
           echo "version_number=${NUM}" >> "$GITHUB_OUTPUT"
           echo "version_tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
           echo "Display version: ${V}"
           echo "Numeric version: ${NUM}"
           echo "Tag/filename version: ${TAG}"
+          echo "Android versionCode: ${VERSION_CODE}"
 
   # ───────────────────────────────────────────────
   # Save version override to VERSION file
@@ -118,19 +138,29 @@ jobs:
           git push
 
   upload-release:
-    needs: [ resolve-version, build-mingw, build-nx, build-macos, build-flatpak, build-aur, build-ps4, build-vita, build-android ]
+    needs: [ resolve-version, build-mingw, build-nx, build-macos, build-flatpak, build-appimage, build-aur, build-ps4, build-vita, build-android ]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     if: startsWith(github.ref, 'refs/tags/')
     steps:
+      - uses: actions/checkout@v4
       - name: Download Assets
         uses: actions/download-artifact@v4
-      - name: Package Windows assets
-        run: |
-          for p in VitaABS-windows-*; do
-            [[ -d $p ]] && 7z a -mx=9 $p.7z ./$p/* && rm -rf $p
-          done
+      # Same renaming as the pre-release job (scripts/ci/rename_release_assets.sh):
+      # the asset names are a contract with the in-app updater's assetSuffix().
+      - name: Rename artifacts for release
+        env:
+          FVER: ${{ needs.resolve-version.outputs.version_tag }}
+        run: bash scripts/ci/rename_release_assets.sh
+      # Detached ECDSA-P256 signatures beside each asset, verified by the
+      # in-app updater before install (src/utils/update_verify.cpp). Signs
+      # into release/, which the upload step globs, so the .sig files ship
+      # automatically. No-op without the UPDATE_SIGNING_KEY secret.
+      - name: Sign release assets
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: bash scripts/ci/sign_release_assets.sh
       - name: Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
@@ -138,93 +168,35 @@ jobs:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
           draft: true
-          files: |
-            VitaABS-windows-*.7z
-            VitaABS-macos-*/*
-            VitaABS-nx-*/*.nro
-            VitaABS-ps4-*/*
-            VitaABS-vita-*/*.vpk
-            VitaABS-Flatpak-*/*
-            VitaABS-aur-*/*.pkg.tar.*
-            VitaABS-android-*/*
+          files: release/*
 
   # ───────────────────────────────────────────────
   # Pre-release — manually triggered
   # ───────────────────────────────────────────────
   upload-prerelease:
-    needs: [resolve-version, build-mingw, build-nx, build-macos, build-flatpak, build-aur, build-ps4, build-vita, build-android, build-deb]
+    needs: [resolve-version, build-mingw, build-nx, build-macos, build-flatpak, build-appimage, build-aur, build-ps4, build-vita, build-android, build-deb]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     if: ${{ !cancelled() && !failure() && github.event_name == 'workflow_dispatch' && inputs.pre_release == true }}
     steps:
+      # Checkout FIRST: actions/checkout cleans the workspace, so downloading
+      # artifacts before it would delete them.
+      - uses: actions/checkout@v4
       - name: Download all artifacts
         uses: actions/download-artifact@v4
       - name: Rename artifacts for release
         env:
           FVER: ${{ needs.resolve-version.outputs.version_tag }}
-        run: |
-          mkdir -p release
-
-          # Vita VPK
-          for f in $(find . -name "*.vpk"); do
-            cp "$f" "release/VitaABS.${FVER}.vpk"
-          done
-
-          # Android APKs (Gradle names them VitaABS-{abi}.apk)
-          for apk in $(find . -name "*.apk"); do
-            abi=$(basename "$apk" .apk | sed 's/VitaABS-//')
-            [ -n "$abi" ] && cp "$apk" "release/VitaABS.${FVER}-${abi}.apk"
-          done
-
-          # Windows — zip each arch (exe + dlls + resources)
-          for dir in VitaABS-mingw-*; do
-            [ -d "$dir" ] || continue
-            arch=$(echo "$dir" | sed -E 's/VitaABS-mingw-([^-]+)-.*/\1/')
-            (cd "$dir" && zip -r "../release/VitaABS.${FVER}-windows-${arch}.zip" .)
-          done
-
-          # Flatpak tarballs
-          for tgz in $(find . -name "VitaABS-Linux-*.tar.gz"); do
-            base=$(basename "$tgz")
-            info=$(echo "$base" | sed -E 's/VitaABS-Linux-(.+)-[0-9]+\.tar\.gz/\1/')
-            cp "$tgz" "release/VitaABS.${FVER}-Flatpak-${info}.tar.gz"
-          done
-
-          # Switch NRO
-          for dir in VitaABS-nx-*; do
-            [ -d "$dir" ] || continue
-            driver=$(echo "$dir" | sed -E 's/VitaABS-nx-([^-]+)-.*/\1/')
-            nro=$(find "$dir" -name "*.nro" | head -1)
-            [ -n "$nro" ] && cp "$nro" "release/VitaABS.${FVER}-nx-${driver}.nro"
-          done
-
-          # PS4 pkg
-          for f in $(find . -path "*ps4*" -name "*.pkg"); do
-            cp "$f" "release/VitaABS.${FVER}-ps4.pkg"
-          done
-
-          # macOS DMG
-          for dir in VitaABS-macos-*; do
-            [ -d "$dir" ] || continue
-            tag=$(echo "$dir" | sed -E 's/VitaABS-macos-([^-]+)-.*/\1/')
-            dmg=$(find "$dir" -name "*.dmg" | head -1)
-            [ -n "$dmg" ] && cp "$dmg" "release/VitaABS.${FVER}-macOS-${tag}.dmg"
-          done
-
-          # Deb
-          for f in $(find . -name "*.deb"); do
-            arch=$(dpkg-deb -f "$f" Architecture 2>/dev/null || echo "amd64")
-            cp "$f" "release/VitaABS.${FVER}-Linux_${arch}.deb"
-          done
-
-          # AUR
-          for f in $(find . -name "*.pkg.tar.zst"); do
-            cp "$f" "release/VitaABS.${FVER}-Linux.pkg.tar.zst"
-          done
-
-          echo "Release files:"
-          ls -lh release/
+        run: bash scripts/ci/rename_release_assets.sh
+      # Detached ECDSA-P256 signatures beside each asset, verified by the
+      # in-app updater before install (src/utils/update_verify.cpp). Signs
+      # into release/, which the upload step globs, so the .sig files ship
+      # automatically. No-op without the UPDATE_SIGNING_KEY secret.
+      - name: Sign release assets
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: bash scripts/ci/sign_release_assets.sh
       - name: Create pre-release
         uses: softprops/action-gh-release@v2
         with:
@@ -243,31 +215,96 @@ jobs:
     name: PS Vita
     runs-on: ubuntu-latest
     container:
-      image: vitasdk/vitasdk:latest
+      # Pinned, not :latest. A rolling rebuild of :latest moved the base distro
+      # (breaking "apk add") and swapped vdpm onto pacman in the same week —
+      # both landed as build failures with no change on our side. 2026.08 is
+      # the series switchfin builds its vita-packages against, so it matches
+      # the assets below.
+      image: vitasdk/vitasdk:2026.08
 
     steps:
       - name: Install build requirements
-        run: apk update && apk add cmake ninja git zstd tar pkgconf
+        run: |
+          set -eu
+          pkgs_apk="cmake ninja git zstd tar pkgconf"
+          pkgs_apt="cmake ninja-build git zstd tar pkg-config"
+          if   command -v apk     >/dev/null 2>&1; then apk update && apk add $pkgs_apk
+          elif command -v apt-get >/dev/null 2>&1; then apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $pkgs_apt
+          elif command -v dnf     >/dev/null 2>&1; then dnf install -y cmake ninja-build git zstd tar pkgconf-pkg-config
+          elif command -v pacman  >/dev/null 2>&1; then pacman -Sy --noconfirm cmake ninja git zstd tar pkgconf
+          else echo "No supported package manager found; relying on the image's toolchain"
+          fi
+          # wget is used by the dependency step and isn't in every base.
+          if ! command -v wget >/dev/null 2>&1; then
+            if   command -v apk     >/dev/null 2>&1; then apk add wget
+            elif command -v apt-get >/dev/null 2>&1; then apt-get install -y --no-install-recommends wget
+            fi
+          fi
+          for tool in cmake ninja git wget; do
+            command -v "$tool" >/dev/null 2>&1 || { echo "::error::$tool missing after dependency install"; exit 1; }
+          done
 
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      - name: Cache Vita portlibs
+        id: cache-vita-portlibs
+        uses: actions/cache@v4
+        with:
+          path: portlib-cache
+          # The key IS the pin list, so bumping a version misses and refetches.
+          key: vita-portlibs-mbedtls-3.6.7-1_curl-8.16.0-3_ffmpeg-n6.0-3_mpv-0.36.0-3
+
       - name: Install Vita dependencies
         env:
           BASE_URL: https://github.com/dragonflylee/switchfin/releases/download/vita-packages
         run: |
+          set -eu
+          # vita-packages is ROLLING — version bumps REPLACE assets, so stale
+          # pins 404. Use *-vita.pkg.tar.xz (real pacman packages), NOT the
+          # legacy *-arm.tar.xz bare sysroots (no .PKGINFO → "invalid or
+          # corrupted package").
+          fetch() {
+            if command -v curl >/dev/null 2>&1; then
+              curl -fL --retry 4 --retry-all-errors --speed-limit 102400 --speed-time 30 -o "$2" "$1"
+            else
+              wget --tries=4 --read-timeout=30 -O "$2" "$1"
+            fi
+          }
+          mkdir -p portlib-cache
           for pkg in mbedtls-3.6.7-1 curl-8.16.0-3 ffmpeg-n6.0-3 mpv-0.36.0-3; do
-            wget "$BASE_URL/${pkg}-arm.tar.xz"
+            f="portlib-cache/${pkg}-vita.pkg.tar.xz"
+            [ -s "$f" ] || fetch "$BASE_URL/${pkg}-vita.pkg.tar.xz" "$f"
           done
-          vdpm libass harfbuzz fribidi freetype libpng libwebp $PWD/*-arm.tar.xz
+          cp portlib-cache/*-vita.pkg.tar.xz .
+
+          # VitaSDK-repo packages go in by name with vdpm; LOCAL package files
+          # must go through pacman --upgrade (vdpm-on-pacman's --sync rejects
+          # file paths). Keep a legacy vdpm fallback for pre-pacman images.
+          VDPM_NONINTERACTIVE=1 vdpm libass harfbuzz fribidi freetype libpng libwebp
+          PACMAN="${VDPM_PACMAN:-$VITASDK/bin/pacman}"
+          if [ -x "$PACMAN" ]; then
+            "$PACMAN" \
+              --config  "${VDPM_PACMAN_CONF:-$VITASDK/etc/pacman.conf}" \
+              --root    "$VITASDK" \
+              --dbpath  "$VITASDK/var/lib/pacman" \
+              --cachedir "$VITASDK/var/cache/pacman/pkg" \
+              --logfile "$VITASDK/var/log/pacman.log" \
+              --noscriptlet --noconfirm --noprogressbar \
+              --upgrade $PWD/*-vita.pkg.tar.xz
+          else
+            vdpm $PWD/*-vita.pkg.tar.xz          # legacy (pre-pacman) vdpm
+          fi
+
           git config --system --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Build
         run: |
           cmake -B build -G Ninja -DPLATFORM_PSV=ON \
-            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }}
+            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }} \
+            -DAPP_DISPLAY_VERSION="${{ needs.resolve-version.outputs.version }}"
           cmake --build build
 
       - name: Upload VPK
@@ -301,8 +338,15 @@ jobs:
         link-to-sdk: true
     - name: Install dependency
       run: |
-        sudo apt-get update
-        sudo apt-get install -y ninja-build pkg-config meson nasm make zstd
+        # Prefer the fast Azure mirror but let apt fall back to the public
+        # archive when a request Ign:/stalls (amd64 only; arm64 uses ports).
+        if [ "$(dpkg --print-architecture)" = "amd64" ] && [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+          printf 'http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttp://archive.ubuntu.com/ubuntu/\tpriority:2\n' \
+            | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          sudo sed -i 's|^URIs: .*|URIs: mirror+file:/etc/apt/apt-mirrors.txt|' /etc/apt/sources.list.d/ubuntu.sources
+        fi
+        sudo apt-get -o Acquire::Retries=3 update
+        sudo apt-get -o Acquire::Retries=3 install -y ninja-build pkg-config meson nasm make zstd
     - name: Cache depends
       id: cache-deps
       uses: actions/cache@v4
@@ -321,7 +365,7 @@ jobs:
       uses: chkfung/android-version-actions@v1.2.2
       with:
         gradlePath: app/platform/android/app/build.gradle
-        versionCode: ${{ github.run_number }}
+        versionCode: ${{ needs.resolve-version.outputs.version_code }}
         versionName: ${{ needs.resolve-version.outputs.version }}
     - name: Prepare Android sources and native dependencies
       run: |
@@ -354,7 +398,13 @@ jobs:
       # Resources are loaded via APK assets (see build.gradle syncBorealisResources).
       run: |
         ${{ github.workspace }}/lib/borealis/build_libromfs_generator.sh
-        cd app/platform/android && ./gradlew assembleRelease
+        # Forward the CI-resolved version into the native build (see
+        # build.gradle externalNativeBuild) so the in-app version matches the
+        # APK's versionName — without this the indirect Gradle->cmake build
+        # never saw -DAPP_VERSION and fell back to the on-disk default.
+        cd app/platform/android && ./gradlew assembleRelease \
+          -PappVersion="${{ needs.resolve-version.outputs.version_number }}" \
+          -PappDisplayVersion="${{ needs.resolve-version.outputs.version }}"
     - name: Upload dist
       uses: actions/upload-artifact@v4
       with:
@@ -362,19 +412,18 @@ jobs:
         path: app/platform/android/app/build/outputs/apk/release/*.apk
 
   # ───────────────────────────────────────────────
-  # Flatpak — Linux Matrix (x86_64 + aarch64, OpenGL)
+  # AppImage — self-updating Linux format (x86_64 + aarch64)
   # ───────────────────────────────────────────────
-  build-flatpak:
+  build-appimage:
     needs: [resolve-version]
-    if: ${{ inputs.platform == 'flatpak' || inputs.platform == 'all' || github.event_name != 'workflow_dispatch' }}
-    name: Flatpak (${{ matrix.arch }}-${{ matrix.driver }})
+    if: ${{ inputs.platform == 'appimage' || inputs.platform == 'all' || github.event_name != 'workflow_dispatch' }}
+    name: AppImage (${{ matrix.arch }})
     strategy:
       fail-fast: false
       matrix:
         include:
-        - { arch: x86_64, runner: ubuntu-24.04, driver: gl, gles2: "OFF" }
-        - { arch: aarch64, runner: ubuntu-24.04-arm, driver: gl, gles2: "OFF" }
-        - { arch: aarch64, runner: ubuntu-24.04-arm, driver: gles2, gles2: "ON" }
+        - { arch: x86_64, runner: ubuntu-24.04 }
+        - { arch: aarch64, runner: ubuntu-24.04-arm }
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -384,48 +433,141 @@ jobs:
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - name: Install dependencies
         run: |
-          if command -v apt-get >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends \
-              cmake ninja-build pkg-config \
-              libcurl4-openssl-dev libmbedtls-dev libmpv-dev \
-              libavcodec-dev libavformat-dev libavfilter-dev libswresample-dev libswscale-dev libavutil-dev \
-              libmp3lame-dev libass-dev libfreetype-dev libharfbuzz-dev libfribidi-dev \
-              libpng-dev libwebp-dev libzstd-dev libdbus-1-dev \
-              libwayland-dev libxkbcommon-dev xorg-dev
-          elif command -v dnf >/dev/null 2>&1; then
-            dnf install -y \
-              cmake ninja-build pkgconf-pkg-config \
-              libcurl-devel mbedtls-devel mpv-devel \
-              ffmpeg-devel lame-devel libass-devel freetype-devel harfbuzz-devel fribidi-devel \
-              libpng-devel libwebp-devel libzstd-devel dbus-devel \
-              wayland-devel libxkbcommon-devel libX11-devel libXrandr-devel libXi-devel libXinerama-devel libXcursor-devel
-          elif command -v microdnf >/dev/null 2>&1; then
-            microdnf install -y \
-              cmake ninja-build pkgconf-pkg-config \
-              libcurl-devel mbedtls-devel mpv-devel \
-              ffmpeg-devel lame-devel libass-devel freetype-devel harfbuzz-devel fribidi-devel \
-              libpng-devel libwebp-devel libzstd-devel dbus-devel \
-              wayland-devel libxkbcommon-devel libX11-devel libXrandr-devel libXi-devel libXinerama-devel libXcursor-devel
-          elif command -v apk >/dev/null 2>&1; then
-            apk add --no-cache \
-              cmake ninja pkgconf \
-              curl-dev mbedtls-dev mpv-dev ffmpeg-dev lame-dev libass-dev freetype-dev harfbuzz-dev fribidi-dev \
-              libpng-dev libwebp-dev zstd-dev dbus-dev wayland-dev libxkbcommon-dev libx11-dev libxrandr-dev libxi-dev libxinerama-dev libxcursor-dev
-          else
-            echo "No supported package manager found; assuming container image already has required build dependencies"
-          fi
-      - name: Build desktop target in flatpak container
+          sudo apt-get -o Acquire::Retries=3 update
+          # librtmp1 / libssh-gcrypt-4 are Recommends (not Depends) of
+          # libavformat on Ubuntu 24.04 — without them ldd of the build's
+          # libavformat reports "librtmp.so.1 => not found" and the bundling
+          # loop below fails (and Steam Deck would fail the same way at
+          # launch). Pull them in explicitly so they get bundled.
+          sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+            cmake ninja-build pkg-config patchelf \
+            libcurl4-openssl-dev libmbedtls-dev libmpv-dev \
+            libavcodec-dev libavformat-dev libavfilter-dev libswresample-dev libswscale-dev libavutil-dev \
+            libmp3lame-dev libass-dev libfreetype-dev libharfbuzz-dev libfribidi-dev \
+            libpng-dev libwebp-dev libzstd-dev libdbus-1-dev \
+            librtmp1 libssh-gcrypt-4 \
+            libwayland-dev libxkbcommon-dev xorg-dev
+      - name: Build and bundle
         run: |
-          cmake -B build -G Ninja -DPLATFORM_DESKTOP=ON -DUSE_GLES2=${{ matrix.gles2 }} \
-            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }}
+          cmake -B build -G Ninja -DPLATFORM_DESKTOP=ON \
+            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }} \
+            -DAPP_DISPLAY_VERSION="${{ needs.resolve-version.outputs.version }}"
           cmake --build build
-          tar -czf VitaABS-Linux-${{ matrix.arch }}-${{ matrix.driver }}-${{ github.run_number }}.tar.gz -C build VitaABS resources
+
+          # Bundle libmpv and every other non-system shared dep next to the
+          # binary so distros that don't ship them (SteamOS, Bazzite, …) can
+          # still launch it. Base-system libs (glibc, libstdc++, the OpenGL
+          # stack, Wayland/X11, the loader) stay with the distro — shipping an
+          # old glibc next to a newer host glibc is the classic startup crash.
+          BUNDLE_DIR=build/lib
+          mkdir -p "$BUNDLE_DIR"
+          # `[-.]` after the prefix matches libwayland-client.so.0 (hyphen)
+          # and libwayland.so.0 (dot) without catching e.g. libcurl for libc.
+          EXCLUDE='^(/lib(64)?/ld-|.*/(libc|libm|libpthread|libdl|librt|libresolv|libutil|libnsl|libstdc\+\+|libgcc_s|libGL|libGLX|libEGL|libGLdispatch|libGLESv|libOpenGL|libvulkan|libX11|libxcb|libXext|libXrandr|libXi|libXinerama|libXcursor|libXrender|libXfixes|libwayland|libxkbcommon|libdbus|libsystemd|libudev|libdrm|libgbm)[-.]|linux-vdso\.so)'
+
+          # Fixed-point walk: bundle the binary's deps, then each bundled
+          # lib's deps too, until nothing new lands. Fail loudly on any
+          # "not found" — the runtime loader would hit the same gap.
+          declare -A bundled
+          UNRESOLVED=""
+          walk_deps() {
+            local target="$1"
+            while IFS= read -r raw; do
+              local needed path
+              needed=$(echo "$raw" | awk '{print $1}')
+              path=$(echo "$raw" | awk '{print $3}')
+              if [ "$path" = "not" ]; then
+                UNRESOLVED+="${needed} (needed by $(basename "$target"))"$'\n'
+                continue
+              fi
+              [[ -z "$path" || ! -f "$path" ]] && continue
+              [[ "$path" =~ $EXCLUDE ]] && continue
+              local name; name=$(basename "$path")
+              if [ -z "${bundled[$name]+x}" ]; then
+                cp -L "$path" "$BUNDLE_DIR/"
+                bundled[$name]=1
+                walk_deps "$BUNDLE_DIR/$name"
+              fi
+            done < <(ldd "$target" 2>/dev/null | awk '/=>/')
+          }
+          walk_deps build/VitaABS
+
+          echo "Bundled libraries:"; ls -la "$BUNDLE_DIR" || true
+          if [ -n "$UNRESOLVED" ]; then
+            echo "::error::ldd reported unresolved dependencies on the build host"
+            printf '%s' "$UNRESOLVED"
+            exit 1
+          fi
+
+          # RPATH: the binary looks in $ORIGIN/lib first; every bundled lib
+          # gets RPATH=$ORIGIN too, because DT_RUNPATH only resolves DIRECT
+          # deps — libavformat wouldn't find the bundled librtmp otherwise.
+          patchelf --set-rpath '$ORIGIN/../lib' build/VitaABS
+          for so in "$BUNDLE_DIR"/*.so*; do
+            [ -f "$so" ] || continue
+            patchelf --set-rpath '$ORIGIN' "$so" 2>/dev/null || true
+          done
+      - name: Package AppImage
+        run: |
+          APPDIR=AppDir
+          rm -rf "$APPDIR"
+          mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/lib" "$APPDIR/usr/share/VitaABS"
+          cp build/VitaABS "$APPDIR/usr/bin/VitaABS"
+          cp -a build/lib/. "$APPDIR/usr/lib/"
+          cp -r build/resources "$APPDIR/usr/share/VitaABS/resources"
+          printf '%s\n' '#!/bin/sh' \
+            'HERE="$(dirname "$(readlink -f "$0")")"' \
+            'cd "$HERE/usr/share/VitaABS" || exit 1' \
+            'exec "$HERE/usr/bin/VitaABS" "$@"' > "$APPDIR/AppRun"
+          chmod +x "$APPDIR/AppRun"
+          printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=VitaABS' \
+            'Comment=Audiobookshelf client' 'Exec=VitaABS' 'Icon=VitaABS' \
+            'Terminal=false' 'Categories=AudioVideo;Audio;Player;Network;' > "$APPDIR/VitaABS.desktop"
+          cp app/platform/icon_desktop.png "$APPDIR/VitaABS.png"
+          curl -fsSL "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${{ matrix.arch }}.AppImage" -o appimagetool
+          chmod +x appimagetool
+          ARCH=${{ matrix.arch }} ./appimagetool --appimage-extract-and-run "$APPDIR" \
+            "VitaABS-${{ matrix.arch }}-${{ github.run_number }}.AppImage"
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VitaABS-appimage-${{ matrix.arch }}-${{ github.run_number }}
+          path: VitaABS-${{ matrix.arch }}-${{ github.run_number }}.AppImage
+
+  # ───────────────────────────────────────────────
+  # Flatpak — org.freedesktop.Platform 24.08 (Flathub target)
+  # ───────────────────────────────────────────────
+  build-flatpak:
+    needs: [resolve-version]
+    if: ${{ inputs.platform == 'flatpak' || inputs.platform == 'all' || github.event_name != 'workflow_dispatch' }}
+    name: Flatpak
+    runs-on: ubuntu-24.04
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:freedesktop-24.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      # The manifest is static YAML and can't see CI variables, and
+      # flatpak-builder builds the app module from the checkout (source type:
+      # dir) — so stamp the resolved version into VERSION and let the module's
+      # cmake pick it up through the file fallback. Changing VERSION changes
+      # the dir-source hash, so only the app module rebuilds; the cached
+      # mpv/deps modules are untouched.
+      - name: Stamp the CI-resolved version into VERSION
+        run: echo "${{ needs.resolve-version.outputs.version }}" > VERSION
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: VitaABS.flatpak
+          manifest-path: flatpak/io.github.breezyslasher.VitaABS.yaml
+          cache-key: flatpak-builder-${{ hashFiles('flatpak/io.github.breezyslasher.VitaABS.yaml') }}
       - name: Upload Flatpak artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VitaABS-Flatpak-${{ matrix.arch }}-${{ matrix.driver }}-${{ github.run_number }}
-          path: VitaABS-Linux-${{ matrix.arch }}-${{ matrix.driver }}-${{ github.run_number }}.tar.gz
+          name: VitaABS-flatpak-${{ github.run_number }}
+          path: VitaABS.flatpak
 
   # ───────────────────────────────────────────────
   # Nintendo Switch — Matrix (opengl + deko3d)
@@ -447,27 +589,54 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Cache Switch portlibs
+        uses: actions/cache@v4
+        with:
+          path: portlib-cache
+          # Full pin list, incl. the per-leg mpv package, IS the key.
+          key: switch-portlibs-hacBrewPack-3.05-1_libuam-master-1_dav1d-1.5.3-1_mbedtls-3.6.7-1_libssh2-1.11.1-1_ffmpeg-7.1.5-5_uchardet-0.0.8-1_${{ matrix.mpv_pkg }}
+
       - name: Install switchfin portlibs
         run: |
           BASE_URL="https://github.com/dragonflylee/switchfin/releases/download/switch-portlibs"
+          set -eu
+          fetch() { curl -fL --retry 4 --retry-all-errors --speed-limit 102400 --speed-time 30 -o "$2" "$1"; }
+          mkdir -p portlib-cache
+          # FFmpeg ABI must match mpv: switchfin's switch-libmpv-0.36.0-5 was
+          # built against switch-ffmpeg-7.1.5-5 (libavcodec 61.19.101), while
+          # devkitPro's own FFmpeg is 61.19.100 — linking mpv against the
+          # mismatched FFmpeg builds green and null-derefs the moment playback
+          # touches libav*. Pull the WHOLE mpv → ffmpeg → tls stack (ffmpeg +
+          # mbedtls + libssh2) plus uchardet (an mpv 0.36.0-5 dependency) from
+          # switchfin so it's ABI-consistent.
+          for pkg in hacBrewPack-3.05-1-x86_64.pkg.tar.zst \
+                     libuam-master-1-any.pkg.tar.zst \
+                     switch-dav1d-1.5.3-1-any.pkg.tar.zst \
+                     switch-mbedtls-3.6.7-1-any.pkg.tar.zst \
+                     switch-libssh2-1.11.1-1-any.pkg.tar.zst \
+                     switch-ffmpeg-7.1.5-5-any.pkg.tar.zst \
+                     switch-uchardet-0.0.8-1-any.pkg.tar.zst \
+                     ${{ matrix.mpv_pkg }}; do
+            [ -s "portlib-cache/$pkg" ] || fetch "$BASE_URL/$pkg" "portlib-cache/$pkg"
+          done
+          # Remove any pre-installed mpv so our pinned one wins, then install
+          # all local files at once (dependency-consistent).
           dkp-pacman --noconfirm -Rdd switch-libmpv || true
           dkp-pacman --noconfirm -Rdd switch-libmpv-deko3d || true
-          dkp-pacman --noconfirm -U \
-            $BASE_URL/hacBrewPack-3.05-1-x86_64.pkg.tar.zst \
-            $BASE_URL/libuam-master-1-any.pkg.tar.zst \
-            $BASE_URL/switch-dav1d-1.5.3-1-any.pkg.tar.zst \
-            $BASE_URL/${{ matrix.mpv_pkg }}
+          dkp-pacman --noconfirm -U portlib-cache/*.pkg.tar.zst
       - name: Build
         run: |
           cmake -B build -G Ninja \
             -DPLATFORM_SWITCH=ON \
             -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }} \
+            -DAPP_DISPLAY_VERSION="${{ needs.resolve-version.outputs.version }}" \
             ${{ matrix.cmake_extra }}
           cmake --build build
       - name: Upload NRO
         uses: actions/upload-artifact@v4
         with:
-          name: VitaABS-Switch-${{ matrix.driver }}-${{ github.run_number }}
+          # Named VitaABS-nx-… because the release jobs collect VitaABS-nx-*
+          name: VitaABS-nx-${{ matrix.driver }}-${{ github.run_number }}
           path: build/VitaABS.nro
 
   # ───────────────────────────────────────────────
@@ -484,19 +653,38 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Cache PS4 portlibs
+        uses: actions/cache@v4
+        with:
+          path: portlib-cache
+          # Key IS the pin list → a version bump misses and refetches.
+          key: ps4-portlibs-musl-1.5-3_mbedtls-2.28.10-2_sdl2-2.0.18-19_libcurl-7.80.0-5
+
       - name: Install PS4 portlibs
         env:
           BASE_URL: https://github.com/dragonflylee/switchfin/releases/download/pacbrew
         run: |
+          set -eu
+          fetch() {
+            curl -fL --retry 4 --retry-all-errors \
+                 --speed-limit 102400 --speed-time 30 -o "$2" "$1"
+          }
+          mkdir -p portlib-cache
+          # NOTE: mbedtls 2.28.x / sdl2 2.0.18 are DELIBERATE — that's what
+          # OpenOrbis/pacbrew provides; don't "upgrade" them to match other
+          # platforms. Assets are ps4-openorbis-<pkg>-any.pkg.tar.gz (gzip).
           for pkg in musl-1.5-3 mbedtls-2.28.10-2 sdl2-2.0.18-19 libcurl-7.80.0-5; do
-            pacman --noconfirm -U "$BASE_URL/ps4-openorbis-${pkg}-any.pkg.tar.gz"
+            f="portlib-cache/ps4-openorbis-${pkg}-any.pkg.tar.gz"
+            [ -s "$f" ] || fetch "$BASE_URL/ps4-openorbis-${pkg}-any.pkg.tar.gz" "$f"
           done
+          pacman --noconfirm -U portlib-cache/*.pkg.tar.gz   # local files → -U
       - name: Build
         env:
           OPENORBIS: /opt/pacbrew/ps4/openorbis
         run: |
           cmake -B build -DPLATFORM_PS4=ON \
-            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }}
+            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }} \
+            -DAPP_DISPLAY_VERSION="${{ needs.resolve-version.outputs.version }}"
           cmake --build build
       - name: Upload PS4 artifacts
         uses: actions/upload-artifact@v4
@@ -532,7 +720,8 @@ jobs:
           cmake -B build -G Ninja -DPLATFORM_DESKTOP=ON \
             -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ matrix.target }} \
-            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }}
+            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }} \
+            -DAPP_DISPLAY_VERSION="${{ needs.resolve-version.outputs.version }}"
           cmake --build build
       - name: Bundle macOS dylibs
         run: |
@@ -696,7 +885,8 @@ jobs:
       - name: Build
         run: |
           cmake -B build -G Ninja -DPLATFORM_DESKTOP=ON -DUSE_SYSTEM_GLFW=ON -DUSE_D3D11=ON \
-            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }}
+            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }} \
+            -DAPP_DISPLAY_VERSION="${{ needs.resolve-version.outputs.version }}"
           cmake --build build
       - name: Bundle runtime DLLs
         run: |
@@ -772,7 +962,8 @@ jobs:
       - name: Build
         run: |
           cmake -B build -G Ninja -DPLATFORM_DESKTOP=ON \
-            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }}
+            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }} \
+            -DAPP_DISPLAY_VERSION="${{ needs.resolve-version.outputs.version }}"
           cmake --build build
           PKGROOT="pkgroot"
           rm -rf "$PKGROOT"
@@ -790,11 +981,11 @@ jobs:
             echo '[Desktop Entry]'
             echo 'Type=Application'
             echo 'Name=VitaABS'
-            echo 'Comment=Suwayomi desktop client'
+            echo 'Comment=Audiobookshelf client'
             echo 'Exec=VitaABS'
             echo 'Icon=VitaABS'
             echo 'Terminal=false'
-            echo 'Categories=Network;Utility;'
+            echo 'Categories=AudioVideo;Audio;Player;Network;'
           } > "$PKGROOT/usr/share/applications/VitaABS.desktop"
           ARCH="$(dpkg --print-architecture)"
           {
@@ -838,7 +1029,8 @@ jobs:
       - name: Build
         run: |
           cmake -B build -G Ninja -DPLATFORM_DESKTOP=ON \
-            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }}
+            -DAPP_VERSION=${{ needs.resolve-version.outputs.version_number }} \
+            -DAPP_DISPLAY_VERSION="${{ needs.resolve-version.outputs.version }}"
           cmake --build build
           tar --zstd -cf VitaABS-${{ github.run_number }}.pkg.tar.zst -C build VitaABS resources
       - name: Upload aur artifact

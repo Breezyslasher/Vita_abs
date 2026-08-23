@@ -73,11 +73,31 @@ endif()
 # Project (after toolchain so cross-compilers are in effect)
 # Pass -DAPP_VERSION=X.Y.Z from CI to override the default.
 # ---------------------------------------------------------------------------
-if(NOT DEFINED APP_VERSION)
-    set(APP_VERSION "1.0.0")
+if(NOT DEFINED APP_VERSION OR APP_VERSION STREQUAL "")
+    # Local-dev fallback ONLY: CI always passes -DAPP_VERSION. Indirect
+    # builders (Gradle, flatpak-builder) forward it too — Gradle via project
+    # properties, Flatpak by stamping this file before the build.
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
+        file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" APP_VERSION)
+        string(STRIP "${APP_VERSION}" APP_VERSION)
+    else()
+        set(APP_VERSION "0.0.0")
+    endif()
+endif()
+# The human-readable version shown in Settings and the updater UI. CI passes
+# the labeled form (e.g. "Beta 2.0.0"); it defaults to APP_VERSION so local
+# builds still show something sensible.
+if(NOT DEFINED APP_DISPLAY_VERSION OR APP_DISPLAY_VERSION STREQUAL "")
+    set(APP_DISPLAY_VERSION "${APP_VERSION}")
 endif()
 string(REGEX REPLACE "^v" "" APP_VERSION "${APP_VERSION}")
-project(VitaABS VERSION ${APP_VERSION} LANGUAGES C CXX)
+# project(VERSION) only accepts numeric X[.Y[.Z[.W]]] — extract it from
+# whatever APP_VERSION carries (labels, build suffixes).
+string(REGEX MATCH "[0-9]+(\\.[0-9]+)*" APP_NUMERIC_VERSION "${APP_VERSION}")
+if(NOT APP_NUMERIC_VERSION)
+    set(APP_NUMERIC_VERSION "0.0.0")
+endif()
+project(VitaABS VERSION ${APP_NUMERIC_VERSION} LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -101,7 +121,7 @@ set(APP_SFO_VERSION "${_SFO_MAJOR}.${_SFO_MINOR}")
 # ---------------------------------------------------------------------------
 if(PLATFORM_PSV)
     set(VITA_APP_NAME "VitaABS")
-    set(VITA_TITLEID  "VSWY00001")
+    set(VITA_TITLEID  "VABS00001")
     set(VITA_VERSION  "${APP_SFO_VERSION}")
     set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d PARENTAL_LEVEL=1 -d ATTRIBUTE2=12")
 endif()
@@ -118,6 +138,46 @@ if(PLATFORM_PSV)
     else()
         message(FATAL_ERROR "Patch file not found: ${PSV_PLATFORM_PATCH}")
     endif()
+endif()
+
+# Borealis fontstash patch (all platforms): caches per-glyph-pair kerning
+# advances so text layout doesn't walk the font's GPOS table for every
+# character every frame. Purely additive to the bundled copy.
+set(FONTSTASH_PATCH  ${CMAKE_CURRENT_SOURCE_DIR}/patches/fontstash.h)
+set(FONTSTASH_TARGET ${BOREALIS_LIBRARY}/include/borealis/extern/nanovg/fontstash.h)
+if(EXISTS ${FONTSTASH_PATCH})
+    message(STATUS "Applying patch: fontstash.h")
+    configure_file(${FONTSTASH_PATCH} ${FONTSTASH_TARGET} COPYONLY)
+else()
+    message(FATAL_ERROR "Patch file not found: ${FONTSTASH_PATCH}")
+endif()
+
+# Borealis hints.json patch (all platforms): borealis 0bbc4222's new soft
+# keyboard (EditTextDialog) registers a password show/hide action labelled
+# "hints/password"_i18n, but that key is missing from borealis's own
+# hints.json — and its i18n falls back to printing the raw key name, so the
+# login password field showed a literal "hints/password". Ship the file with
+# the key added. Every platform copies borealis's i18n dir, so patching the
+# source file fixes them all without per-platform resource wiring.
+set(HINTS_PATCH  ${CMAKE_CURRENT_SOURCE_DIR}/patches/hints.json)
+set(HINTS_TARGET ${BOREALIS_DIR}/resources/i18n/en-US/hints.json)
+if(EXISTS ${HINTS_PATCH})
+    message(STATUS "Applying patch: hints.json")
+    configure_file(${HINTS_PATCH} ${HINTS_TARGET} COPYONLY)
+else()
+    message(FATAL_ERROR "Patch file not found: ${HINTS_PATCH}")
+endif()
+
+# Borealis nanovg patch (all platforms): adds nvgTextBatchBegin/End so a run of
+# nvgText calls sharing identical state flush as a single render call. Used by
+# RecyclingGrid's batched title drawing. Purely additive to the bundled copy.
+set(NANOVG_PATCH  ${CMAKE_CURRENT_SOURCE_DIR}/patches/nanovg.c)
+set(NANOVG_TARGET ${BOREALIS_LIBRARY}/lib/extern/nanovg/nanovg.c)
+if(EXISTS ${NANOVG_PATCH})
+    message(STATUS "Applying patch: nanovg.c")
+    configure_file(${NANOVG_PATCH} ${NANOVG_TARGET} COPYONLY)
+else()
+    message(FATAL_ERROR "Patch file not found: ${NANOVG_PATCH}")
 endif()
 
 add_subdirectory(${BOREALIS_LIBRARY})
@@ -158,11 +218,25 @@ set(APP_SOURCES
     src/utils/http_client.cpp
     src/utils/image_loader.cpp
     src/utils/audio_utils.cpp
+    src/utils/app_update.cpp
+    src/utils/update_verify.cpp
 )
 
 # vita_stubs.c only needed on Vita (no-op stdio locks, SDL_OpenURL stub)
 if(PLATFORM_PSV)
     list(APPEND APP_SOURCES src/utils/vita_stubs.c)
+    # In-app self-update: unzip the downloaded VPK (miniz, sceIo-backed) and
+    # promote it in place via ScePromoterUtility (utils/vita_install).
+    list(APPEND APP_SOURCES src/utils/vita_install.cpp lib/miniz/miniz.c)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib/miniz)
+    # miniz without stdio/time: newlib's fopen64/stat64/utime are absent on
+    # Vita, so vita_install.cpp drives it through sceIo callbacks instead.
+    add_definitions(-DMINIZ_NO_STDIO -DMINIZ_NO_TIME)
+endif()
+
+# PS4 in-app self-update: BGFT pkg install + updater-helper management
+if(PLATFORM_PS4)
+    list(APPEND APP_SOURCES src/utils/ps4_install.cpp)
 endif()
 
 # Switch: userAppInit/userAppExit (romfs, sockets, system services init)
@@ -228,7 +302,13 @@ endif()
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     VITAABS_VERSION=\"${APP_VERSION}\"
+    VITAABS_DISPLAY_VERSION=\"${APP_DISPLAY_VERSION}\"
 )
+
+# Switch deko3d builds download the matching NRO variant in the in-app updater
+if(PLATFORM_SWITCH AND USE_DEKO3D)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VITAABS_NRO_DEKO3D)
+endif()
 
 # ---------------------------------------------------------------------------
 # Link libraries
@@ -267,6 +347,19 @@ else()
     )
     if(APPLE OR PLATFORM_PS4)
         set(APP_FFMPEG_LINK_BLOCK ${APP_FFMPEG_LIBS})
+    elseif(PLATFORM_SWITCH)
+        # switchfin's switch-ffmpeg is built WITH the mbedtls (rtmp/tls) and
+        # libssh2 (sftp) protocols, so libavformat.a pulls in mbedtls_* /
+        # psa_crypto_init / libssh2_* symbols that devkitPro's lighter ffmpeg
+        # didn't. Put ssh2 + mbedtls inside the SAME --start-group as ffmpeg so
+        # the one-pass static linker resolves the cross-references (ffmpeg ↔
+        # libssh2 ↔ mbedtls); listing mbedtls only in APP_NETWORK_LIBS (before
+        # ffmpeg) left those refs undefined.
+        set(APP_FFMPEG_LINK_BLOCK
+            -Wl,--start-group
+            ${APP_FFMPEG_LIBS}
+            ssh2 mbedtls mbedx509 mbedcrypto z
+            -Wl,--end-group)
     else()
         set(APP_FFMPEG_LINK_BLOCK -Wl,--start-group ${APP_FFMPEG_LIBS} -Wl,--end-group)
     endif()
@@ -315,7 +408,11 @@ set(APP_NETWORK_LIBS
     curl
 )
 
-if(NOT WIN32)
+# Switch is excluded HERE on purpose: its ffmpeg ALSO needs mbedtls, so
+# mbedtls is placed inside the ffmpeg --start-group (after curl) instead —
+# listing it here too would let CMake de-duplicate the in-group copy and
+# re-break the static link order (ffmpeg's mbedtls refs going undefined).
+if(NOT WIN32 AND NOT PLATFORM_SWITCH)
     list(APPEND APP_NETWORK_LIBS
         mbedtls
         mbedx509
@@ -330,6 +427,39 @@ target_link_libraries(${PROJECT_NAME}
     ${APP_FFMPEG_LINK_BLOCK}
     ${APP_RENDER_LIBS}
 )
+
+# Update-signature verification (src/utils/update_verify.cpp) uses mbedcrypto,
+# which is linked on every target that installs updates in place: the consoles
+# (Switch gets it via the ffmpeg --start-group above), Android and desktop
+# Linux/macOS. Windows (Schannel, no mbedcrypto) compiles the stub instead and
+# leans on its verified TLS transport.
+if(NOT WIN32)
+    set(_vitaabs_have_mbedcrypto TRUE)
+    if(APPLE)
+        # update_verify.cpp is the ONLY desktop source that includes mbedtls
+        # headers, and Homebrew keeps them in a keg dir (mbedtls is keg-only)
+        # outside the include prefix the other libs use. Locate the header dir
+        # and add it (plus the matching keg lib dir); if it can't be found,
+        # fall back to the stub rather than fail the build — the macOS download
+        # is still TLS-verified, so this only drops the extra check.
+        find_path(MBEDTLS_INCLUDE_DIR mbedtls/sha256.h
+            HINTS /opt/homebrew/include /usr/local/include
+                  /opt/homebrew/opt/mbedtls/include /usr/local/opt/mbedtls/include)
+        if(MBEDTLS_INCLUDE_DIR)
+            target_include_directories(${PROJECT_NAME} PRIVATE "${MBEDTLS_INCLUDE_DIR}")
+            target_link_directories(${PROJECT_NAME} PRIVATE
+                /opt/homebrew/opt/mbedtls/lib /usr/local/opt/mbedtls/lib)
+        else()
+            set(_vitaabs_have_mbedcrypto FALSE)
+            message(WARNING "mbedtls headers not found — update signature "
+                            "verification disabled on this macOS build "
+                            "(the download is still TLS-verified)")
+        endif()
+    endif()
+    if(_vitaabs_have_mbedcrypto)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE VITAABS_HAVE_MBEDCRYPTO=1)
+    endif()
+endif()
 
 if(NOT PLATFORM_SWITCH AND NOT PLATFORM_PS4 AND NOT WIN32 AND NOT PLATFORM_ANDROID)
     target_link_libraries(${PROJECT_NAME} mp3lame)
@@ -389,7 +519,10 @@ if(PLATFORM_PSV)
         SceAudio_stub
         SceVshBridge_stub
         SceAppMgr_stub
-    
+        # In-app self-update promoter (utils/vita_install)
+        ScePromoterUtil_stub
+        SceSysmodule_stub
+
         # Standard libraries last
         z
         c
@@ -399,6 +532,13 @@ elseif(PLATFORM_SWITCH)
 elseif(PLATFORM_PS4)
     target_link_libraries(${PROJECT_NAME}
         SceNet
+        # In-app self-update (utils/ps4_install): BGFT registers the PKG
+        # with the system installer, AppInstUtil uninstalls the old title
+        # (+ SceUserService for AppInstUtil's user context).
+        SceBgft
+        SceAppInstUtil
+        SceUserService
+        SceSystemService
     )
 elseif(PLATFORM_DESKTOP)
     find_package(Threads REQUIRED)
@@ -412,11 +552,58 @@ endif()
 # Platform packaging / post-build
 # ---------------------------------------------------------------------------
 if(PLATFORM_PSV)
+    # ── Updater stub (self-update helper) ───────────────────────────────
+    # A second, tiny Vita app with its own title id (VABSUPD01). VitaABS
+    # cannot promote over itself — the installer returns 0x80101114 "in
+    # use" for the running title — so at update time VitaABS installs and
+    # launches this stub; with VitaABS now closed, the stub promotes the
+    # downloaded VPK and relaunches VitaABS. This is the AutoPlugin2
+    # technique. It shares the extract/promote code (utils/vita_install),
+    # which is deliberately free of borealis/fmt so the stub links without
+    # the UI stack. The stub's own .vpk is bundled inside VitaABS.vpk
+    # (as updater.vpk) so VitaABS can install it on demand.
+    add_executable(vitaabs_updater
+        src/updater_stub/main.cpp
+        src/utils/vita_install.cpp
+        lib/miniz/miniz.c)
+    target_include_directories(vitaabs_updater PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/lib/miniz)
+    target_compile_definitions(vitaabs_updater PRIVATE __PSV__ MINIZ_NO_STDIO MINIZ_NO_TIME)
+    target_link_libraries(vitaabs_updater
+        mbedcrypto            # mbedtls_sha1 for the fpkg hmac
+        # vita2d + its stack, for the tiny progress screen (system PGF font).
+        vita2d
+        freetype
+        png
+        z
+        SceGxm_stub
+        SceDisplay_stub
+        SceCommonDialog_stub
+        ScePgf_stub
+        SceCtrl_stub
+        # self-update + relaunch
+        ScePromoterUtil_stub
+        SceSysmodule_stub
+        SceAppMgr_stub
+        SceIofilemgr_stub
+        SceLibKernel_stub)
+    vita_create_self(vitaabs_updater.self vitaabs_updater UNSAFE NOASLR)
+    # No FILE args: vita_create_vpk accumulates them in a variable it does
+    # not clear between calls, so any file listed here would leak into the
+    # main VitaABS.vpk below and get packed twice. The stub is headless.
+    vita_create_vpk(vitaabs_updater.vpk VABSUPD01 vitaabs_updater.self
+        VERSION 01.00
+        NAME "VitaABS Updater")
+
     vita_create_self(${PROJECT_NAME}.self ${PROJECT_NAME} UNSAFE NOASLR)
 
     vita_create_vpk(${PROJECT_NAME}.vpk ${VITA_TITLEID} ${PROJECT_NAME}.self
         VERSION ${VITA_VERSION}
         NAME    ${VITA_APP_NAME}
+
+        # The bundled updater stub, installed + launched at self-update
+        FILE ${CMAKE_BINARY_DIR}/vitaabs_updater.vpk updater.vpk
 
         FILE app/platform/psv/sce_sys/icon0.png                      sce_sys/icon0.png
         FILE app/platform/psv/sce_sys/pic0.png                       sce_sys/pic0.png
@@ -426,6 +613,10 @@ if(PLATFORM_PSV)
 
         FILE ${BOREALIS_DIR}/resources/i18n/en-US/hints.json resources/i18n/en-US/hints.json
         FILE resources/i18n/en-US/main.json                  resources/i18n/en-US/main.json
+
+        # Mozilla CA bundle — curl's CAINFO trust anchor. Without this in the
+        # VPK, every HTTPS request fails closed (see http_client.cpp).
+        FILE resources/cacert.pem                            resources/cacert.pem
 
         FILE ${BOREALIS_DIR}/resources/img/sys/battery_back_dark.png  resources/img/sys/battery_back_dark.png
         FILE ${BOREALIS_DIR}/resources/img/sys/battery_back_light.png resources/img/sys/battery_back_light.png
@@ -516,7 +707,7 @@ elseif(PLATFORM_PS4)
         add_self(${PROJECT_NAME})
         add_pkg(${PROJECT_NAME}
             ${CMAKE_BINARY_DIR}/ps4
-            "VSWY00002"
+            "VABS00002"
             "VitaABS"
             "${APP_SFO_VERSION}"
             # https://psdevwiki.com/ps4/param.sfo#ATTRIBUTE - Support PS4 Pro
@@ -535,6 +726,72 @@ elseif(PLATFORM_PS4)
         COMMAND "${CMAKE_COMMAND}" -E copy_directory ${BOREALIS_DIR}/resources/img ${CMAKE_BINARY_DIR}/ps4/resources/img
     )
     add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}.data)
+
+    # ── PS4 updater helper (self-update) ────────────────────────────────
+    # A second, tiny PS4 app with its own title id (VABS00003). VitaABS
+    # cannot replace itself in place: BGFT installs into the running
+    # /user/app/VABS00002 (locked), the installer returns 0x80990088
+    # "already installed", and uninstalling the running title just kills the
+    # process. So at update time VitaABS launches this helper and quits;
+    # with VitaABS closed the helper uninstalls VABS00002 and hands the
+    # downloaded pkg to the system installer (BGFT), which finishes in the
+    # background. Shipped as its own pkg, installed once (like the Vita
+    # updater stub VABSUPD01). It has no UI, so it needs only the borealis
+    # PS4 base (sce_module + sce_sys) — no app resources.
+    if(PS4)
+        add_executable(vitaabs_updater_ps4 src/updater_ps4/main.cpp)
+        target_compile_definitions(vitaabs_updater_ps4 PRIVATE __PS4__)
+        # stb_image (vendored with borealis's nanovg) decodes the app icon for
+        # the helper's progress screen — it links no other image/font code.
+        target_include_directories(vitaabs_updater_ps4 PRIVATE
+            ${BOREALIS_LIBRARY}/include/borealis/extern/nanovg)
+        # SDL2 is required at RUNTIME, not just to link: the helper calls
+        # SDL_Init(SDL_INIT_VIDEO) before touching any system service, exactly
+        # as borealis's Ps4Platform does. Without that call every privileged
+        # call faults. Plus the libs whose functions the helper calls: BGFT +
+        # AppInstUtil (+ SceUserService for AppInstUtil's user context).
+        if(NOT TARGET SDL2::SDL2-static)
+            find_package(SDL2 REQUIRED)
+        endif()
+        target_link_libraries(vitaabs_updater_ps4
+            SceBgft SceAppInstUtil SceUserService SceSystemService SDL2::SDL2-static)
+        add_custom_target(vitaabs_updater_ps4.data
+            COMMAND "${CMAKE_COMMAND}" -E copy_directory
+                ${BOREALIS_DIR}/ps4 ${CMAKE_BINARY_DIR}/ps4_updater
+            COMMAND "${CMAKE_COMMAND}" -E copy_directory
+                ${CMAKE_SOURCE_DIR}/app/platform/ps4 ${CMAKE_BINARY_DIR}/ps4_updater
+            # The progress screen's artwork must be a PLAIN file: sce_sys is the
+            # package metadata dir, so sce_sys/icon0.png is consumed by the pkg
+            # tool and cannot be opened at runtime.
+            COMMAND "${CMAKE_COMMAND}" -E copy
+                ${CMAKE_SOURCE_DIR}/app/platform/ps4/sce_sys/icon0.png
+                ${CMAKE_BINARY_DIR}/ps4_updater/updater_icon.png
+        )
+        add_dependencies(vitaabs_updater_ps4 vitaabs_updater_ps4.data)
+        add_self(vitaabs_updater_ps4)
+        add_pkg(vitaabs_updater_ps4
+            ${CMAKE_BINARY_DIR}/ps4_updater
+            "VABS00003"
+            "VitaABS Updater"
+            "01.00"
+            8388608
+        )
+
+        # Bundle the helper's pkg INSIDE VitaABS's pkg (as /app0/updater.pkg),
+        # so the user only ever installs one app — the same approach the Vita
+        # build uses for its updater stub. The dependency forces the helper's
+        # pkg to be built and copied in BEFORE VitaABS's pkg is packed. The pkg
+        # tool names its output from the CONTENT_ID (IV0001-VABS00003_00-...),
+        # so the file is located by glob at build time.
+        add_custom_target(vitaabs_updater_ps4.bundle
+            COMMAND "${CMAKE_COMMAND}"
+                -DSRC_DIR=${CMAKE_BINARY_DIR}
+                -DDST=${CMAKE_BINARY_DIR}/ps4/updater.pkg
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/bundle_updater_pkg.cmake
+            DEPENDS vitaabs_updater_ps4_pkg
+        )
+        add_dependencies(${PROJECT_NAME}_pkg vitaabs_updater_ps4.bundle)
+    endif()
 
 elseif(PLATFORM_SWITCH)
     # Build NRO with embedded romfs resources (matches switchfin approach).

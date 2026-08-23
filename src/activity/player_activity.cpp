@@ -299,6 +299,13 @@ void PlayerActivity::loadMedia() {
             }
         }
 
+        // Pause background thumbnail loading and cancel in-flight loads BEFORE
+        // queueing our own cover art — cancelAll() bumps the loader generation,
+        // so calling it after loadCoverArt would cancel the player's own cover.
+        ImageLoader::setPaused(true);
+        ImageLoader::cancelAll();
+        ImageLoader::clearCache();
+
         bool metadataLoaded = false;
         if (foundInDownloads) {
             brls::Logger::info("PlayerActivity: Using offline metadata from downloads manager");
@@ -333,11 +340,6 @@ void PlayerActivity::loadMedia() {
                 brls::Logger::warning("PlayerActivity: Could not fetch metadata (offline or error)");
             }
         }
-
-        // Pause image loading to free resources for MPV
-        ImageLoader::setPaused(true);
-        ImageLoader::cancelAll();
-        ImageLoader::clearCache();
 
         // Initialize and load player
         MpvPlayer& player = MpvPlayer::getInstance();
@@ -597,6 +599,13 @@ void PlayerActivity::loadMedia() {
     MediaItem item;
 
     if (client.fetchItem(m_itemId, item)) {
+        // Pause background thumbnail loading and cancel in-flight loads BEFORE
+        // queueing our own cover art — cancelAll() bumps the loader generation,
+        // so calling it after loadCoverArt would cancel the player's own cover.
+        ImageLoader::setPaused(true);
+        ImageLoader::cancelAll();
+        ImageLoader::clearCache();
+
         // Set title
         if (titleLabel) {
             titleLabel->setText(item.title);
@@ -652,11 +661,6 @@ void PlayerActivity::loadMedia() {
         if (chapterInfoLabel) {
             chapterInfoLabel->setText("Streaming...");
         }
-
-        // Pause image loading and free cache to reclaim memory/bandwidth for MPV streaming
-        ImageLoader::setPaused(true);
-        ImageLoader::cancelAll();
-        ImageLoader::clearCache();
 
         // Initialize and play via direct URL streaming (mpv handles HTTP natively)
         MpvPlayer& player = MpvPlayer::getInstance();
@@ -956,13 +960,16 @@ void PlayerActivity::loadCoverArt(const std::string& coverUrl) {
         }
 #endif
     } else {
-        // Use the image loader to load the cover asynchronously (HTTP)
-        std::weak_ptr<bool> aliveWeak = m_alive;
-        ImageLoader::loadAsync(coverUrl, [aliveWeak](brls::Image* img) {
-            auto alive = aliveWeak.lock();
-            if (!alive || !*alive) return;
+        // Use the image loader to load the cover asynchronously (HTTP).
+        // loadMedia() pauses the loader before we run, so temporarily unpause
+        // around our own load (VMA's showAlbumCover pattern) — the player's
+        // cover must load even while background thumbnails are paused.
+        bool wasPaused = ImageLoader::isPaused();
+        if (wasPaused) ImageLoader::setPaused(false);
+        ImageLoader::loadAsync(coverUrl, [](brls::Image* img) {
             brls::Logger::debug("Cover art loaded");
-        }, coverImage, aliveWeak);
+        }, coverImage, m_alive);
+        if (wasPaused) ImageLoader::setPaused(true);
     }
 }
 

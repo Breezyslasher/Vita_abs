@@ -114,6 +114,10 @@ struct AppSettings {
     int connectionTimeout = 30;        // seconds (applied to HTTP client)
     bool autoSwitchUrl = true;         // Auto-switch between local/remote URL on failure
 
+    // In-app updates
+    bool autoCheckUpdates = true;          // Silent check on startup
+    std::string skippedUpdateVersion;      // Release tag the user chose to skip
+
     // Download Settings
     bool autoStartDownloads = true;
     bool deleteAfterFinish = false;    // Delete downloaded book after finishing

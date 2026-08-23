@@ -359,6 +359,10 @@ bool Application::loadSettings() {
     if (m_settings.connectionTimeout <= 0) m_settings.connectionTimeout = 30;
     m_settings.autoSwitchUrl = extractBool("autoSwitchUrl", true);
 
+    // Load in-app update settings
+    m_settings.autoCheckUpdates = extractBool("autoCheckUpdates", true);
+    m_settings.skippedUpdateVersion = extractString("skippedUpdateVersion");
+
     // Load download settings
     m_settings.autoStartDownloads = extractBool("autoStartDownloads", true);
     m_settings.deleteAfterFinish = extractBool("deleteAfterFinish", false);
@@ -432,6 +436,8 @@ bool Application::saveSettings() {
     // Network settings
     json += "  \"connectionTimeout\": " + std::to_string(m_settings.connectionTimeout) + ",\n";
     json += "  \"autoSwitchUrl\": " + std::string(m_settings.autoSwitchUrl ? "true" : "false") + ",\n";
+    json += "  \"autoCheckUpdates\": " + std::string(m_settings.autoCheckUpdates ? "true" : "false") + ",\n";
+    json += "  \"skippedUpdateVersion\": \"" + m_settings.skippedUpdateVersion + "\",\n";
 
     // Download settings
     json += "  \"autoStartDownloads\": " + std::string(m_settings.autoStartDownloads ? "true" : "false") + ",\n";

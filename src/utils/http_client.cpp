@@ -150,10 +150,27 @@ HttpResponse HttpClient::request(const HttpRequest& req) {
     // Follow redirects
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, req.followRedirects ? 1L : 0L);
 
-    // SSL options (Vita specific)
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
     curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
+
+    // Verify the peer certificate chain AND the hostname on every platform.
+    // Without this, all traffic — Audiobookshelf login, the auth/refresh
+    // tokens, and the in-app update download from GitHub — is MITM-able by
+    // anyone on the network path. That made the update path a code-execution
+    // vector, since a downloaded .vpk/.pkg/.nro is installed/executed.
+    //
+    // Verification needs a trust anchor, and several targets have no system
+    // CA store configured, so an unqualified VERIFYPEER=1 would fail every
+    // handshake: Android ships NDK libcurl with no CA store, and the consoles
+    // (Vita/PS4/Switch) use mbedtls as curl's TLS backend with no store
+    // either — mbedtls honours CAINFO, so a bundled PEM is all it needs.
+    // So we ship Mozilla's bundle as resources/cacert.pem and point CAINFO at
+    // it, resolved via the platform's RESOURCE_PREFIX — the Android asset
+    // extractor drops it under the writable cwd; the consoles pack it into
+    // the vpk / pkg / romfs. A target that can't read the bundle fails closed
+    // (its HTTPS errors out) rather than silently skipping verification.
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+    curl_easy_setopt(curl, CURLOPT_CAINFO, RESOURCE_PREFIX "cacert.pem");
 
     // User agent
     curl_easy_setopt(curl, CURLOPT_USERAGENT, m_userAgent.c_str());
@@ -379,10 +396,27 @@ bool HttpClient::downloadFile(const std::string& url, WriteCallback writeCallbac
     // Follow redirects
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
-    // SSL options (Vita specific)
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
     curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
+
+    // Verify the peer certificate chain AND the hostname on every platform.
+    // Without this, all traffic — Audiobookshelf login, the auth/refresh
+    // tokens, and the in-app update download from GitHub — is MITM-able by
+    // anyone on the network path. That made the update path a code-execution
+    // vector, since a downloaded .vpk/.pkg/.nro is installed/executed.
+    //
+    // Verification needs a trust anchor, and several targets have no system
+    // CA store configured, so an unqualified VERIFYPEER=1 would fail every
+    // handshake: Android ships NDK libcurl with no CA store, and the consoles
+    // (Vita/PS4/Switch) use mbedtls as curl's TLS backend with no store
+    // either — mbedtls honours CAINFO, so a bundled PEM is all it needs.
+    // So we ship Mozilla's bundle as resources/cacert.pem and point CAINFO at
+    // it, resolved via the platform's RESOURCE_PREFIX — the Android asset
+    // extractor drops it under the writable cwd; the consoles pack it into
+    // the vpk / pkg / romfs. A target that can't read the bundle fails closed
+    // (its HTTPS errors out) rather than silently skipping verification.
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+    curl_easy_setopt(curl, CURLOPT_CAINFO, RESOURCE_PREFIX "cacert.pem");
 
     // User agent
     curl_easy_setopt(curl, CURLOPT_USERAGENT, m_userAgent.c_str());

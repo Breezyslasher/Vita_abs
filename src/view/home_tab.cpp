@@ -12,7 +12,7 @@ namespace vitaabs {
 
 HomeTab::HomeTab() {
     // Create alive flag for async callback safety
-    m_alive = std::make_shared<bool>(true);
+    m_alive = std::make_shared<std::atomic<bool>>(true);
 
     this->setAxis(brls::Axis::COLUMN);
     this->setJustifyContent(brls::JustifyContent::FLEX_START);
@@ -124,7 +124,7 @@ void HomeTab::loadContent() {
 
     brls::Logger::debug("HomeTab: Loading content");
 
-    std::weak_ptr<bool> aliveWeak = m_alive;
+    std::weak_ptr<std::atomic<bool>> aliveWeak = m_alive;
 
     asyncRun([this, aliveWeak]() {
         AudiobookshelfClient& client = AudiobookshelfClient::getInstance();
@@ -228,17 +228,16 @@ void HomeTab::populateHorizontalRow(brls::Box* container, const std::vector<Medi
     // Clear existing items
     container->clearViews();
 
-    // Set container width to fit all items (180px per item: 160 width + 20 margin)
-    float totalWidth = items.size() * 180.0f;
+    // Set container width to fit all items (130px per item: 120 width + 10 margin)
+    float totalWidth = items.size() * 130.0f;
     container->setWidth(totalWidth);
 
-    // Add cells for each item
+    // Add cells for each item (cells default to 120x150 and draw their own
+    // NanoVG cover + title when used standalone outside a RecyclingGrid)
     for (size_t i = 0; i < items.size(); i++) {
         auto* cell = new MediaItemCell();
         cell->setItem(items[i]);
-        cell->setWidth(160);
-        cell->setHeight(195);  // Square cover (140) + labels (~55)
-        cell->setMarginRight(20);  // More space between items
+        cell->setMarginRight(10);
 
         // Store the item for click handler
         MediaItem itemCopy = items[i];

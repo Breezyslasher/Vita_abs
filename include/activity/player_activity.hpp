@@ -8,6 +8,7 @@
 #include <borealis.hpp>
 #include <borealis/core/timer.hpp>
 #include <memory>
+#include <atomic>
 #include <string>
 
 namespace vitaabs {
@@ -63,7 +64,7 @@ private:
     bool m_isPreDownloaded = false; // File was pre-downloaded before player push
     bool m_destroying = false;    // Flag to prevent timer callbacks during destruction
     bool m_loadingMedia = false;  // Flag to prevent rapid re-entry of loadMedia
-    std::shared_ptr<bool> m_alive = std::make_shared<bool>(true);
+    std::shared_ptr<std::atomic<bool>> m_alive = std::make_shared<std::atomic<bool>>(true);
     double m_pendingSeek = 0.0;   // Pending seek position (set when resuming)
     double m_totalDuration = 0.0; // Total duration for display
     brls::RepeatingTimer m_updateTimer;

@@ -90,6 +90,72 @@ public class PlatformUtils {
         return wifiInfo.getRssi();
     }
 
+    /**
+     * Hand a downloaded update APK to the system package installer.
+     * Works on Android TV as well as mobile: TVs usually ship no browser,
+     * so opening the release page there does nothing, but the installer
+     * (and its unknown-sources consent flow) exists everywhere. The
+     * content:// URI is served by ApkProvider, which only ever exposes
+     * this one file.
+     */
+    public static void installApk(String path) {
+        Context context = SDLActivity.getContext();
+        try {
+            // API 26+ needs BOTH the REQUEST_INSTALL_PACKAGES manifest
+            // permission AND a per-app "install unknown apps" grant. Older
+            // Android auto-prompted for the grant when the install intent
+            // launched; newer builds (Android TV especially) do NOT — the
+            // installer just shows "Staging app... (Unknown)" and silently
+            // aborts, so the user is never asked and every update fails the
+            // same way. Check the grant ourselves and send the user to the
+            // settings screen to enable it; they grant it and press Update
+            // again, and future updates skip this step.
+            if (android.os.Build.VERSION.SDK_INT >= 26 &&
+                    !context.getPackageManager().canRequestPackageInstalls()) {
+                Intent grant = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:" + context.getPackageName()))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                // Some Android TV builds have no per-app source screen: fall
+                // back to the global list, then to security settings.
+                if (grant.resolveActivity(context.getPackageManager()) == null) {
+                    grant = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                }
+                if (grant.resolveActivity(context.getPackageManager()) == null) {
+                    grant = new Intent(Settings.ACTION_SECURITY_SETTINGS)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                }
+                android.util.Log.i("VitaABS",
+                        "installApk: no install-unknown-apps grant; opening settings");
+                context.startActivity(grant);
+                return;   // user enables it, then retries Update
+            }
+
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            Uri uri;
+            if (android.os.Build.VERSION.SDK_INT >= 24) {
+                uri = Uri.parse("content://" + context.getPackageName() + ".apkprovider/update.apk");
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } else {
+                uri = Uri.fromFile(new java.io.File(path));
+            }
+            intent.setDataAndType(uri, "application/vnd.android.package-archive");
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+
+            // Deliberately NO self-kill here. The installer streams the APK
+            // from ApkProvider, a ContentProvider hosted in THIS process, so
+            // killing ourselves mid-"Staging app..." tears the provider down
+            // and aborts the install (a fixed timer also fires before the
+            // install commits, so it never stopped a "stale" app anyway).
+            // Android force-stops the package when an update commits, which
+            // is exactly the behaviour the kill was trying to imitate; on a
+            // cancelled install we want to keep running.
+        } catch (Exception e) {
+            android.util.Log.e("VitaABS", "installApk failed", e);
+        }
+    }
+
     public static void openBrowser(String url) {
         Context context = SDLActivity.getContext();
 

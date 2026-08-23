@@ -1,3 +1,8 @@
 [submodule "lib/borealis"]
 	path = lib/borealis
 	url = https://github.com/dragonflylee/borealis.git
+	branch = switchfin
+	# The build applies patches/ files into the submodule tree at configure
+	# time (fontstash.h, nanovg.c, psv_platform.cpp), so its working tree is
+	# always dirty on a built checkout — hide that from git status.
+	ignore = dirty

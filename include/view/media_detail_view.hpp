@@ -93,7 +93,7 @@ private:
     brls::Image* m_sortIcon = nullptr;
 
     // Live download progress tracking
-    std::shared_ptr<bool> m_alive;
+    std::shared_ptr<std::atomic<bool>> m_alive;
     std::chrono::steady_clock::time_point m_lastProgressUpdate;
     std::string m_activeDownloadItemId;   // Item currently being downloaded from this view
     std::string m_activeDownloadEpisodeId;

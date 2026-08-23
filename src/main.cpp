@@ -8,6 +8,7 @@
 
 #include <borealis.hpp>
 #include "app/application.hpp"
+#include "utils/app_update.hpp"
 #include "app/audiobookshelf_client.hpp"
 #include "view/media_item_cell.hpp"
 #include "view/recycling_grid.hpp"
@@ -175,10 +176,11 @@ static void registerCustomViews() {
  * Main entry point
  */
 int main(int argc, char* argv[]) {
-    (void)argc;
-    (void)argv;
-
     std::setlocale(LC_ALL, "C.UTF-8");
+
+    // Remember our own executable path (Switch: the NRO the in-app updater
+    // must replace). Must run before borealis starts; a no-op elsewhere.
+    if (argc > 0) vitaabs::app_update::setSelfPath(argv[0]);
 
 #ifdef __vita__
     // Initialize Vita-specific systems
