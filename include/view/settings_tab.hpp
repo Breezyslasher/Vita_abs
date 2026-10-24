@@ -40,7 +40,7 @@ private:
         SEC_PLAYBACK,
         SEC_AUDIO,
         SEC_DOWNLOADS,
-        SEC_ABOUT,
+        SEC_UPDATES,
         SEC_COUNT
     };
 
@@ -54,7 +54,7 @@ private:
     brls::Box* createPlaybackSection();
     brls::Box* createAudioSection();
     brls::Box* createDownloadsSection();
-    brls::Box* createAboutSection();
+    brls::Box* createUpdatesSection();
 
     // Master/detail plumbing — see settings_tab.cpp for the layout.
     brls::Box* makeSectionBox();
@@ -101,6 +101,7 @@ private:
     brls::Box*   m_railHairline   = nullptr;
     brls::Box*   m_detailHairline = nullptr;
     brls::Label* m_versionLabel   = nullptr;
+    brls::Label* m_creditLabel    = nullptr;
     brls::ThemeVariant m_themeVariant = brls::ThemeVariant::DARK;
 
     std::vector<brls::Box*> m_railRows;      // one per section, indexed by SectionId
