@@ -6,3 +6,6 @@
 	# time (fontstash.h, nanovg.c, psv_platform.cpp), so its working tree is
 	# always dirty on a built checkout — hide that from git status.
 	ignore = dirty
+[submodule "lib/vita-shell-companion"]
+	path = lib/vita-shell-companion
+	url = https://github.com/Breezyslasher/vita-shell-companion.git

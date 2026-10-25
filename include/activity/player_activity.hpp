@@ -53,6 +53,10 @@ private:
     void applyLocalInfo(const std::string& subline, bool isPodcast);
     // Keeps the right tile's "CHAPTER n / m" current as playback moves.
     void updateChapterTile(double position);
+    // Keep the quick menu's Music row in step with the player (heartbeat,
+    // title/author/chapter, play state), and act on its presses.
+    void updateMusicRow(bool playing);
+    void handleRowPresses();
     void updateProgress();
     void syncProgressToServer();  // Periodic sync to server during playback
     void updatePlayPauseButton();
@@ -91,6 +95,10 @@ private:
     double m_pendingSeek = 0.0;   // Pending seek position (set when resuming)
     double m_totalDuration = 0.0; // Total duration for display
     brls::RepeatingTimer m_updateTimer;
+    // Polls the quick menu's Music row for presses (vita-shell-companion).
+    // Faster than the 1 Hz progress tick so ⏯ ⏮ ⏭ feel immediate; a no-op
+    // off the Vita.
+    brls::RepeatingTimer m_rowPressTimer;
     int m_syncCounter = 0;        // Counter for periodic server sync (every 30 updates = 30 seconds)
     float m_lastSyncedTime = 0.0f; // Last position synced to server
     std::string m_sessionId;      // Active playback session ID (for server sync)

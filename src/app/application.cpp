@@ -3,6 +3,7 @@
  */
 
 #include "app/application.hpp"
+#include "platform/shell_companion.hpp"
 #include "app/audiobookshelf_client.hpp"
 #include "app/downloads_manager.hpp"
 #include "activity/login_activity.hpp"
@@ -43,6 +44,10 @@ bool Application::init() {
     // Apply settings
     applyTheme();
     applyLogLevel();
+
+    // vita-shell-companion (Vita only; a no-op elsewhere). Registers with the
+    // SceShell plugin, loading the bundled copy if none is there yet.
+    shell::init();
 
     m_initialized = true;
     return true;

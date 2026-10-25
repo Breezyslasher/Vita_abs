@@ -10,6 +10,8 @@
 #include "utils/image_loader.hpp"
 #include "view/progress_dialog.hpp"
 #include "utils/ui_theme.hpp"
+#include "platform/platform.hpp"
+#include "platform/shell_companion.hpp"
 
 #include <cstdio>
 #include <cmath>
@@ -238,6 +240,11 @@ void PlayerActivity::onContentAvailable() {
         updateProgress();
     });
     m_updateTimer.start(1000); // Update every second
+
+#ifdef __vita__
+    m_rowPressTimer.setCallback([this]() { handleRowPresses(); });
+    m_rowPressTimer.start(200);
+#endif
 }
 
 void PlayerActivity::willDisappear(bool resetState) {
@@ -248,6 +255,10 @@ void PlayerActivity::willDisappear(bool resetState) {
 
     // Stop update timer first
     m_updateTimer.stop();
+    m_rowPressTimer.stop();
+
+    // Hand the Music row back now rather than letting it time out.
+    shell::rowRelease();
 
     // For photos, nothing to stop
     if (m_isPhoto) {
@@ -923,6 +934,10 @@ void PlayerActivity::updateProgress() {
     // Update play/pause button state
     updatePlayPauseButton();
 
+    // Quick menu Music row. Before the loading early-out below, so the row
+    // keeps its heartbeat while mpv buffers.
+    updateMusicRow(player.isPlaying());
+
     // Skip UI updates while MPV is still loading - be gentle on Vita's limited hardware
     if (player.isLoading()) {
         return;
@@ -1116,8 +1131,64 @@ std::string PlayerActivity::formatTimeRemaining(double remaining) {
     return std::string(buf);
 }
 
+void PlayerActivity::updateMusicRow(bool playing) {
+    shell::rowHeartbeat();
+    shell::rowPlaying(playing);
+
+    // Title above, "artist / album" below: the book (or episode), its author
+    // (or show), and for books the chapter being played.
+    std::string album;
+    if (!m_isPodcastItem && m_currentChapter >= 0 &&
+        m_currentChapter < static_cast<int>(m_chapters.size())) {
+        album = m_chapters[m_currentChapter].title;
+    }
+    shell::rowSong(titleLabel ? titleLabel->getFullText() : std::string(),
+                   authorLabel ? authorLabel->getFullText() : std::string(),
+                   album);
+}
+
+void PlayerActivity::handleRowPresses() {
+    if (m_destroying) return;
+
+    // ⏮ ⏭ seek within the book, as the on-screen pills do, rather than
+    // skipping files or chapters — what an audiobook player wants.
+    int seekInterval = Application::getInstance().getSettings().seekInterval;
+    for (int i = 0; i < 8; i++) {   // drain a few queued presses per tick
+        shell::Press press = shell::poll();
+        if (press == shell::Press::None) break;
+        switch (press) {
+            case shell::Press::PlayPause:
+                brls::Logger::info("ShellCompanion: row play/pause");
+                togglePlayPause();
+                break;
+            case shell::Press::Next:
+                brls::Logger::info("ShellCompanion: row forward {}s", seekInterval);
+                seek(seekInterval);
+                break;
+            case shell::Press::Previous:
+                brls::Logger::info("ShellCompanion: row back {}s", seekInterval);
+                seek(-seekInterval);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
 void PlayerActivity::loadCoverArt(const std::string& coverUrl) {
     if (coverUrl.empty() || !coverImage) return;
+
+    // The Music row wants a 64x64 square. Ask the server for a small cover
+    // rather than decoding the 400px one again on the Vita.
+    if (platform::isLocalPath(coverUrl)) {
+        shell::rowCoverFromFile(coverUrl);
+    } else {
+        std::string small = coverUrl;
+        const std::string full = "width=400&height=400";
+        size_t at = small.find(full);
+        if (at != std::string::npos) small.replace(at, full.size(), "width=128&height=128");
+        shell::rowCoverFromUrl(small);
+    }
 
     brls::Logger::debug("Loading cover art: {}", coverUrl);
 

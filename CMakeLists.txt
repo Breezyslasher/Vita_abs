@@ -294,6 +294,57 @@ if(PLATFORM_PSV)
     # miniz without stdio/time: newlib's fopen64/stat64/utime are absent on
     # Vita, so vita_install.cpp drives it through sceIo callbacks instead.
     add_definitions(-DMINIZ_NO_STDIO -DMINIZ_NO_TIME)
+
+    # ── vita-shell-companion ────────────────────────────────────────────
+    # The SceShell plugin that carries the app's work on after it closes
+    # (Music row, background playback/downloads, self-update). Its client
+    # library is plain C from the submodule; the plugin binary itself is the
+    # matching release asset (below). The submodule commit and
+    # SHELL_COMPANION_TAG must name the same release, so client and plugin
+    # always speak the same protocol.
+    set(SC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/vita-shell-companion)
+    if(NOT EXISTS ${SC_DIR}/client/shell_companion.c)
+        message(FATAL_ERROR "lib/vita-shell-companion is empty: run git submodule update --init")
+    endif()
+    enable_language(ASM)
+    list(APPEND APP_SOURCES
+        src/platform/shell_companion.cpp
+        ${SC_DIR}/client/shell_companion.c
+        ${SC_DIR}/client/sc_files.c
+        ${SC_DIR}/client/sc_cover.c       # covers; stb_image comes from nanovg
+        ${SC_DIR}/client/sc_link_stub.S)  # its own msgpipe/taiHEN import stubs
+    include_directories(${SC_DIR}/client ${SC_DIR}/include
+                        ${BOREALIS_LIBRARY}/include/borealis/extern/nanovg)
+
+    # The plugin binary, pinned by tag AND hash: it is loaded into SceShell,
+    # so a swapped or corrupted asset must fail the build rather than ship.
+    set(SHELL_COMPANION_TAG    "Alpha-0.0.1")
+    set(SHELL_COMPANION_SHA256 "bb8832dc2722dd33356994dcee06b0503f117270c84a1d1ee68c790b0da7648f")
+    set(SHELL_COMPANION_SUPRX  ${CMAKE_BINARY_DIR}/shell_companion.suprx)
+    # Re-verify a copy left from an earlier configure: file(DOWNLOAD) fails
+    # on a hash mismatch but leaves the bad file behind, so trusting
+    # "it exists" would pack it on the next run.
+    if(EXISTS ${SHELL_COMPANION_SUPRX})
+        file(SHA256 ${SHELL_COMPANION_SUPRX} _sc_have)
+        if(NOT _sc_have STREQUAL SHELL_COMPANION_SHA256)
+            message(STATUS "shell_companion.suprx does not match its pin; fetching again")
+            file(REMOVE ${SHELL_COMPANION_SUPRX})
+        endif()
+    endif()
+    if(NOT EXISTS ${SHELL_COMPANION_SUPRX})
+        message(STATUS "Fetching shell_companion.suprx ${SHELL_COMPANION_TAG}")
+        file(DOWNLOAD
+            "https://github.com/Breezyslasher/vita-shell-companion/releases/download/${SHELL_COMPANION_TAG}/shell_companion.suprx"
+            ${SHELL_COMPANION_SUPRX}
+            EXPECTED_HASH SHA256=${SHELL_COMPANION_SHA256}
+            TLS_VERIFY ON
+            STATUS _sc_status)
+        list(GET _sc_status 0 _sc_code)
+        if(NOT _sc_code EQUAL 0)
+            file(REMOVE ${SHELL_COMPANION_SUPRX})
+            message(FATAL_ERROR "shell_companion.suprx download failed: ${_sc_status}")
+        endif()
+    endif()
 endif()
 
 # PS4 in-app self-update: BGFT pkg install + updater-helper management
@@ -697,6 +748,10 @@ if(PLATFORM_PSV)
 
         # The bundled updater stub, installed + launched at self-update
         FILE ${CMAKE_BINARY_DIR}/vitaabs_updater.vpk updater.vpk
+
+        # vita-shell-companion, loaded into SceShell by scOpen when no copy
+        # of this protocol (or a later one) is there yet.
+        FILE ${SHELL_COMPANION_SUPRX} module/shell_companion.suprx
 
         FILE app/platform/psv/sce_sys/icon0.png                      sce_sys/icon0.png
         FILE app/platform/psv/sce_sys/pic0.png                       sce_sys/pic0.png
