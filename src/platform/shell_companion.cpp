@@ -69,6 +69,28 @@ void writeCover(const std::vector<uint8_t>& bytes, uint32_t generation) {
                        bytes.size(), rc);
 }
 
+// Which plugin answered. Several apps ship this plugin (VitaPlex does too),
+// and the first one loaded after a reboot stays in SceShell until the next,
+// so the copy answering may be older than the one in this VPK. A test report
+// is only readable alongside this line.
+void logPluginInfo() {
+    ScPluginInfo info;
+    if (scPluginInfo(&info) != 0) {
+        brls::Logger::warning("ShellCompanion: the plugin in SceShell did not report a version — "
+                              "it predates 0.2.0, probably loaded this boot by another app. "
+                              "Restart the Vita to load this app's own copy.");
+        return;
+    }
+    brls::Logger::info("ShellCompanion: plugin {} (code {}, protocol {}), has 0x{:X}, "
+                       "granted 0x{:X} of asked 0x{:X}, caps [{}]",
+                       info.version, info.versionCode, info.protocol, info.features,
+                       info.granted, kFeatures, info.caps);
+    if ((info.granted & kFeatures) != kFeatures) {
+        brls::Logger::warning("ShellCompanion: not every feature asked for was granted "
+                              "(missing 0x{:X})", kFeatures & ~info.granted);
+    }
+}
+
 }  // namespace
 
 void init() {
@@ -89,6 +111,7 @@ void init() {
         g_open = (open == 0);
         if (open == 0) {
             brls::Logger::info("ShellCompanion: open ({})", what);
+            logPluginInfo();
         } else {
             brls::Logger::error("ShellCompanion: scOpen failed, code {} ({})", open, what);
         }
