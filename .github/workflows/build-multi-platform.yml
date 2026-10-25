@@ -280,22 +280,55 @@ jobs:
           done
           cp portlib-cache/*-vita.pkg.tar.xz .
 
-          # VitaSDK-repo packages go in by name with vdpm; LOCAL package files
-          # must go through pacman --upgrade (vdpm-on-pacman's --sync rejects
-          # file paths). Keep a legacy vdpm fallback for pre-pacman images.
+          # Packages carried by the VitaSDK repo go in by name.
           VDPM_NONINTERACTIVE=1 vdpm libass harfbuzz fribidi freetype libpng libwebp
-          PACMAN="${VDPM_PACMAN:-$VITASDK/bin/pacman}"
-          if [ -x "$PACMAN" ]; then
-            "$PACMAN" \
-              --config  "${VDPM_PACMAN_CONF:-$VITASDK/etc/pacman.conf}" \
-              --root    "$VITASDK" \
-              --dbpath  "$VITASDK/var/lib/pacman" \
-              --cachedir "$VITASDK/var/cache/pacman/pkg" \
-              --logfile "$VITASDK/var/log/pacman.log" \
-              --noscriptlet --noconfirm --noprogressbar \
-              --upgrade $PWD/*-vita.pkg.tar.xz
+
+          # The switchfin packages are LOCAL FILES, which vdpm-on-pacman's
+          # `--sync` rejects ("target not found ... did you mean -U?"); they go
+          # through `pacman --upgrade` with vdpm's root/db/cache arguments.
+          # Ported from VitaPlex, whose Vita job hit this first: pacman is NOT
+          # at $VITASDK/bin/pacman in the current image. Looking only there
+          # fell through to `vdpm <local files>` — the very call that fails —
+          # so a missing binary looked like a working fallback. Search the
+          # places it actually turns up, PATH included.
+          PACMAN="${VDPM_PACMAN:-}"
+          if [ -z "$PACMAN" ] || [ ! -x "$PACMAN" ]; then
+            PACMAN=""
+            for cand in "$VITASDK/bin/pacman" "$VITASDK/usr/bin/pacman" \
+                        "$(command -v pacman 2>/dev/null || true)"; do
+              if [ -n "$cand" ] && [ -x "$cand" ]; then PACMAN="$cand"; break; fi
+            done
+          fi
+          echo "pacman for local packages: ${PACMAN:-<none found>}"
+
+          if [ -n "$PACMAN" ]; then
+            mkdir -p "$VITASDK/var/lib/pacman" "$VITASDK/var/cache/pacman/pkg" "$VITASDK/var/log"
+            # --config only when there is one: a pacman from PATH has its own
+            # default, and naming a missing file is a hard error.
+            set -- --root "$VITASDK" \
+                   --dbpath "$VITASDK/var/lib/pacman" \
+                   --cachedir "$VITASDK/var/cache/pacman/pkg" \
+                   --logfile "$VITASDK/var/log/pacman.log" \
+                   --noscriptlet --noconfirm --noprogressbar
+            CONF="${VDPM_PACMAN_CONF:-$VITASDK/etc/pacman.conf}"
+            [ -f "$CONF" ] && set -- --config "$CONF" "$@"
+            "$PACMAN" "$@" --upgrade $PWD/*-vita.pkg.tar.xz
           else
-            vdpm $PWD/*-vita.pkg.tar.xz          # legacy (pre-pacman) vdpm
+            # No pacman anywhere. The packages are plain tar.xz rooted where
+            # --root would put them, so unpacking gives the same tree minus
+            # the package database, which nothing in this build reads.
+            echo "no pacman found; unpacking the packages directly"
+            for f in $PWD/*-vita.pkg.tar.xz; do
+              tar -xJf "$f" -C "$VITASDK" \
+                  --exclude=.PKGINFO --exclude=.MTREE --exclude=.BUILDINFO --exclude=.INSTALL
+            done
+          fi
+
+          # Fail here rather than in the compiler, where a missing library
+          # surfaces hundreds of lines later as an unrelated-looking error.
+          if ! find "$VITASDK" \( -name 'libmpv.a' -o -name 'libcurl.a' \) -print -quit | grep -q .; then
+            echo "Vita dependencies did not install: no libmpv.a or libcurl.a under $VITASDK" >&2
+            exit 1
           fi
 
           git config --system --add safe.directory "$GITHUB_WORKSPACE"
