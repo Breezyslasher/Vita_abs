@@ -309,6 +309,7 @@ if(PLATFORM_PSV)
     enable_language(ASM)
     list(APPEND APP_SOURCES
         src/platform/shell_companion.cpp
+        src/platform/app_events.cpp       # answers the system's quit request (gdc)
         ${SC_DIR}/client/shell_companion.c
         ${SC_DIR}/client/sc_files.c
         ${SC_DIR}/client/sc_cover.c       # covers; stb_image comes from nanovg
@@ -741,6 +742,16 @@ if(PLATFORM_PSV)
     endforeach()
 
     vita_create_self(${PROJECT_NAME}.self ${PROJECT_NAME} UNSAFE NOASLR)
+
+    # A non-game application (gdc) with ElevenMPV-A's attributes, so the system
+    # lets the app play on and use the network once it is left with PS, where a
+    # game is frozen (measured in VitaPlex's BG tests; its docs/DESIGN_NOTES.md).
+    # Set here, after the updater stub's VPK and before this one: vita_create_vpk
+    # reads VITA_MKSFOEX_FLAGS when it is called, so only VitaABS itself becomes
+    # gdc. ATTRIBUTE2=12 (extended memory), set above, stays. A non-game app is
+    # asked to quit when the user opens something it cannot run beside, and must
+    # answer — src/platform/app_events.cpp does.
+    set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -s CATEGORY=gdc -d ATTRIBUTE=0x01089088 -d ATTRIBUTE_MINOR=16")
 
     vita_create_vpk(${PROJECT_NAME}.vpk ${VITA_TITLEID} ${PROJECT_NAME}.self
         VERSION ${VITA_VERSION}

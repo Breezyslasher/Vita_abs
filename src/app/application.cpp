@@ -3,6 +3,7 @@
  */
 
 #include "app/application.hpp"
+#include "platform/app_events.hpp"
 #include "platform/shell_companion.hpp"
 #include "app/audiobookshelf_client.hpp"
 #include "app/downloads_manager.hpp"
@@ -48,6 +49,11 @@ bool Application::init() {
     // vita-shell-companion (Vita only; a no-op elsewhere). Registers with the
     // SceShell plugin, loading the bundled copy if none is there yet.
     shell::init();
+
+    // Vita application events. The VPK is a non-game app, so it keeps running
+    // when left with PS, and must answer the system's request to quit (an
+    // unanswered one hangs the console). No-op off the Vita.
+    appevents::init();
 
     m_initialized = true;
     return true;
