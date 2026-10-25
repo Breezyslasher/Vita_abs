@@ -594,7 +594,7 @@ jobs:
         with:
           path: portlib-cache
           # Full pin list, incl. the per-leg mpv package, IS the key.
-          key: switch-portlibs-hacBrewPack-3.05-1_libuam-master-1_dav1d-1.5.3-1_mbedtls-3.6.7-1_libssh2-1.11.1-1_ffmpeg-7.1.5-5_uchardet-0.0.8-1_${{ matrix.mpv_pkg }}
+          key: switch-portlibs-hacBrewPack-3.05-1_libuam-master-1_dav1d-1.5.4-1_mbedtls-3.6.7-1_libssh2-1.11.1-1_ffmpeg-7.1.5-5-r20261007_${{ matrix.mpv_pkg }}
 
       - name: Install switchfin portlibs
         run: |
@@ -607,15 +607,20 @@ jobs:
           # devkitPro's own FFmpeg is 61.19.100 — linking mpv against the
           # mismatched FFmpeg builds green and null-derefs the moment playback
           # touches libav*. Pull the WHOLE mpv → ffmpeg → tls stack (ffmpeg +
-          # mbedtls + libssh2) plus uchardet (an mpv 0.36.0-5 dependency) from
-          # switchfin so it's ABI-consistent.
+          # mbedtls + libssh2) from switchfin so it's ABI-consistent.
+          #
+          # switch-portlibs is ROLLING too. On 2026-10-07 switchfin rebuilt
+          # this whole set in place (same version strings for mpv/ffmpeg):
+          # dav1d moved 1.5.3-1 -> 1.5.4-1, and uchardet was withdrawn — the
+          # rebuilt libmpv no longer depends on it (its .PKGINFO lists only
+          # switch-ffmpeg + switch-mesa; deko3d adds deko3d + libuam). The
+          # cache key carries the rebuild date so the old set is not reused.
           for pkg in hacBrewPack-3.05-1-x86_64.pkg.tar.zst \
                      libuam-master-1-any.pkg.tar.zst \
-                     switch-dav1d-1.5.3-1-any.pkg.tar.zst \
+                     switch-dav1d-1.5.4-1-any.pkg.tar.zst \
                      switch-mbedtls-3.6.7-1-any.pkg.tar.zst \
                      switch-libssh2-1.11.1-1-any.pkg.tar.zst \
                      switch-ffmpeg-7.1.5-5-any.pkg.tar.zst \
-                     switch-uchardet-0.0.8-1-any.pkg.tar.zst \
                      ${{ matrix.mpv_pkg }}; do
             [ -s "portlib-cache/$pkg" ] || fetch "$BASE_URL/$pkg" "portlib-cache/$pkg"
           done
@@ -880,13 +885,22 @@ jobs:
             mingw-w64-${{ matrix.env }}-cc
             mingw-w64-${{ matrix.env }}-cmake
             mingw-w64-${{ matrix.env }}-glfw
+            mingw-w64-${{ matrix.env }}-curl
       - uses: actions/checkout@v4
         with:
           submodules: recursive
       - name: Install dependency
         run: |
-          for pkg in glfw-3.5.0-1 curl-8.16.0-1 mpv-0.41.0-1 libwebp-1.6.0-1; do
-            curl -sLO https://github.com/dragonflylee/switchfin/releases/download/mingw-packages/${MINGW_PACKAGE_PREFIX}-${pkg}-any.pkg.tar.zst
+          # mingw-packages is a ROLLING release: switchfin replaces assets
+          # when it bumps them, and the old names 404. As of 2026-10-22
+          # mpv-0.41.0-1 became 0.41.0-2 and its curl build was withdrawn
+          # (no successor) — curl now comes from MSYS2's own repository via
+          # setup-msys2 above. -f makes a missing asset fail HERE, by name;
+          # without it curl saved GitHub's 404 page under the package's file
+          # name and pacman failed later with a misleading "invalid package".
+          set -e
+          for pkg in glfw-3.5.0-1 mpv-0.41.0-2 libwebp-1.6.0-1; do
+            curl -fsSLO https://github.com/dragonflylee/switchfin/releases/download/mingw-packages/${MINGW_PACKAGE_PREFIX}-${pkg}-any.pkg.tar.zst
           done
           pacman -U --noconfirm *.pkg.tar.zst
       - name: Build
