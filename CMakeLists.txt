@@ -319,8 +319,8 @@ if(PLATFORM_PSV)
 
     # The plugin binary, pinned by tag AND hash: it is loaded into SceShell,
     # so a swapped or corrupted asset must fail the build rather than ship.
-    set(SHELL_COMPANION_TAG    "Alpha-0.0.3")
-    set(SHELL_COMPANION_SHA256 "bbb38a1d4ed25569d2a8409c589b94f4f57ef3f24ec1ee2b90d2872df8213a69")
+    set(SHELL_COMPANION_TAG    "Alpha-0.0.4")
+    set(SHELL_COMPANION_SHA256 "070166d4500a8bffd7e3d1ddba62348a23fa7ec1855e8b54bb5f70e62d68634a")
     set(SHELL_COMPANION_SUPRX  ${CMAKE_BINARY_DIR}/shell_companion.suprx)
     # Re-verify a copy left from an earlier configure: file(DOWNLOAD) fails
     # on a hash mismatch but leaves the bad file behind, so trusting
